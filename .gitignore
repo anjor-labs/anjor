@@ -33,10 +33,15 @@ htmlcov/
 
 # Project
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 agentscope.db
 .agentscope/
+
+# Claude Code
+.claude/
 
 # OS
 .DS_Store
