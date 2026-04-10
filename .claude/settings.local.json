@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p agentscope/core/events agentscope/core/pipeline agentscope/interceptors/parsers agentscope/collector/storage/migrations agentscope/collector/api/routes agentscope/analysis/drift agentscope/analysis/classification tests/unit/core tests/unit/interceptors tests/unit/collector tests/unit/analysis tests/integration tests/e2e scripts docs)",
+      "Bash(touch agentscope/__init__.py agentscope/core/__init__.py agentscope/core/events/__init__.py agentscope/core/pipeline/__init__.py agentscope/interceptors/__init__.py agentscope/interceptors/parsers/__init__.py agentscope/collector/__init__.py agentscope/collector/storage/__init__.py agentscope/collector/api/__init__.py agentscope/collector/api/routes/__init__.py agentscope/analysis/__init__.py agentscope/analysis/drift/__init__.py agentscope/analysis/classification/__init__.py tests/__init__.py tests/unit/__init__.py tests/unit/core/__init__.py tests/unit/interceptors/__init__.py tests/unit/collector/__init__.py tests/unit/analysis/__init__.py tests/integration/__init__.py tests/e2e/__init__.py tests/conftest.py)",
+      "Bash(pip install:*)",
+      "Bash(chmod +x \"/Users/anjistic/Desktop/personal projects/agentscope/scripts/dev_setup.sh\")",
+      "Bash(chmod +x \"/Users/anjistic/Desktop/personal projects/agentscope/scripts/start_collector.py\")"
+    ]
+  }
+}

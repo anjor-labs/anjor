@@ -57,10 +57,14 @@ class EventPipeline:
     def put(self, event: BaseEvent) -> bool:
         """Enqueue an event. Non-blocking. Returns False if queue is full."""
         try:
+            # DECISION: put_nowait (non-blocking) so the agent's call stack never stalls
+            # waiting for queue space — observability must have zero impact on agent latency.
             self._queue.put_nowait(event)
             self._stats.enqueued += 1
             return True
         except asyncio.QueueFull:
+            # DECISION: drop + log instead of blocking or raising — a full queue means the
+            # collector is behind; losing events is better than slowing or crashing the agent.
             self._stats.dropped += 1
             logger.warning(
                 "event_dropped_queue_full",
@@ -75,6 +79,8 @@ class EventPipeline:
         if not self._handlers:
             return
 
+        # DECISION: asyncio.gather(return_exceptions=True) so one bad handler never kills
+        # the others — each handler is independent; a crash in logging must not stop storage.
         results = await asyncio.gather(
             *[h.handle(event) for h in self._handlers],
             return_exceptions=True,
@@ -95,6 +101,8 @@ class EventPipeline:
         """Background worker that consumes the queue."""
         while self._running:
             try:
+                # DECISION: 0.1s timeout so the worker checks _running frequently enough
+                # to respond to stop() without holding up shutdown for long.
                 event = await asyncio.wait_for(self._queue.get(), timeout=0.1)
                 await self._dispatch(event)
                 self._queue.task_done()

@@ -62,6 +62,8 @@ class ToolCallEvent(BaseEvent):
     token_usage: TokenUsage | None = None
     schema_drift: SchemaDrift | None = None
 
+    # DECISION: model_validator mode="after" so we see the fully-constructed object
+    # and can enforce cross-field contracts that field-level validators can't express.
     @model_validator(mode="after")
     def validate_failure_type_consistency(self) -> "ToolCallEvent":
         """Enforce failure_type ↔ status contract.
@@ -74,6 +76,7 @@ class ToolCallEvent(BaseEvent):
                 f"failure_type must be None when status is success, got {self.failure_type!r}"
             )
         if self.status == ToolCallStatus.FAILURE and self.failure_type is None:
-            # Frozen models require object.__setattr__ for post-init mutation
+            # DECISION: object.__setattr__ because frozen=True blocks normal attribute setting,
+            # but we still need to coerce inside the validator before the object is returned.
             object.__setattr__(self, "failure_type", FailureType.UNKNOWN)
         return self

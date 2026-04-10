@@ -17,6 +17,8 @@ from agentscope.interceptors.parsers.registry import ParserRegistry, build_defau
 
 logger = structlog.get_logger(__name__)
 
+# DECISION: module-level threading.Lock (not asyncio.Lock) because install/uninstall
+# can be called from any thread (e.g. test teardown on a different thread than setup).
 _lock = threading.Lock()
 
 
@@ -129,7 +131,8 @@ class PatchInterceptor(BaseInterceptor):
             for event in events:
                 self._pipeline.put(event)
         except Exception as exc:
-            # Never propagate — interceptor must not affect the agent
+            # DECISION: swallow all exceptions here — the interceptor sits on the agent's
+            # critical path; any unhandled error would crash the agent's HTTP call.
             logger.warning(
                 "patch_interceptor_process_error",
                 error=str(exc),

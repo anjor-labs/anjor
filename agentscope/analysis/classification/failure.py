@@ -130,6 +130,8 @@ class FailureClassifier(BaseAnalyser):
     """
 
     def __init__(self, rules: list[BaseRule] | None = None) -> None:
+        # DECISION: sort at construction time so callers can pass rules in any order
+        # and still get deterministic priority behaviour — registration order is irrelevant.
         self._rules = sorted(rules or _DEFAULT_RULES, key=lambda r: r.priority)
 
     def analyse(self, data: ClassificationContext) -> FailureType:

@@ -70,6 +70,8 @@ class AgentScopeConfig(BaseSettings):
     All fields can be set via env vars with the AGENTSCOPE_ prefix.
     """
 
+    # DECISION: frozen=True so config can be passed around safely without callers
+    # mutating it mid-flight — config is established at startup, not modified at runtime.
     model_config = {"env_prefix": "AGENTSCOPE_", "frozen": True}
 
     # Mode: patch (in-process httpx monkey-patch) or proxy (mitmproxy)

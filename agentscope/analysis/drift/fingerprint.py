@@ -14,6 +14,8 @@ import hashlib
 import json
 from typing import Any
 
+# DECISION: depth cap at 10 to prevent runaway recursion on pathologically nested payloads
+# (e.g. circular references via JSON-unsafe objects) without failing the whole fingerprint.
 _MAX_DEPTH = 10
 _DEPTH_SENTINEL = "..."
 
@@ -50,6 +52,8 @@ def _structural_shape(value: Any, depth: int = 0) -> Any:
 def fingerprint(payload: dict[str, Any]) -> str:
     """Return a SHA-256 hex digest of the structural shape of payload."""
     shape = _structural_shape(payload)
+    # DECISION: json.dumps with sort_keys=True as a second safety net for key ordering,
+    # even though _structural_shape already sorts — defence in depth against hash instability.
     canonical = json.dumps(shape, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()
 

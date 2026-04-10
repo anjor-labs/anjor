@@ -13,6 +13,8 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 
+# DECISION: Protocol (structural subtyping) instead of ABC so any object with a
+# handle() method and name property satisfies the contract — no forced inheritance.
 @runtime_checkable
 class EventHandler(Protocol):
     """Protocol for all event handlers.
@@ -63,10 +65,14 @@ class CollectorHandler:
         self._url = collector_url.rstrip("/") + "/events"
 
     async def handle(self, event: BaseEvent) -> None:
+        # DECISION: lazy import httpx here so the handler module has no hard dep on httpx
+        # at import time — tests that don't need network can avoid importing it.
         import httpx
 
         payload = event.model_dump(mode="json")
         try:
+            # DECISION: short 2s timeout so a slow collector never blocks the handler for long;
+            # exceptions are caught below and logged, not raised.
             async with httpx.AsyncClient() as client:
                 response = await client.post(self._url, json=payload, timeout=2.0)
                 response.raise_for_status()

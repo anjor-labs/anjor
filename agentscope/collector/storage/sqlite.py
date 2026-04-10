@@ -52,7 +52,11 @@ class SQLiteBackend(StorageBackend):
     async def connect(self) -> None:
         """Open connection, apply migrations, start batch flusher."""
         self._conn = await aiosqlite.connect(self._db_path)
+        # DECISION: row_factory=aiosqlite.Row so rows behave like dicts — callers
+        # can access columns by name without knowing the column index.
         self._conn.row_factory = aiosqlite.Row
+        # DECISION: WAL mode for concurrent reads — the API reads while the batch writer
+        # writes; WAL avoids full table locks that would stall dashboard queries.
         if self._db_path != ":memory:":
             await self._conn.execute("PRAGMA journal_mode=WAL")
         await self._run_migrations()
@@ -91,6 +95,8 @@ class SQLiteBackend(StorageBackend):
     # ------------------------------------------------------------------
 
     async def _periodic_flush(self) -> None:
+        # DECISION: time-based flush as a safety net so events are written even when
+        # traffic is low and the batch_size threshold is never reached.
         interval = self._batch_interval_ms / 1000.0
         while True:
             await asyncio.sleep(interval)
