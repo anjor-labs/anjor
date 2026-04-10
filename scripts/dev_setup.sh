@@ -25,9 +25,10 @@ fi
 # Activate
 source .venv/bin/activate
 
-# Install package with dev extras
+# Install package with dev extras — use .venv/bin/pip explicitly to avoid
+# accidentally installing into a Homebrew or system Python
 echo "Installing agentscope[dev]..."
-pip install -e ".[dev]" -q
+.venv/bin/pip install -e ".[dev]" -q
 
 # Copy .env if missing
 if [ ! -f ".env" ]; then
@@ -39,6 +40,6 @@ echo ""
 echo "=== Setup complete ==="
 echo ""
 echo "Activate the environment:  source .venv/bin/activate"
-echo "Run tests:                 pytest"
-echo "Start collector:           python scripts/start_collector.py"
+echo "Run tests:                 .venv/bin/pytest   (use this, not bare 'pytest')"
+echo "Start collector:           .venv/bin/python scripts/start_collector.py"
 echo "Health check:              curl http://localhost:7843/health"
