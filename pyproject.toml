@@ -8,7 +8,21 @@ version = "0.1.0"
 description = "Observability and reliability platform for agentic AI systems"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = { file = "LICENSE" }
+authors = [{ name = "Anjani Kumar", email = "anjistic@gmail.com" }]
+keywords = ["observability", "llm", "agents", "tools", "monitoring", "anthropic"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Monitoring",
+    "Typing :: Typed",
+]
 dependencies = [
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
@@ -18,6 +32,12 @@ dependencies = [
     "httpx>=0.27",
     "structlog>=24.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/anji/agentscope"
+Repository = "https://github.com/anji/agentscope"
+Issues = "https://github.com/anji/agentscope/issues"
+Changelog = "https://github.com/anji/agentscope/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 proxy = ["mitmproxy>=10.0"]
@@ -34,6 +54,9 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["agentscope*"]
+
+[tool.setuptools.package-data]
+agentscope = ["py.typed", "collector/storage/migrations/*.sql"]
 
 [tool.ruff]
 line-length = 100
