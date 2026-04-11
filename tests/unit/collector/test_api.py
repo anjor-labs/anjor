@@ -209,3 +209,62 @@ class TestLLMEndpoint:
             client.post("/events", json=sample_llm_event())
         items = client.get("/llm").json()
         assert items[0]["call_count"] == 4
+
+
+class TestCallsEndpoint:
+    def test_empty_returns_200(self, client: TestClient) -> None:
+        resp = client.get("/calls")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_returns_tool_calls_after_event(self, client: TestClient) -> None:
+        client.post("/events", json=sample_event(tool_name="search"))
+        resp = client.get("/calls")
+        assert resp.status_code == 200
+        rows = resp.json()
+        assert len(rows) == 1
+        assert rows[0]["tool_name"] == "search"
+
+    def test_filter_by_tool_name(self, client: TestClient) -> None:
+        client.post("/events", json=sample_event(tool_name="search"))
+        client.post("/events", json=sample_event(tool_name="fetch"))
+        resp = client.get("/calls?tool_name=search")
+        assert len(resp.json()) == 1
+        assert resp.json()[0]["tool_name"] == "search"
+
+    def test_drift_only_filter(self, client: TestClient) -> None:
+        # post one normal call and one drift call
+        client.post("/events", json=sample_event())
+        drift_event = {
+            **sample_event(),
+            "schema_drift": {"detected": True, "missing_fields": ["x"], "unexpected_fields": []},
+        }
+        client.post("/events", json=drift_event)
+        resp = client.get("/calls?drift_only=true")
+        rows = resp.json()
+        assert len(rows) == 1
+        assert rows[0]["drift_detected"] == 1
+
+    def test_drift_only_false_returns_all(self, client: TestClient) -> None:
+        client.post("/events", json=sample_event())
+        client.post("/events", json=sample_event())
+        resp = client.get("/calls?drift_only=false")
+        assert len(resp.json()) == 2
+
+    def test_limit_param(self, client: TestClient) -> None:
+        for _ in range(5):
+            client.post("/events", json=sample_event())
+        resp = client.get("/calls?limit=2")
+        assert len(resp.json()) == 2
+
+    def test_offset_param(self, client: TestClient) -> None:
+        for i in range(3):
+            client.post("/events", json=sample_event(sequence_no=i))
+        all_rows = client.get("/calls?limit=10").json()
+        offset_rows = client.get("/calls?limit=10&offset=1").json()
+        assert len(offset_rows) == len(all_rows) - 1
+
+    def test_llm_events_not_returned(self, client: TestClient) -> None:
+        client.post("/events", json=sample_llm_event())
+        resp = client.get("/calls")
+        assert resp.json() == []
