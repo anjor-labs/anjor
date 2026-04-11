@@ -9,6 +9,8 @@ import httpx
 import pytest
 
 from agentscope.core.events.base import BaseEvent, EventType
+from agentscope.core.events.llm_call import LLMCallEvent
+from agentscope.core.events.tool_call import ToolCallEvent
 from agentscope.core.pipeline.pipeline import EventPipeline
 from agentscope.interceptors.patch import PatchInterceptor, ProxyInterceptor, _body_to_dict
 
@@ -108,8 +110,11 @@ class TestPatchInterceptor:
         request = make_httpx_request(_ANTHROPIC_URL, _REQUEST_BODY)
         response = make_httpx_response(200, _TOOL_RESPONSE)
         self.interceptor._process(request, response, latency_ms=100.0)
-        assert len(self.pipeline.captured) == 1
-        assert self.pipeline.captured[0].event_type == EventType.TOOL_CALL
+        # Phase 2: every call emits LLMCallEvent + ToolCallEvent(s)
+        assert len(self.pipeline.captured) == 2
+        assert isinstance(self.pipeline.captured[0], LLMCallEvent)
+        assert isinstance(self.pipeline.captured[1], ToolCallEvent)
+        assert self.pipeline.captured[1].event_type == EventType.TOOL_CALL
 
     def test_process_non_matching_url_no_events(self) -> None:
         request = make_httpx_request("https://example.com/api", {})
@@ -139,7 +144,9 @@ class TestPatchInterceptor:
                     json=_REQUEST_BODY,
                     headers={"x-api-key": "test"},
                 )
-        assert len(self.pipeline.captured) == 1
+        # LLMCallEvent + ToolCallEvent
+        assert len(self.pipeline.captured) == 2
+        assert isinstance(self.pipeline.captured[0], LLMCallEvent)
 
     async def test_async_httpx_intercepted(self) -> None:
         self.interceptor.install()
@@ -153,7 +160,9 @@ class TestPatchInterceptor:
                     json=_REQUEST_BODY,
                     headers={"x-api-key": "test"},
                 )
-        assert len(self.pipeline.captured) == 1
+        # LLMCallEvent + ToolCallEvent
+        assert len(self.pipeline.captured) == 2
+        assert isinstance(self.pipeline.captured[0], LLMCallEvent)
 
 
 # Import respx at module level for tests that use it

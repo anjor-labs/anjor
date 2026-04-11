@@ -31,6 +31,31 @@ class SchemaSnapshot:
     sample_payload: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class LLMQueryFilters:
+    """Filters for querying LLM call events."""
+
+    trace_id: str | None = None
+    agent_id: str | None = None
+    model: str | None = None
+    since: datetime | None = None
+    until: datetime | None = None
+    limit: int = 100
+    offset: int = 0
+
+
+@dataclass
+class LLMSummary:
+    """Aggregated stats for a model."""
+
+    model: str
+    call_count: int
+    avg_latency_ms: float
+    avg_token_input: float
+    avg_token_output: float
+    avg_context_utilisation: float
+
+
 @dataclass
 class ToolSummary:
     """Aggregated stats for a single tool."""
@@ -56,7 +81,24 @@ class StorageBackend(ABC):
 
     @abstractmethod
     async def write_event(self, event_data: dict[str, Any]) -> None:
-        """Persist a single event (serialised dict)."""
+        """Persist a single event (serialised dict). Routes by event_type."""
+        ...
+
+    @abstractmethod
+    async def write_llm_event(self, event_data: dict[str, Any]) -> None:
+        """Persist an LLM call event to the llm_calls table."""
+        ...
+
+    @abstractmethod
+    async def query_llm_calls(
+        self, filters: LLMQueryFilters
+    ) -> list[dict[str, Any]]:
+        """Query stored LLM call events with optional filters."""
+        ...
+
+    @abstractmethod
+    async def list_llm_summaries(self) -> list[LLMSummary]:
+        """Return aggregated stats per model."""
         ...
 
     @abstractmethod

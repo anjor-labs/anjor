@@ -41,8 +41,48 @@ class EventIngestResponse(BaseModel):
     message: str = "Event accepted"
 
 
+class LLMSummaryItem(BaseModel):
+    """Aggregate stats for a single model."""
+
+    model: str
+    call_count: int
+    avg_latency_ms: float
+    avg_token_input: float
+    avg_token_output: float
+    avg_context_utilisation: float
+
+
+class LLMDetailItem(BaseModel):
+    """A single LLM call row as returned by GET /llm/trace/{trace_id}."""
+
+    trace_id: str = ""
+    session_id: str = ""
+    agent_id: str = "default"
+    model: str = ""
+    latency_ms: float = 0.0
+    token_input: int | None = None
+    token_output: int | None = None
+    token_cache_read: int | None = None
+    context_window_used: int | None = None
+    context_window_limit: int | None = None
+    context_utilisation: float | None = None
+    prompt_hash: str | None = None
+    system_prompt_hash: str | None = None
+    messages_count: int | None = None
+    finish_reason: str | None = None
+    timestamp: str = ""
+
+
 class EventIngestRequest(BaseModel):
-    """Incoming event payload. Validated before storage."""
+    """Incoming event payload. Validated before storage.
+
+    extra="allow" so Phase 2 LLM-specific fields (model, context_window_used, etc.)
+    pass through without being listed here — avoids a separate schema per event type.
+    """
+
+    # DECISION: extra="allow" instead of a separate LLMIngestRequest — the routing
+    # to the right table happens in SQLiteBackend.write_event() based on event_type.
+    model_config = {"extra": "allow"}
 
     event_type: str
     tool_name: str = ""

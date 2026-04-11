@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from agentscope.core.events.base import BaseEvent, EventType
-from agentscope.core.events.llm_call import LLMCallEvent
+from agentscope.core.events.llm_call import LLMCallEvent, LLMTokenUsage
 from agentscope.core.events.registry import EventTypeRegistry, default_registry
 from agentscope.core.events.tool_call import (
     FailureType,
@@ -155,14 +155,89 @@ class TestToolCallEvent:
 
 
 class TestLLMCallEvent:
+    def _make(self, **kwargs: object) -> LLMCallEvent:
+        return LLMCallEvent(model="claude-3-5-sonnet-20241022", latency_ms=500.0, **kwargs)  # type: ignore[arg-type]
+
     def test_event_type_is_llm_call(self) -> None:
-        event = LLMCallEvent(model="claude-3-5-sonnet")
-        assert event.event_type == EventType.LLM_CALL
+        assert self._make().event_type == EventType.LLM_CALL
+
+    def test_inherits_base_event_fields(self) -> None:
+        event = self._make()
+        assert event.trace_id
+        assert event.timestamp
 
     def test_defaults(self) -> None:
-        event = LLMCallEvent(model="gpt-4")
-        assert event.latency_ms == 0.0
+        event = self._make()
+        assert event.latency_ms == 500.0
         assert event.context_window_used == 0
+        assert event.context_window_limit == 0
+        assert event.context_utilisation == 0.0
+        assert event.token_usage is None
+        assert event.prompt_hash == ""
+        assert event.system_prompt_hash is None
+        assert event.messages_count == 0
+        assert event.finish_reason is None
+
+    def test_context_utilisation_computed(self) -> None:
+        event = self._make(context_window_used=50_000, context_window_limit=200_000)
+        assert event.context_utilisation == pytest.approx(0.25)
+
+    def test_context_utilisation_capped_at_one(self) -> None:
+        # over-limit edge case — still 1.0, not > 1
+        event = self._make(context_window_used=250_000, context_window_limit=200_000)
+        assert event.context_utilisation == 1.0
+
+    def test_context_utilisation_zero_when_limit_unknown(self) -> None:
+        event = self._make(context_window_used=1000, context_window_limit=0)
+        assert event.context_utilisation == 0.0
+
+    def test_token_usage(self) -> None:
+        usage = LLMTokenUsage(input=1000, output=250, cache_read=500)
+        event = self._make(token_usage=usage)
+        assert event.token_usage is not None
+        assert event.token_usage.input == 1000
+        assert event.token_usage.output == 250
+        assert event.token_usage.cache_read == 500
+
+    def test_token_usage_cache_read_defaults_zero(self) -> None:
+        usage = LLMTokenUsage(input=100, output=50)
+        assert usage.cache_read == 0
+
+    def test_prompt_hash(self) -> None:
+        event = self._make(
+            prompt_hash="abc123",
+            system_prompt_hash="def456",
+        )
+        assert event.prompt_hash == "abc123"
+        assert event.system_prompt_hash == "def456"
+
+    def test_finish_reason(self) -> None:
+        for reason in ("end_turn", "tool_use", "max_tokens", "stop_sequence"):
+            event = self._make(finish_reason=reason)
+            assert event.finish_reason == reason
+
+    def test_frozen(self) -> None:
+        event = self._make()
+        with pytest.raises(ValidationError):
+            event.model = "other"  # type: ignore[misc]
+
+    def test_latency_non_negative(self) -> None:
+        with pytest.raises(ValidationError):
+            LLMCallEvent(model="claude", latency_ms=-1.0)
+
+    def test_messages_count_non_negative(self) -> None:
+        with pytest.raises(ValidationError):
+            self._make(messages_count=-1)
+
+    def test_serialises_to_dict(self) -> None:
+        event = self._make(
+            context_window_used=10_000,
+            context_window_limit=200_000,
+            token_usage=LLMTokenUsage(input=100, output=50),
+        )
+        d = event.model_dump()
+        assert d["model"] == "claude-3-5-sonnet-20241022"
+        assert d["context_utilisation"] == pytest.approx(0.05)
 
 
 # ---------------------------------------------------------------------------

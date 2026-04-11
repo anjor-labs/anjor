@@ -11,6 +11,8 @@ from typing import Any
 import aiosqlite
 
 from agentscope.collector.storage.base import (
+    LLMQueryFilters,
+    LLMSummary,
     QueryFilters,
     SchemaSnapshot,
     StorageBackend,
@@ -153,13 +155,50 @@ class SQLiteBackend(StorageBackend):
     # ------------------------------------------------------------------
 
     async def write_event(self, event_data: dict[str, Any]) -> None:
-        """Buffer event in batch; flush immediately if batch_size reached."""
-        async with self._lock:
-            self._batch.append(event_data)
-            should_flush = len(self._batch) >= self._batch_size
+        """Route and persist a single event by event_type."""
+        event_type = event_data.get("event_type")
+        if event_type == "tool_call":
+            async with self._lock:
+                self._batch.append(event_data)
+                should_flush = len(self._batch) >= self._batch_size
+            if should_flush:
+                await self._flush()
+        elif event_type == "llm_call":
+            await self.write_llm_event(event_data)
 
-        if should_flush:
-            await self._flush()
+    async def write_llm_event(self, event_data: dict[str, Any]) -> None:
+        """Persist an LLMCallEvent directly to the llm_calls table (not batched)."""
+        assert self._conn is not None
+        usage = event_data.get("token_usage") or {}
+        await self._conn.execute(
+            """INSERT INTO llm_calls (
+                trace_id, session_id, agent_id, timestamp, sequence_no,
+                model, latency_ms,
+                token_input, token_output, token_cache_read,
+                context_window_used, context_window_limit, context_utilisation,
+                prompt_hash, system_prompt_hash, messages_count, finish_reason
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                event_data.get("trace_id", ""),
+                event_data.get("session_id", ""),
+                event_data.get("agent_id", "default"),
+                event_data.get("timestamp", _now_iso()),
+                event_data.get("sequence_no", 0),
+                event_data.get("model", ""),
+                event_data.get("latency_ms", 0.0),
+                usage.get("input"),
+                usage.get("output"),
+                usage.get("cache_read"),
+                event_data.get("context_window_used"),
+                event_data.get("context_window_limit"),
+                event_data.get("context_utilisation"),
+                event_data.get("prompt_hash"),
+                event_data.get("system_prompt_hash"),
+                event_data.get("messages_count"),
+                event_data.get("finish_reason"),
+            ),
+        )
+        await self._conn.commit()
 
     async def query_tool_calls(
         self, filters: QueryFilters
@@ -241,6 +280,67 @@ class SQLiteBackend(StorageBackend):
             p95_latency_ms=percentile(latencies, 95),
             p99_latency_ms=percentile(latencies, 99),
         )
+
+    async def query_llm_calls(
+        self, filters: LLMQueryFilters
+    ) -> list[dict[str, Any]]:
+        """Query LLM call events with optional filters."""
+        assert self._conn is not None
+        conditions: list[str] = []
+        params: list[Any] = []
+
+        if filters.trace_id:
+            conditions.append("trace_id = ?")
+            params.append(filters.trace_id)
+        if filters.agent_id:
+            conditions.append("agent_id = ?")
+            params.append(filters.agent_id)
+        if filters.model:
+            conditions.append("model = ?")
+            params.append(filters.model)
+        if filters.since:
+            conditions.append("timestamp >= ?")
+            params.append(filters.since.isoformat())
+        if filters.until:
+            conditions.append("timestamp <= ?")
+            params.append(filters.until.isoformat())
+
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+        params.extend([filters.limit, filters.offset])
+
+        cursor = await self._conn.execute(
+            f"SELECT * FROM llm_calls {where} ORDER BY timestamp DESC LIMIT ? OFFSET ?",  # noqa: S608
+            params,
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def list_llm_summaries(self) -> list[LLMSummary]:
+        """Return aggregated stats per model from llm_calls table."""
+        assert self._conn is not None
+        cursor = await self._conn.execute(
+            """SELECT
+                model,
+                count(*) as call_count,
+                avg(latency_ms) as avg_latency_ms,
+                avg(token_input) as avg_token_input,
+                avg(token_output) as avg_token_output,
+                avg(context_utilisation) as avg_context_utilisation
+               FROM llm_calls
+               GROUP BY model"""
+        )
+        rows = await cursor.fetchall()
+        return [
+            LLMSummary(
+                model=row["model"],
+                call_count=row["call_count"],
+                avg_latency_ms=row["avg_latency_ms"] or 0.0,
+                avg_token_input=row["avg_token_input"] or 0.0,
+                avg_token_output=row["avg_token_output"] or 0.0,
+                avg_context_utilisation=row["avg_context_utilisation"] or 0.0,
+            )
+            for row in rows
+        ]
 
     async def write_schema_snapshot(self, snap: SchemaSnapshot) -> None:
         assert self._conn is not None

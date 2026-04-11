@@ -9,6 +9,7 @@ from fastapi import FastAPI
 
 from agentscope.collector.api.routes.events import make_events_router
 from agentscope.collector.api.routes.health import make_health_router
+from agentscope.collector.api.routes.llm import make_llm_router
 from agentscope.collector.api.routes.tools import make_tools_router
 from agentscope.collector.service import CollectorService
 from agentscope.core.config import AgentScopeConfig
@@ -43,5 +44,6 @@ def create_app(
     app.include_router(make_health_router(resolved_service))
     app.include_router(make_events_router(resolved_service))
     app.include_router(make_tools_router(resolved_service))
+    app.include_router(make_llm_router(resolved_service))
 
     return app

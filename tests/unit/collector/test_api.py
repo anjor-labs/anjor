@@ -136,3 +136,76 @@ class TestToolsEndpoint:
         assert "call_count" in item
         assert "success_rate" in item
         assert "avg_latency_ms" in item
+
+
+def sample_llm_event(**kwargs: object) -> dict:
+    return {
+        "event_type": "llm_call",
+        "trace_id": "trace-llm-1",
+        "session_id": "session-1",
+        "agent_id": "default",
+        "timestamp": datetime.now(UTC).isoformat(),
+        "sequence_no": 0,
+        "model": "claude-3-5-sonnet-20241022",
+        "latency_ms": 500.0,
+        "token_usage": {"input": 100, "output": 50, "cache_read": 0},
+        "context_window_used": 150,
+        "context_window_limit": 200_000,
+        "context_utilisation": 0.00075,
+        "prompt_hash": "abc123",
+        "system_prompt_hash": None,
+        "messages_count": 2,
+        "finish_reason": "end_turn",
+        **kwargs,
+    }
+
+
+class TestLLMEndpoint:
+    def test_list_llm_empty(self, client: TestClient) -> None:
+        resp = client.get("/llm")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_list_llm_after_event(self, client: TestClient) -> None:
+        client.post("/events", json=sample_llm_event())
+        resp = client.get("/llm")
+        assert resp.status_code == 200
+        items = resp.json()
+        assert len(items) == 1
+        assert items[0]["model"] == "claude-3-5-sonnet-20241022"
+
+    def test_llm_summary_fields(self, client: TestClient) -> None:
+        client.post("/events", json=sample_llm_event())
+        item = client.get("/llm").json()[0]
+        assert "model" in item
+        assert "call_count" in item
+        assert "avg_latency_ms" in item
+        assert "avg_token_input" in item
+        assert "avg_token_output" in item
+        assert "avg_context_utilisation" in item
+
+    def test_llm_trace_not_found(self, client: TestClient) -> None:
+        resp = client.get("/llm/trace/nonexistent-trace")
+        assert resp.status_code == 404
+
+    def test_llm_trace_detail(self, client: TestClient) -> None:
+        client.post("/events", json=sample_llm_event(trace_id="trace-xyz"))
+        resp = client.get("/llm/trace/trace-xyz")
+        assert resp.status_code == 200
+        items = resp.json()
+        assert len(items) == 1
+        assert items[0]["trace_id"] == "trace-xyz"
+        assert items[0]["model"] == "claude-3-5-sonnet-20241022"
+
+    def test_llm_trace_multiple_calls(self, client: TestClient) -> None:
+        for _ in range(3):
+            client.post("/events", json=sample_llm_event(trace_id="trace-multi"))
+        resp = client.get("/llm/trace/trace-multi")
+        assert resp.status_code == 200
+        assert len(resp.json()) == 3
+
+    def test_llm_aggregate_call_count(self, client: TestClient) -> None:
+        for _ in range(4):
+            client.post("/events", json=sample_llm_event())
+        items = client.get("/llm").json()
+        assert items[0]["call_count"] == 4
