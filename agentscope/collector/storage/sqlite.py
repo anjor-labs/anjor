@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import statistics
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -187,7 +186,7 @@ class SQLiteBackend(StorageBackend):
         params.extend([filters.limit, filters.offset])
 
         cursor = await self._conn.execute(
-            f"SELECT * FROM tool_calls {where} ORDER BY timestamp DESC LIMIT ? OFFSET ?",
+            f"SELECT * FROM tool_calls {where} ORDER BY timestamp DESC LIMIT ? OFFSET ?",  # noqa: S608
             params,
         )
         rows = await cursor.fetchall()
@@ -202,7 +201,7 @@ class SQLiteBackend(StorageBackend):
         rows = await cursor.fetchall()
         if not rows:
             return None
-        return self._compute_summary(tool_name, rows)
+        return self._compute_summary(tool_name, list(rows))
 
     async def list_tool_summaries(self) -> list[ToolSummary]:
         assert self._conn is not None

@@ -5,10 +5,13 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-import pytest
-
 from agentscope.core.events.base import BaseEvent, EventType
-from agentscope.core.pipeline.handlers import CollectorHandler, EventHandler, LogHandler, NoOpHandler
+from agentscope.core.pipeline.handlers import (
+    CollectorHandler,
+    EventHandler,
+    LogHandler,
+    NoOpHandler,
+)
 from agentscope.core.pipeline.pipeline import EventPipeline
 
 if TYPE_CHECKING:

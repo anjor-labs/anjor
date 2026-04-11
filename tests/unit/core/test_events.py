@@ -13,11 +13,10 @@ from agentscope.core.events.registry import EventTypeRegistry, default_registry
 from agentscope.core.events.tool_call import (
     FailureType,
     SchemaDrift,
+    TokenUsage,
     ToolCallEvent,
     ToolCallStatus,
-    TokenUsage,
 )
-
 
 # ---------------------------------------------------------------------------
 # BaseEvent tests

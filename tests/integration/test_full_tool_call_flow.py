@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-import httpx
 import pytest
-import respx
 from fastapi.testclient import TestClient
 
 from agentscope.collector.api.app import create_app

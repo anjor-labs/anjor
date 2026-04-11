@@ -5,7 +5,7 @@ These are separate from domain models — API schema can evolve independently.
 
 from __future__ import annotations
 
-from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -54,9 +54,9 @@ class EventIngestRequest(BaseModel):
     status: str = ""
     failure_type: str | None = None
     latency_ms: float = Field(default=0.0, ge=0)
-    input_payload: dict = Field(default_factory=dict)
-    output_payload: dict = Field(default_factory=dict)
+    input_payload: dict[str, Any] = Field(default_factory=dict)
+    output_payload: dict[str, Any] = Field(default_factory=dict)
     input_schema_hash: str = ""
     output_schema_hash: str = ""
-    token_usage: dict | None = None
-    schema_drift: dict | None = None
+    token_usage: dict[str, Any] | None = None
+    schema_drift: dict[str, Any] | None = None

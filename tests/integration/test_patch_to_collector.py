@@ -10,8 +10,8 @@ from agentscope.collector.storage.base import QueryFilters
 from agentscope.collector.storage.sqlite import SQLiteBackend
 from agentscope.core.events.base import BaseEvent
 from agentscope.core.pipeline.pipeline import EventPipeline
-from agentscope.interceptors.patch import PatchInterceptor
 from agentscope.interceptors.parsers.registry import build_default_registry
+from agentscope.interceptors.patch import PatchInterceptor
 
 _ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 

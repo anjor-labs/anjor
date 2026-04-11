@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
-import io
-import time
 import threading
-from typing import Any, Callable
+import time
+from collections.abc import Callable
+from typing import Any
 
 import httpx
 import structlog

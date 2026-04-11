@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import os
-
 import pytest
+from pydantic import ValidationError
 
 from agentscope.core.config import AgentScopeConfig, SanitiseConfig
 
@@ -33,22 +32,22 @@ class TestAgentScopeConfig:
             AgentScopeConfig(mode="invalid")  # type: ignore[call-arg]
 
     def test_invalid_log_level_raises(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             AgentScopeConfig(log_level="VERBOSE")  # type: ignore[call-arg]
 
     def test_proxy_port_bounds(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             AgentScopeConfig(proxy_port=0)  # type: ignore[call-arg]
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             AgentScopeConfig(proxy_port=70000)  # type: ignore[call-arg]
 
     def test_batch_size_min(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             AgentScopeConfig(batch_size=0)  # type: ignore[call-arg]
 
     def test_frozen_prevents_mutation(self) -> None:
         cfg = AgentScopeConfig()
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             cfg.mode = "proxy"  # type: ignore[misc]
 
     def test_valid_modes(self) -> None:
@@ -77,5 +76,5 @@ class TestSanitiseConfig:
 
     def test_frozen(self) -> None:
         cfg = SanitiseConfig()
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             cfg.strip_patterns = []  # type: ignore[misc]

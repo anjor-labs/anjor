@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from fnmatch import fnmatch
 from typing import Any
+from uuid import uuid4
 
 from agentscope.analysis.drift.fingerprint import fingerprint
 from agentscope.core.events.base import BaseEvent
 from agentscope.core.events.tool_call import (
     FailureType,
-    SchemaDrift,
+    TokenUsage,
     ToolCallEvent,
     ToolCallStatus,
-    TokenUsage,
 )
 from agentscope.interceptors.parsers.base import BaseParser
 
@@ -99,7 +99,6 @@ class AnthropicParser(BaseParser):
 
         if not tool_use_blocks and not is_success:
             # API error with no tool calls — create a single failure event
-            error_info = response_body.get("error", {})
             sanitised_req = _sanitise(request_body)
             sanitised_resp = _sanitise(response_body)
             event = ToolCallEvent(
@@ -112,8 +111,8 @@ class AnthropicParser(BaseParser):
                 input_schema_hash=fingerprint(sanitised_req),
                 output_schema_hash=fingerprint(sanitised_resp),
                 token_usage=token_usage,
-                **({"trace_id": trace_id} if trace_id else {}),
-                **({"session_id": session_id} if session_id else {}),
+                trace_id=trace_id if trace_id else str(uuid4()),
+                session_id=session_id if session_id else str(uuid4()),
             )
             events.append(event)
             return events
@@ -147,8 +146,8 @@ class AnthropicParser(BaseParser):
                 input_schema_hash=input_hash,
                 output_schema_hash=output_hash,
                 token_usage=token_usage,
-                **({"trace_id": trace_id} if trace_id else {}),
-                **({"session_id": session_id} if session_id else {}),
+                trace_id=trace_id if trace_id else str(uuid4()),
+                session_id=session_id if session_id else str(uuid4()),
             )
             events.append(event)
 

@@ -108,13 +108,13 @@ class AgentScopeConfig(BaseSettings):
     def settings_customise_sources(
         cls,
         settings_cls: type[BaseSettings],
-        **kwargs: Any,
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        # Extract the standard sources from kwargs
-        init_settings = kwargs.get("init_settings")
-        env_settings = kwargs.get("env_settings")
-        assert init_settings is not None
-        assert env_settings is not None
+        # DECISION: explicit signature matches supertype exactly so mypy strict is happy.
+        # We omit dotenv_settings and file_secret_settings — config comes from env + TOML.
         return (
             init_settings,
             env_settings,

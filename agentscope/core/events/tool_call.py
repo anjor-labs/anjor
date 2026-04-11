@@ -65,7 +65,7 @@ class ToolCallEvent(BaseEvent):
     # DECISION: model_validator mode="after" so we see the fully-constructed object
     # and can enforce cross-field contracts that field-level validators can't express.
     @model_validator(mode="after")
-    def validate_failure_type_consistency(self) -> "ToolCallEvent":
+    def validate_failure_type_consistency(self) -> ToolCallEvent:
         """Enforce failure_type ↔ status contract.
 
         - success + failure_type set → ValidationError

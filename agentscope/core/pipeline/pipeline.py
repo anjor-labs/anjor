@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import structlog
@@ -85,7 +85,7 @@ class EventPipeline:
             *[h.handle(event) for h in self._handlers],
             return_exceptions=True,
         )
-        for handler, result in zip(self._handlers, results):
+        for handler, result in zip(self._handlers, results, strict=False):
             if isinstance(result, BaseException):
                 self._stats.handler_errors += 1
                 logger.error(
@@ -136,7 +136,7 @@ class EventPipeline:
                 pass
             self._worker_task = None
 
-    async def __aenter__(self) -> "EventPipeline":
+    async def __aenter__(self) -> EventPipeline:
         await self.start()
         return self
 

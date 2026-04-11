@@ -3,17 +3,14 @@
 from __future__ import annotations
 
 import json
-from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import httpx
 import pytest
 
 from agentscope.core.events.base import BaseEvent, EventType
 from agentscope.core.pipeline.pipeline import EventPipeline
-from agentscope.interceptors.parsers.registry import ParserRegistry
 from agentscope.interceptors.patch import PatchInterceptor, ProxyInterceptor, _body_to_dict
-
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 

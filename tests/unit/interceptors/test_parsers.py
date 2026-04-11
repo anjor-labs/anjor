@@ -7,7 +7,6 @@ from agentscope.interceptors.parsers.anthropic import AnthropicParser, _sanitise
 from agentscope.interceptors.parsers.openai import OpenAIParser
 from agentscope.interceptors.parsers.registry import ParserRegistry, build_default_registry
 
-
 # ---------------------------------------------------------------------------
 # AnthropicParser tests
 # ---------------------------------------------------------------------------
@@ -196,8 +195,8 @@ class TestSanitise:
         assert result["data"]["user"] == "alice"
 
     def test_redacts_in_list(self) -> None:
-        result = _sanitise({"items": [{"password": "secret", "name": "x"}]})
-        assert result["items"][0]["password"] == "[REDACTED]"
+        result = _sanitise({"items": [{"password": "secret", "name": "x"}]})  # noqa: S105
+        assert result["items"][0]["password"] == "[REDACTED]"  # noqa: S105
         assert result["items"][0]["name"] == "x"
 
     def test_case_insensitive(self) -> None:
