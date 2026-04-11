@@ -1,20 +1,34 @@
 """AgentScope — observability and reliability for agentic AI systems.
 
 Public API:
-    patch()         — install the in-process httpx interceptor
-    configure()     — set config programmatically
-    get_pipeline()  — access the global event pipeline
+    patch()                — install the in-process httpx interceptor
+    configure()            — set config programmatically
+    get_pipeline()         — access the global event pipeline
+    ContextWindowTracker   — track context usage across turns per trace
+    ContextHogDetector     — identify tools with oversized outputs
+    PromptDriftDetector    — detect system prompt changes per agent
 """
 
 from __future__ import annotations
 
+from agentscope.analysis.context.hog_detector import ContextHogDetector
+from agentscope.analysis.context.tracker import ContextWindowTracker
+from agentscope.analysis.prompt.detector import PromptDriftDetector
 from agentscope.core.config import AgentScopeConfig
 from agentscope.core.pipeline.pipeline import EventPipeline
 from agentscope.interceptors.parsers.registry import build_default_registry
 from agentscope.interceptors.patch import PatchInterceptor
 
-__version__ = "0.1.0"
-__all__ = ["patch", "configure", "get_pipeline", "__version__"]
+__version__ = "0.2.0"
+__all__ = [
+    "patch",
+    "configure",
+    "get_pipeline",
+    "ContextWindowTracker",
+    "ContextHogDetector",
+    "PromptDriftDetector",
+    "__version__",
+]
 
 # Module-level singletons — lazily initialised
 _config: AgentScopeConfig | None = None

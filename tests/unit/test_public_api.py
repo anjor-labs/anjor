@@ -69,7 +69,19 @@ class TestPublicAPI:
         assert agentscope._config is cfg
 
     def test_version_is_set(self) -> None:
-        assert agentscope.__version__ == "0.1.0"
+        assert agentscope.__version__ == "0.2.0"
+
+    def test_phase2_exports_available(self) -> None:
+        from agentscope import ContextHogDetector, ContextWindowTracker, PromptDriftDetector
+
+        assert ContextWindowTracker is not None
+        assert ContextHogDetector is not None
+        assert PromptDriftDetector is not None
+
+    def test_all_exports_in_all(self) -> None:
+        assert "ContextWindowTracker" in agentscope.__all__
+        assert "ContextHogDetector" in agentscope.__all__
+        assert "PromptDriftDetector" in agentscope.__all__
 
 
 class TestProxyInterceptor:

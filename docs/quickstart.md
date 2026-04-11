@@ -372,3 +372,134 @@ Your agent may be using `requests` instead of `httpx`. The current interceptor p
 **Collector exits immediately**
 
 Check the port isn't already in use: `lsof -i :7843`. Change with `AGENTSCOPE_COLLECTOR_PORT=7844`.
+
+---
+
+## Phase 2 — LLM Call Intelligence
+
+### Query LLM call summaries
+
+```bash
+curl http://localhost:7843/llm
+```
+
+```json
+[
+  {
+    "model": "claude-3-5-sonnet-20241022",
+    "call_count": 5,
+    "avg_latency_ms": 1150.2,
+    "avg_token_input": 312.0,
+    "avg_token_output": 88.4,
+    "avg_context_utilisation": 0.002
+  }
+]
+```
+
+### Get all LLM calls for a trace
+
+```bash
+curl http://localhost:7843/llm/trace/my-trace-id
+```
+
+### Track context window growth in code
+
+```python
+from agentscope import ContextWindowTracker
+
+tracker = ContextWindowTracker(thresholds=[0.7, 0.9])
+
+# Call after each LLM response
+alert = tracker.record(
+    trace_id="session-abc",
+    context_used=145_000,
+    context_limit=200_000,
+)
+if alert:
+    print(f"Context threshold {alert.threshold:.0%} crossed — utilisation {alert.utilisation:.1%}")
+
+# Get growth rate (avg tokens added per turn)
+rate = tracker.growth_rate("session-abc")
+print(f"Growing at {rate:,.0f} tokens/turn")
+```
+
+### Detect bloated tool outputs
+
+```python
+from agentscope import ContextHogDetector
+
+detector = ContextHogDetector(threshold=0.10, context_window_limit=200_000)
+
+result = detector.record("web_search", output_bytes=len(raw_tool_output))
+if result.is_hog:
+    print(
+        f"{result.tool_name} consumes ~{result.context_fraction:.1%} of context window "
+        f"({result.estimated_tokens:,} tokens avg)"
+    )
+
+# Summary of all tools sorted by context fraction
+for r in detector.summary():
+    print(f"{r.tool_name}: {r.context_fraction:.2%}")
+```
+
+### Detect system prompt drift
+
+```python
+from agentscope import PromptDriftDetector
+
+detector = PromptDriftDetector()
+
+# First call per agent — establishes baseline
+result = detector.check("my-agent", system_prompt="You are a helpful assistant.")
+print(result)  # None
+
+# Subsequent call — returns PromptDrift(detected=False) if unchanged
+result = detector.check("my-agent", system_prompt="You are a helpful assistant.")
+print(result.detected)  # False
+
+# Changed prompt — drift detected
+result = detector.check("my-agent", system_prompt="You are a coding assistant.")
+print(result.detected)         # True
+print(result.calls_since_last_change)  # resets to 0
+```
+
+### Trace ID consistency across LLM and tool events
+
+Pass `trace_id` in the Anthropic request metadata to correlate LLM call and tool events:
+
+```python
+import httpx
+
+response = httpx.post(
+    "https://api.anthropic.com/v1/messages",
+    json={
+        "model": "claude-3-5-sonnet-20241022",
+        "max_tokens": 1024,
+        "messages": [{"role": "user", "content": "Search for AI news"}],
+        "metadata": {"trace_id": "my-session-001"},  # shared across all events
+    },
+    headers={"x-api-key": "sk-ant-..."},
+)
+```
+
+The `trace_id` propagates to both the `LLMCallEvent` and any `ToolCallEvent`(s) produced from that call.
+
+---
+
+## What's In the llm_calls Table
+
+```sql
+SELECT
+    model,
+    round(latency_ms, 1) as latency_ms,
+    token_input,
+    token_output,
+    token_cache_read,
+    round(context_utilisation * 100, 2) as context_pct,
+    finish_reason,
+    trace_id,
+    timestamp
+FROM llm_calls
+ORDER BY timestamp DESC
+LIMIT 20;
+```

@@ -54,40 +54,51 @@ httpx.Client.send  →  wrapped_send()           # interceptors/patch.py
 
 ---
 
-## 3. AnthropicParser — Response → ToolCallEvent
+## 3. AnthropicParser — Response → LLMCallEvent + ToolCallEvents
 
 ```
 AnthropicParser.parse(url, request_body, response_body, latency_ms, status_code)
   ├── is_success = 200 <= status_code < 300
+  ├── model = request_body.get("model", "")
+  ├── context_limit = _MODEL_CONTEXT_LIMITS.get(model, 200_000)
   ├── Extract token_usage from response_body["usage"]
-  │     └── TokenUsage(input=input_tokens, output=output_tokens)
+  │     └── LLMTokenUsage(input=input_tokens, output=output_tokens, cache_read=...)
   ├── Extract trace_id / session_id from request_body["metadata"] (if present)
+  ├── finish_reason = response_body.get("stop_reason")
+  ├── context_window_used = token_usage.input + token_usage.output
+  │
+  ├── _prompt_hash(messages)       # SHA-256 of structural shape: [(role, content_type), ...]
+  ├── _system_prompt_hash(system)  # SHA-256 of system prompt string, or None
+  │
+  ├── LLMCallEvent(
+  │     model, latency_ms, token_usage,
+  │     context_window_used, context_window_limit=context_limit,
+  │     context_utilisation  ← auto-computed by model_validator (used/limit, capped at 1.0)
+  │     prompt_hash, system_prompt_hash,
+  │     messages_count=len(messages), finish_reason,
+  │     trace_id, session_id
+  │   )
+  │
   ├── content = response_body.get("content", [])
   ├── tool_use_blocks = [b for b in content if b["type"] == "tool_use"]
   │
-  ├── [No blocks, success] → return []           # text-only response, nothing to record
+  ├── [No blocks, success] → return [LLMCallEvent]      # text-only response
   │
-  ├── [No blocks, failure] → build one ToolCallEvent(tool_name="unknown", status=FAILURE)
+  ├── [No blocks, failure] → return [LLMCallEvent, ToolCallEvent(tool_name="unknown", FAILURE)]
   │
-  └── [Has blocks] → for each tool_use block:
-        ├── tool_name = block["name"]            # e.g. "web_search"
-        ├── tool_input = block["input"]          # the args dict
-        ├── sanitised_input = _sanitise(tool_input)
-        │     └── recursively redacts keys matching *api_key*, *secret*, *token*, etc.
-        ├── input_schema_hash  = fingerprint(sanitised_input)   # SHA-256 of structure
-        ├── output_schema_hash = fingerprint({})                 # output not yet known
+  └── [Has blocks] → return [LLMCallEvent] + for each tool_use block:
+        ├── tool_name = block["name"]
+        ├── sanitised_input = _sanitise(block["input"])
+        ├── input_schema_hash = fingerprint(sanitised_input)
         └── ToolCallEvent(
-              tool_name, status, failure_type,
-              latency_ms, input_payload=sanitised_input,
-              input_schema_hash, output_schema_hash,
-              token_usage, trace_id, session_id
+              tool_name, status, failure_type, latency_ms,
+              input_payload=sanitised_input,
+              input_schema_hash, token_usage,
+              trace_id, session_id          # same values as LLMCallEvent above
             )
-              └── model_validator runs:
-                    - success + failure_type set → ValidationError
-                    - failure + failure_type None → coerce to UNKNOWN
 ```
 
-Each `tool_use` block becomes exactly one `ToolCallEvent`. For 2 tool calls in one response: 2 events are returned and each is enqueued separately.
+Every `/v1/messages` call produces at minimum one `LLMCallEvent`. Tool-use responses also produce `ToolCallEvent`(s). The `trace_id` and `session_id` are identical across all events from the same HTTP call.
 
 ---
 
@@ -154,33 +165,42 @@ CollectorHandler.handle(event)               # core/pipeline/handlers.py
 
 ---
 
-## 7. SQLiteBackend — Batch Write to Disk
+## 7. SQLiteBackend — Event Routing + Write
 
 ```
 SQLiteBackend.write_event(event_dict)
-  ├── _lock.acquire()
-  ├── self._batch.append(event_dict)
-  ├── should_flush = len(self._batch) >= batch_size   (default: 100)
-  └── _lock.release()
-        └── [should_flush] → _flush()
+  ├── event_type = event_dict.get("event_type")
+  │
+  ├── [event_type == "llm_call"] → write_llm_event(event_dict)
+  │     └── conn.execute(
+  │           "INSERT INTO llm_calls (...) VALUES (...)",
+  │           (trace_id, session_id, agent_id, timestamp, model, latency_ms,
+  │            token_input, token_output, token_cache_read,
+  │            context_window_used, context_window_limit, context_utilisation,
+  │            prompt_hash, system_prompt_hash, messages_count, finish_reason)
+  │         )
+  │           └── conn.commit()  [direct write — no batching for LLM events]
+  │
+  └── [event_type == "tool_call"] → batch path
+        ├── _lock.acquire()
+        ├── self._batch.append(event_dict)
+        ├── should_flush = len(self._batch) >= batch_size
+        └── _lock.release()
+              └── [should_flush] → _flush()
 
 SQLiteBackend._flush()
-  ├── _lock.acquire()
-  ├── batch = self._batch[:]   # snapshot
-  ├── self._batch.clear()
-  ├── _lock.release()
   └── conn.executemany(
-        "INSERT INTO tool_calls (...) VALUES (...)",   # parameterised — no f-strings
+        "INSERT INTO tool_calls (...) VALUES (...)",   # parameterised
         [_row_from_event(e) for e in batch]
       )
         └── conn.commit()
 
-# Also runs on a timer regardless of batch size:
+# Timer flush regardless of batch size:
 SQLiteBackend._periodic_flush()   [asyncio.Task]
   └── loop: asyncio.sleep(batch_interval_ms / 1000)  →  _flush()
 ```
 
-`_row_from_event` maps the event dict to a 20-element tuple covering every column in `tool_calls`.
+DECISION: `write_event()` routes by `event_type` so callers (CollectorHandler) always call one method and the backend decides where data goes. Adding a new event type only requires a new branch here, not changes in callers.
 
 ---
 
@@ -263,7 +283,32 @@ FailureClassifier.analyse(ClassificationContext(...))
 
 ---
 
-## 11. Shutdown
+## 11. LLM Query Path (GET /llm, GET /llm/trace/{trace_id})
+
+```
+GET /llm
+  └── FastAPI route               # collector/api/routes/llm.py
+        └── CollectorService.storage.list_llm_summaries()
+              └── SQLiteBackend.list_llm_summaries()
+                    └── SELECT model, COUNT(*), AVG(latency_ms), AVG(token_input),
+                               AVG(token_output), AVG(context_utilisation)
+                        FROM llm_calls
+                        GROUP BY model
+                        ORDER BY COUNT(*) DESC
+
+GET /llm/trace/{trace_id}
+  └── FastAPI route
+        └── CollectorService.storage.query_llm_calls(LLMQueryFilters(trace_id=...))
+              └── SQLiteBackend.query_llm_calls(filters)
+                    └── SELECT * FROM llm_calls
+                        WHERE trace_id = ?
+                        ORDER BY timestamp ASC
+                          └── 404 if result is empty
+```
+
+---
+
+## 12. Shutdown
 
 ```
 CollectorService.stop()
@@ -289,20 +334,34 @@ No events are lost on clean shutdown.
 httpx Request/Response
     │
     ▼ AnthropicParser
-ToolCallEvent (frozen Pydantic)
-    │  tool_name, status, failure_type, latency_ms
-    │  input_payload (sanitised), output_payload
-    │  input_schema_hash, output_schema_hash
-    │  token_usage (input, output)
-    │  schema_drift (detected, missing_fields, unexpected_fields, expected_hash)
-    │  trace_id, session_id, agent_id, timestamp, sequence_no
+    ├── LLMCallEvent (frozen Pydantic)               ← always emitted
+    │     model, latency_ms, finish_reason
+    │     token_usage (input, output, cache_read)
+    │     context_window_used, context_window_limit
+    │     context_utilisation  (auto-computed)
+    │     prompt_hash, system_prompt_hash
+    │     messages_count
+    │     trace_id, session_id, agent_id, timestamp, sequence_no
+    │
+    └── ToolCallEvent (frozen Pydantic)              ← per tool_use block
+          tool_name, status, failure_type, latency_ms
+          input_payload (sanitised), output_payload
+          input_schema_hash, output_schema_hash
+          token_usage (input, output)
+          schema_drift (detected, missing_fields, unexpected_fields, expected_hash)
+          trace_id, session_id, agent_id, timestamp, sequence_no
+              │ same trace_id as LLMCallEvent
     │
     ▼ model_dump(mode="json")
-dict → POST /events → EventIngestRequest (Pydantic) → dict
+dict → POST /events → EventIngestRequest (extra="allow") → dict
     │
-    ▼ _row_from_event()
-20-tuple → INSERT INTO tool_calls
+    ▼ write_event() routes by event_type
+    ├── "llm_call"  → INSERT INTO llm_calls (direct)
+    └── "tool_call" → batch → INSERT INTO tool_calls
     │
-    ▼ SELECT + _compute_summary()
-ToolSummary → ToolDetailResponse → JSON
+    ▼ SELECT
+    ├── GET /llm               → LLMSummaryItem[]  (grouped by model)
+    ├── GET /llm/trace/{id}    → LLMDetailItem[]
+    ├── GET /tools             → ToolSummary[]
+    └── GET /tools/{name}      → ToolDetailResponse
 ```

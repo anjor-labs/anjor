@@ -7,7 +7,7 @@
 
 Observability for AI agents. One-line install. No cloud. No account required.
 
-AgentScope intercepts your agent's HTTP traffic at the protocol layer and gives you full visibility into every tool call — latency, schema drift, failures, token usage — without changing how you build.
+AgentScope intercepts your agent's HTTP traffic at the protocol layer and gives you full visibility into every LLM call and tool use — latency, token usage, context window growth, schema drift, prompt changes — without changing how you build.
 
 ---
 
@@ -54,12 +54,16 @@ No API key? Use [`respx`](https://lundberg.github.io/respx/) to replay a mock re
 
 | Signal | Details |
 |--------|---------|
+| LLM calls | Model, latency, finish reason — for every Anthropic `/v1/messages` call |
 | Tool calls | Name, status (success/failure), failure type |
-| Latency | Per-call and aggregated (p50/p95/p99) |
-| Token usage | Input + output tokens per call |
-| Schema fingerprints | SHA-256 structural hash of input/output shape |
+| Token usage | Input + output + cache_read tokens per call |
+| Context window | Tokens used vs model limit, utilisation %, per-trace growth rate |
+| Context hogs | Per-tool average output size, % of context consumed |
+| System prompt drift | SHA-256 per agent — alerts when prompt changes between calls |
+| Schema fingerprints | SHA-256 structural hash of tool input/output shape |
 | Schema drift | Field-level diff against the baseline for each tool |
-| Trace context | Trace ID, session ID, agent ID |
+| Trace context | Trace ID, session ID, agent ID — consistent across LLM + tool events |
+| Latency | Per-call and aggregated (p50/p95/p99) |
 
 ---
 
@@ -93,15 +97,14 @@ agentscope.patch(config=AgentScopeConfig(db_path="my_project.db", batch_size=1))
 
 ---
 
-## What is NOT in v0.1
+## What is NOT in v0.2
 
-- No LLM call tracing (Phase 2)
-- No context window intelligence (Phase 2)
 - No optimisation suggestions (Phase 3)
 - No multi-agent tracing (Phase 4)
 - No dashboard UI — API and SQLite only
 - No cloud sync, authentication, or team management
 - `requests` library not intercepted (Anthropic SDK uses httpx by default)
+- OpenAI parser not implemented (stub only)
 
 ---
 

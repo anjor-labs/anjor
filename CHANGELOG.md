@@ -11,6 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.0] — 2026-04-12
+
+Phase 2: Context & LLM Call Intelligence.
+
+### Added
+
+- **`LLMCallEvent`** — full domain model: model, token usage (input/output/cache_read), latency, context window used/limit, context utilisation (auto-computed), prompt hash, system prompt hash, messages count, finish reason
+- **`AnthropicParser` extended** — now always emits an `LLMCallEvent` for every `/v1/messages` call, plus `ToolCallEvent`(s) for any tool_use blocks
+- **`ContextWindowTracker`** — per-trace context accumulation with configurable threshold alerts (default 70%/90%), growth rate (tokens/turn), frozen `ContextSnapshot` records
+- **`ContextHogDetector`** — per-tool running average output size, flags tools whose estimated token contribution exceeds a configurable fraction of the context window
+- **`PromptDriftDetector`** — SHA-256 per `agent_id`, detects system prompt changes across calls, tracks calls-since-last-change
+- **Storage migration 002** — `llm_calls` and `prompt_snapshots` tables in SQLite
+- **`GET /llm`** — aggregate LLM call summaries by model (call count, avg latency, avg tokens, avg utilisation)
+- **`GET /llm/trace/{trace_id}`** — all LLM calls for a specific trace
+- **`ContextWindowTracker`, `ContextHogDetector`, `PromptDriftDetector`** exported from `agentscope` top-level
+- `LLMTokenUsage` with cache_read field for Anthropic prompt caching
+- 284 tests, 97.65% coverage
+
+### Changed
+
+- `AnthropicParser.parse()` now returns `[LLMCallEvent, ...ToolCallEvents]` — at minimum one event per call
+- `StorageBackend` ABC extended with `write_llm_event`, `query_llm_calls`, `list_llm_summaries`
+- `write_event()` routes by `event_type` — tool_call events go to tool_calls table, llm_call events go to llm_calls table
+- `__version__` bumped to 0.2.0
+
+---
+
 ## [0.1.0] — 2026-04-10
 
 Phase 1: Tool Call Observability — first complete release.
