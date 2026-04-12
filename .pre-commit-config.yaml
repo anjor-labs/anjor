@@ -4,7 +4,9 @@ repos:
     hooks:
       - id: ruff
         args: [--fix]
+        files: ^(anjor|tests)/
       - id: ruff-format
+        files: ^(anjor|tests)/
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
@@ -24,6 +26,6 @@ repos:
         entry: .venv/bin/mypy
         language: system
         types: [python]
-        args: [--config-file=pyproject.toml]
+        args: [anjor/]
         pass_filenames: false
         always_run: true
