@@ -2,15 +2,17 @@
 
 Public API:
     patch()                — install the in-process httpx interceptor
+    span()                 — context manager: stamp events with trace/agent context,
+                             auto-emit AgentSpanEvent on exit
     configure()            — set config programmatically
     get_pipeline()         — access the global event pipeline
     ContextWindowTracker   — track context usage across turns per trace
     ContextHogDetector     — identify tools with oversized outputs
     PromptDriftDetector    — detect system prompt changes per agent
-    FailureClusterer       — cluster historical failures into patterns (Phase 3)
-    TokenOptimizer         — identify context-bloating tools (Phase 3)
-    CostEstimator          — estimate cost savings for optimizations (Phase 3)
-    QualityScorer          — per-tool and per-run quality scores (Phase 3)
+    FailureClusterer       — cluster historical failures into patterns
+    TokenOptimizer         — identify context-bloating tools
+    CostEstimator          — estimate cost savings for optimizations
+    QualityScorer          — per-tool and per-run quality scores
 """
 
 from __future__ import annotations
@@ -24,14 +26,16 @@ from anjor.analysis.intelligence.failure_clustering import FailureClusterer
 from anjor.analysis.intelligence.quality_scorer import QualityScorer
 from anjor.analysis.intelligence.token_optimizer import CostEstimator, TokenOptimizer
 from anjor.analysis.prompt.detector import PromptDriftDetector
+from anjor.context import span
 from anjor.core.config import AnjorConfig
 from anjor.core.pipeline.pipeline import EventPipeline
 from anjor.interceptors.parsers.registry import build_default_registry
 from anjor.interceptors.patch import PatchInterceptor
 
-__version__ = "0.3.0"
+__version__ = "0.5.1"
 __all__ = [
     "patch",
+    "span",
     "configure",
     "get_pipeline",
     "ContextWindowTracker",
