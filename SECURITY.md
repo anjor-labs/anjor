@@ -6,7 +6,8 @@ Anjor is currently in early development (v0.x). Only the latest release receives
 
 | Version | Supported |
 | ------- | --------- |
-| 0.1.x   | Yes       |
+| 0.5.x   | Yes       |
+| < 0.5   | No        |
 
 ---
 

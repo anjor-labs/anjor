@@ -5,8 +5,9 @@ HTTP response parsers — translate API responses into domain events.
 ## Key abstractions
 
 - **`BaseParser`** (ABC) — `can_parse(url)` + `parse(url, req_body, resp_body, latency_ms, status_code) → [BaseEvent]`.
-- **`AnthropicParser`** — matches `api.anthropic.com/v1/messages`. Extracts `tool_use` blocks → `ToolCallEvent`. Sanitises sensitive keys. Handles both success and error responses.
-- **`OpenAIParser`** — Phase 2 stub. Returns `[]`.
+- **`AnthropicParser`** — matches `api.anthropic.com/v1/messages`. Emits `LLMCallEvent` + `ToolCallEvent` per tool_use block.
+- **`OpenAIParser`** — matches `api.openai.com/v1/chat/completions`. Emits `LLMCallEvent` + `ToolCallEvent` per function call.
+- **`GeminiParser`** — matches `generativelanguage.googleapis.com`. Emits `LLMCallEvent` + `ToolCallEvent` per functionCall part.
 - **`ParserRegistry`** — first-match URL routing. Call `find_parser(url)` or `parse(...)` directly.
 
 ## Architecture fit
