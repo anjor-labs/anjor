@@ -48,13 +48,15 @@ class EventTypeRegistry:
 
 
 def _build_default_registry() -> EventTypeRegistry:
-    """Build the registry pre-populated with Phase 1 event types."""
+    """Build the registry pre-populated with all known event types."""
+    from anjor.core.events.agent_span import AgentSpanEvent
     from anjor.core.events.llm_call import LLMCallEvent
     from anjor.core.events.tool_call import ToolCallEvent
 
     reg = EventTypeRegistry()
     reg.register(EventType.TOOL_CALL, ToolCallEvent)
     reg.register(EventType.LLM_CALL, LLMCallEvent)
+    reg.register(EventType.AGENT_SPAN, AgentSpanEvent)
     return reg
 
 

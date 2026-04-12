@@ -13,6 +13,14 @@ import structlog
 from anjor.core.pipeline.pipeline import EventPipeline
 from anjor.interceptors.base import BaseInterceptor
 from anjor.interceptors.parsers.registry import ParserRegistry, build_default_registry
+from anjor.interceptors.traceparent import (
+    HEADER as TRACEPARENT_HEADER,
+)
+from anjor.interceptors.traceparent import (
+    make_traceparent,
+    new_span_id,
+    new_trace_id,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -79,6 +87,19 @@ class PatchInterceptor(BaseInterceptor):
             self._installed = False
             logger.info("patch_interceptor_uninstalled")
 
+    def _inject_traceparent(self, request: httpx.Request) -> None:
+        """Inject a W3C traceparent header if one is not already present.
+
+        Preserves an existing traceparent (propagated from a parent agent)
+        so the full DAG trace_id is maintained end-to-end. When absent,
+        starts a new root trace.
+        """
+        if TRACEPARENT_HEADER in request.headers:
+            return
+        request.headers[TRACEPARENT_HEADER] = make_traceparent(
+            new_trace_id(), new_span_id()
+        )
+
     def _make_sync_wrapper(self) -> Callable[..., Any]:
         interceptor = self
         original = httpx.Client.send
@@ -86,6 +107,7 @@ class PatchInterceptor(BaseInterceptor):
         def wrapped_send(
             client: httpx.Client, request: httpx.Request, **kwargs: Any
         ) -> httpx.Response:
+            interceptor._inject_traceparent(request)
             start = time.monotonic()
             response = original(client, request, **kwargs)
             latency_ms = (time.monotonic() - start) * 1000
@@ -101,6 +123,7 @@ class PatchInterceptor(BaseInterceptor):
         async def wrapped_async_send(
             client: httpx.AsyncClient, request: httpx.Request, **kwargs: Any
         ) -> httpx.Response:
+            interceptor._inject_traceparent(request)
             start = time.monotonic()
             response = await original(client, request, **kwargs)
             latency_ms = (time.monotonic() - start) * 1000
