@@ -48,6 +48,12 @@ dist/
 build/
 *.egg-info/
 
+# Credentials — never commit
+.pypirc
+*.pypirc
+.env.local
+.env.*.local
+
 # Internal — never commit to public repo
 CLAUDE.md
 .internal/
