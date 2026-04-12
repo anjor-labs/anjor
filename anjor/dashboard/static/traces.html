@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anjor — Traces</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="utils.js"></script>
+</head>
+<body class="min-h-screen bg-gray-950 text-gray-100 font-mono">
+  <div id="nav"></div>
+  <main class="px-6 py-8 max-w-6xl mx-auto space-y-8" id="app">
+    <p class="text-gray-600 text-sm">Loading…</p>
+  </main>
+
+  <script>
+    document.getElementById('nav').innerHTML = buildNav('/ui/traces.html')
+
+    const params = new URLSearchParams(window.location.search)
+    const TRACE_ID = params.get('id')
+
+    async function load() {
+      try {
+        if (TRACE_ID) {
+          await loadGraph(TRACE_ID)
+        } else {
+          await loadList()
+        }
+      } catch (e) {
+        document.getElementById('app').innerHTML = `
+          <div>
+            <h1 class="text-xl font-bold text-white">Traces</h1>
+            <p class="text-sm text-gray-500 mt-1">Multi-agent trace explorer.</p>
+          </div>
+          <div class="bg-red-950 border border-red-800 rounded-lg p-4 text-red-300 text-sm">
+            ${e.message || 'Failed to load'} — is the collector running at localhost:${window.location.port || 7843}?
+          </div>`
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // Trace list
+    // ------------------------------------------------------------------
+
+    async function loadList() {
+      const traces = await fetch(`${API}/traces`).then(r => r.json())
+      renderList(traces)
+    }
+
+    function renderList(traces) {
+      const header = `
+        <div>
+          <h1 class="text-xl font-bold text-white">Traces</h1>
+          <p class="text-sm text-gray-500 mt-1">Multi-agent execution traces. Click a trace to explore the agent DAG.</p>
+        </div>`
+
+      if (traces.length === 0) {
+        document.getElementById('app').innerHTML = header + `
+          <div class="bg-gray-900 border border-gray-800 rounded-lg p-8 text-center">
+            <p class="text-gray-500 text-sm">No traces yet. Seed some data or run an agent with <code class="text-blue-400">anjor.patch()</code>.</p>
+          </div>`
+        return
+      }
+
+      const rows = traces.map(t => `
+        <tr class="border-b border-gray-800 hover:bg-gray-900/50 cursor-pointer" onclick="window.location='/ui/traces.html?id=${t.trace_id}'">
+          <td class="py-3 pr-4">
+            <div class="flex items-center gap-2">
+              ${statusDot(t.status)}
+              <span class="text-white text-sm font-medium">${t.root_agent_name}</span>
+            </div>
+          </td>
+          <td class="py-3 pr-4 text-xs text-gray-400">${t.trace_id.slice(0, 12)}…</td>
+          <td class="py-3 pr-4 text-sm text-gray-300">${t.span_count}</td>
+          <td class="py-3 pr-4 text-sm text-gray-300">${fmt.tokens(t.total_token_input + t.total_token_output)}</td>
+          <td class="py-3 text-xs text-gray-500">${fmt.ts(t.started_at)}</td>
+        </tr>`).join('')
+
+      document.getElementById('app').innerHTML = header + `
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="border-b border-gray-800 text-xs text-gray-500 uppercase tracking-wider">
+                <th class="pb-2 pr-4">Root Agent</th>
+                <th class="pb-2 pr-4">Trace ID</th>
+                <th class="pb-2 pr-4">Spans</th>
+                <th class="pb-2 pr-4">Tokens</th>
+                <th class="pb-2">Started</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`
+    }
+
+    // ------------------------------------------------------------------
+    // Trace graph detail
+    // ------------------------------------------------------------------
+
+    async function loadGraph(traceId) {
+      const [graph, attribution] = await Promise.all([
+        fetch(`${API}/traces/${traceId}/graph`).then(r => {
+          if (!r.ok) throw new Error(`Trace not found: ${traceId}`)
+          return r.json()
+        }),
+        fetch(`${API}/intelligence/attribution?trace_id=${traceId}`).then(r => r.json()),
+      ])
+      renderGraph(graph, attribution)
+    }
+
+    function renderGraph(graph, attribution) {
+      const backLink = `<a href="/ui/traces.html" class="text-xs text-gray-500 hover:text-white transition-colors">← All traces</a>`
+      const statusLabel = graph.nodes.some(n => n.status === 'error')
+        ? '<span class="text-xs px-1.5 py-0.5 rounded bg-red-900 text-red-300 border border-red-700">error</span>'
+        : '<span class="text-xs px-1.5 py-0.5 rounded bg-green-900 text-green-300 border border-green-700">ok</span>'
+
+      // --- Span tree ---
+      const treeRows = graph.nodes.map(n => {
+        const indent = n.depth * 24
+        const duration = n.duration_ms != null ? fmt.ms(n.duration_ms) : '—'
+        const tokens = fmt.tokens(n.token_input + n.token_output)
+        const kindIcon = spanKindIcon(n.span_kind)
+        const dot = statusDot(n.status)
+        return `
+          <tr class="border-b border-gray-800/50">
+            <td class="py-2.5 pr-4" style="padding-left: ${indent + 12}px">
+              <span class="text-gray-500 mr-1 text-xs">${kindIcon}</span>
+              ${dot}
+              <span class="text-white text-sm">${n.agent_name}</span>
+              <span class="ml-2 text-xs text-gray-600">${n.span_kind}</span>
+            </td>
+            <td class="py-2.5 pr-4 text-xs text-gray-400">${n.span_id.slice(0, 8)}…</td>
+            <td class="py-2.5 pr-4 text-sm text-gray-300">${duration}</td>
+            <td class="py-2.5 pr-4 text-sm text-gray-300">${tokens}</td>
+            <td class="py-2.5 text-sm text-gray-300">${n.tool_calls_count} / ${n.llm_calls_count}</td>
+          </tr>`
+      }).join('')
+
+      // --- Attribution panel ---
+      const attrRows = attribution.length === 0
+        ? '<p class="text-sm text-gray-500 italic">No attribution data.</p>'
+        : attribution.map(a => `
+          <div class="flex items-center justify-between py-2 border-b border-gray-800/50 last:border-0">
+            <div class="flex items-center gap-3 min-w-0">
+              ${statusDot(a.failure_rate > 0 ? 'error' : 'ok')}
+              <span class="text-sm text-white truncate">${a.agent_name}</span>
+              <span class="text-xs text-gray-500">${a.span_count} span${a.span_count !== 1 ? 's' : ''}</span>
+            </div>
+            <div class="flex items-center gap-4 shrink-0 text-right">
+              <div>
+                <p class="text-sm text-gray-300">${fmt.tokens(a.token_total)}</p>
+                <p class="text-xs text-gray-500">${a.token_share_pct}%</p>
+              </div>
+              <div>
+                <p class="text-sm ${a.failure_rate > 0 ? 'text-red-400' : 'text-green-400'}">${(a.failure_rate * 100).toFixed(0)}% err</p>
+                <p class="text-xs text-gray-500">${a.failure_count} fail</p>
+              </div>
+            </div>
+          </div>`).join('')
+
+      document.getElementById('app').innerHTML = `
+        <div class="space-y-1">
+          ${backLink}
+          <div class="flex items-center gap-3">
+            <h1 class="text-xl font-bold text-white">Trace</h1>
+            ${statusLabel}
+            ${graph.has_cycle ? '<span class="text-xs px-1.5 py-0.5 rounded bg-yellow-900 text-yellow-300 border border-yellow-700">cycle detected</span>' : ''}
+          </div>
+          <p class="text-xs text-gray-500 font-mono">${graph.trace_id}</p>
+        </div>
+
+        <div class="grid grid-cols-3 gap-4">
+          ${statCard('Spans', graph.node_count, null)}
+          ${statCard('Edges', graph.edges.length, 'parent → child links')}
+          ${statCard('Agents', new Set(graph.nodes.map(n => n.agent_name)).size, 'unique agent names')}
+        </div>
+
+        <div class="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+          <div class="px-4 py-3 border-b border-gray-800">
+            <h2 class="text-sm font-semibold text-white">Execution Tree</h2>
+            <p class="text-xs text-gray-500">Ordered by topological depth. Tool / LLM columns show call counts.</p>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left">
+              <thead>
+                <tr class="border-b border-gray-800 text-xs text-gray-500 uppercase tracking-wider">
+                  <th class="px-3 pb-2 pt-3">Agent</th>
+                  <th class="pb-2 pt-3 pr-4">Span ID</th>
+                  <th class="pb-2 pt-3 pr-4">Duration</th>
+                  <th class="pb-2 pt-3 pr-4">Tokens</th>
+                  <th class="pb-2 pt-3">Tool / LLM</th>
+                </tr>
+              </thead>
+              <tbody>${treeRows}</tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+          <div class="px-4 py-3 border-b border-gray-800">
+            <h2 class="text-sm font-semibold text-white">Attribution</h2>
+            <p class="text-xs text-gray-500">Token consumption and failure rate per agent.</p>
+          </div>
+          <div class="px-4 py-2">${attrRows}</div>
+        </div>`
+    }
+
+    load()
+    setInterval(load, 5000)
+  </script>
+</body>
+</html>

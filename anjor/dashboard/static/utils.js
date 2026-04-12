@@ -49,7 +49,18 @@ const NAV_LINKS = [
   ['/ui/alerts.html', 'Alerts'],
   ['/ui/llm.html', 'LLM'],
   ['/ui/intelligence.html', 'Intelligence'],
+  ['/ui/traces.html', 'Traces'],
 ]
+
+function spanKindIcon(kind) {
+  return { root: '◆', orchestrator: '⬡', subagent: '○', tool: '▸' }[kind] || '·'
+}
+
+function statusDot(status) {
+  return status === 'error'
+    ? '<span class="inline-block w-2 h-2 rounded-full bg-red-500 mr-1.5"></span>'
+    : '<span class="inline-block w-2 h-2 rounded-full bg-green-500 mr-1.5"></span>'
+}
 
 function buildNav(current) {
   const links = NAV_LINKS.map(([href, label]) => {

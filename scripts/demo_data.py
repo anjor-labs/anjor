@@ -110,6 +110,63 @@ def seed_llm_calls() -> None:
     print(f"  {seq - 200} LLM calls seeded across {len(trace_ids)} traces.")
 
 
+def seed_agent_spans() -> None:
+    print("Seeding agent spans...")
+    # Three separate multi-agent traces
+    scenarios = [
+        # (trace_name, [(agent_name, span_kind, parent_idx_or_None)])
+        ("research_pipeline", [
+            ("orchestrator",  "orchestrator", None),
+            ("web_researcher", "subagent",     0),
+            ("summariser",    "subagent",      0),
+            ("fact_checker",  "subagent",      2),
+        ]),
+        ("data_analysis", [
+            ("planner",    "orchestrator", None),
+            ("fetcher",    "subagent",     0),
+            ("analyser",   "subagent",     0),
+            ("reporter",   "subagent",     1),
+        ]),
+        ("code_review", [
+            ("coordinator", "orchestrator", None),
+            ("linter",      "subagent",     0),
+            ("tester",      "subagent",     0),
+        ]),
+    ]
+
+    count = 0
+    for scenario_name, agents in scenarios:
+        trace_id = str(uuid.uuid4())
+        span_ids: list[str] = []
+        for i, (agent_name, span_kind, parent_idx) in enumerate(agents):
+            span_id = str(uuid.uuid4())
+            span_ids.append(span_id)
+            parent_span_id = span_ids[parent_idx] if parent_idx is not None else None
+            offset = len(agents) - i
+            success = random.random() > 0.15
+            body = {
+                "event_type": "agent_span",
+                "span_id": span_id,
+                "parent_span_id": parent_span_id,
+                "trace_id": trace_id,
+                "span_kind": "root" if parent_span_id is None else span_kind,
+                "agent_name": agent_name,
+                "agent_role": f"{scenario_name} — {agent_name}",
+                "started_at": ts(offset + 1),
+                "ended_at": ts(offset),
+                "status": "ok" if success else "error",
+                "failure_type": None if success else "timeout",
+                "token_input": random.randint(200, 2000),
+                "token_output": random.randint(50, 600),
+                "tool_calls_count": random.randint(1, 5),
+                "llm_calls_count": random.randint(1, 3),
+            }
+            post("/events", body)
+            count += 1
+
+    print(f"  {count} spans seeded across {len(scenarios)} traces.")
+
+
 if __name__ == "__main__":
     print(f"Checking collector at {COLLECTOR}...")
     try:
@@ -121,4 +178,5 @@ if __name__ == "__main__":
 
     seed_tool_calls()
     seed_llm_calls()
+    seed_agent_spans()
     print("\nDone. Open http://localhost:7843/ui/ to see the dashboard.")
