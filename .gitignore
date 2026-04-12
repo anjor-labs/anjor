@@ -43,6 +43,11 @@ anjor.db
 # Claude Code
 .claude/
 
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
 # Internal — never commit to public repo
 CLAUDE.md
 .internal/
