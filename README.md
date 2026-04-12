@@ -66,7 +66,7 @@ No API key? Use [`respx`](https://lundberg.github.io/respx/) to replay a mock re
 | Schema fingerprints | 1 | SHA-256 structural hash of tool input/output shape |
 | Schema drift | 1 | Field-level diff against the baseline for each tool |
 | Latency | 1 | Per-call and aggregated (p50/p95/p99) |
-| LLM calls | 2 | Model, latency, finish reason — for every Anthropic `/v1/messages` call |
+| LLM calls | 2 | Model, latency, finish reason — Anthropic, OpenAI, and Gemini |
 | Token usage | 2 | Input + output + cache_read tokens per call |
 | Context window | 2 | Tokens used vs model limit, utilisation %, per-trace growth rate |
 | Context hogs | 2 | Per-tool average output size, % of context consumed |
@@ -76,6 +76,10 @@ No API key? Use [`respx`](https://lundberg.github.io/respx/) to replay a mock re
 | Token optimization | 3 | Tools consuming >5% of context window, estimated token waste and cost savings |
 | Quality scores | 3 | Per-tool reliability/schema-stability/latency-consistency grade (A–F) |
 | Run quality | 3 | Per-trace context efficiency, failure recovery, tool diversity grade (A–F) |
+| Multi-agent spans | 4 | W3C-compatible parent/child span linking across agent boundaries |
+| Trace graphs | 4 | DAG reconstruction with topological order and cycle detection |
+| Cross-agent attribution | 4 | Token usage and failure rate broken down per agent in a trace |
+| Provider breakdown | 5 | LLM dashboard shows Anthropic / OpenAI / Google per model |
 
 ---
 
@@ -109,13 +113,35 @@ anjor.patch(config=AnjorConfig(db_path="my_project.db", batch_size=1))
 
 ---
 
-## What is NOT in v0.3
+## Supported providers
 
-- No multi-agent tracing (Phase 4)
+| Provider | SDK | Intercepted endpoint |
+|----------|-----|----------------------|
+| Anthropic | `anthropic` | `api.anthropic.com/v1/messages` |
+| OpenAI | `openai` | `api.openai.com/v1/chat/completions` |
+| Google Gemini | `google-generativeai` | `generativelanguage.googleapis.com/.../generateContent` |
+
+All three providers are auto-detected — no config required. Anjor reads the URL and routes to the right parser.
+
+---
+
+## What is NOT in v0.5
+
+- `requests` library not intercepted (all three SDKs use httpx by default)
 - No cloud sync, authentication, or team management
-- `requests` library not intercepted (Anthropic SDK uses httpx by default)
-- OpenAI parser not implemented (stub only)
 - Intelligence suggestions are heuristic — no LLM-powered explanations yet
+- Streaming responses are not parsed (only non-streaming calls are captured)
+
+---
+
+## Releasing a new version
+
+Tag the commit and push — the publish workflow runs CI first, then uploads to PyPI automatically:
+
+```bash
+git tag v0.5.0
+git push origin v0.5.0
+```
 
 ---
 
