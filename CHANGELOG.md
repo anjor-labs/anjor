@@ -11,62 +11,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.2.0] — 2026-04-12
-
-Phase 2: Context & LLM Call Intelligence.
+## [0.5.0] — 2026-04-12
 
 ### Added
-
-- **`LLMCallEvent`** — full domain model: model, token usage (input/output/cache_read), latency, context window used/limit, context utilisation (auto-computed), prompt hash, system prompt hash, messages count, finish reason
-- **`AnthropicParser` extended** — now always emits an `LLMCallEvent` for every `/v1/messages` call, plus `ToolCallEvent`(s) for any tool_use blocks
-- **`ContextWindowTracker`** — per-trace context accumulation with configurable threshold alerts (default 70%/90%), growth rate (tokens/turn), frozen `ContextSnapshot` records
-- **`ContextHogDetector`** — per-tool running average output size, flags tools whose estimated token contribution exceeds a configurable fraction of the context window
-- **`PromptDriftDetector`** — SHA-256 per `agent_id`, detects system prompt changes across calls, tracks calls-since-last-change
-- **Storage migration 002** — `llm_calls` and `prompt_snapshots` tables in SQLite
-- **`GET /llm`** — aggregate LLM call summaries by model (call count, avg latency, avg tokens, avg utilisation)
-- **`GET /llm/trace/{trace_id}`** — all LLM calls for a specific trace
-- **`ContextWindowTracker`, `ContextHogDetector`, `PromptDriftDetector`** exported from `anjor` top-level
-- `LLMTokenUsage` with cache_read field for Anthropic prompt caching
-- 284 tests, 97.65% coverage
+- **OpenAI support** — `anjor.patch()` now captures `/v1/chat/completions` calls, emitting `LLMCallEvent` and `ToolCallEvent` for every OpenAI model call
+- **Google Gemini support** — `generateContent` calls are captured with token usage, function calls, and model context limits
+- **LLM provider breakdown** — dashboard LLM page shows colour-coded Anthropic / OpenAI / Google badges per model
+- **Automatic PyPI publish** — pushing a `vX.Y.Z` tag runs CI and publishes the package automatically; no manual steps required
+- `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001` added to the Anthropic model map
+- Unknown `claude-*` models default to 200k context limit rather than 0
 
 ### Changed
+- `AnthropicParser` context limit lookup now falls back to 200k for any `claude-*` model not explicitly listed
 
-- `AnthropicParser.parse()` now returns `[LLMCallEvent, ...ToolCallEvents]` — at minimum one event per call
-- `StorageBackend` ABC extended with `write_llm_event`, `query_llm_calls`, `list_llm_summaries`
-- `write_event()` routes by `event_type` — tool_call events go to tool_calls table, llm_call events go to llm_calls table
-- `__version__` bumped to 0.2.0
+---
+
+## [0.4.0] — 2026-04-12
+
+### Added
+- **Multi-agent tracing** — `AgentSpanEvent` with W3C-compatible parent/child span linking
+- **TraceGraph** — DAG reconstruction, topological sort, cycle detection
+- **Span storage** — `agent_spans` table; `write_span`, `query_spans`, `list_traces` methods
+- **`GET /traces`** and **`GET /traces/{trace_id}/graph`** endpoints
+- **Cross-agent attribution** — `GET /intelligence/attribution?trace_id=` breaks down token usage and failure rate per agent
+- **W3C traceparent injection** — `anjor.patch()` automatically injects `traceparent` into outbound httpx requests; existing headers are preserved
+- Traces dashboard page with indented span tree and attribution panel
+- Storage backend abstraction — `create_storage_backend(config)` factory; config fields `storage_backend` and `storage_url`
+
+---
+
+## [0.3.0] — 2026-04-12
+
+### Added
+- **Failure clustering** — groups historical failures by `(tool_name, failure_type)`, sorted by failure rate with natural-language descriptions and fix suggestions
+- **Token optimization** — flags tools whose average output exceeds 5% of the context window; estimates token waste and cost savings per 1,000 calls
+- **Quality scoring** — per-tool `ToolQualityScore` (reliability × 0.5 + schema stability × 0.3 + latency consistency × 0.2) and per-trace `AgentRunQualityScore` with A–F grades
+- **Intelligence API** — `GET /intelligence/failures`, `GET /intelligence/optimization`, `GET /intelligence/quality/tools`, `GET /intelligence/quality/runs`
+- Intelligence dashboard page
+- Bundled static dashboard served by the collector — no Node.js required
+- `anjor start` CLI command — starts collector + dashboard on `:7843`
+- `GET /calls` — paginated raw event log
+
+---
+
+## [0.2.0] — 2026-04-11
+
+### Added
+- **LLM call tracing** — every `/v1/messages` call now produces an `LLMCallEvent` (model, token usage, context window, prompt hash, finish reason)
+- **`ContextWindowTracker`** — per-trace context accumulation with configurable threshold alerts (70%/90%), growth rate in tokens/turn
+- **`ContextHogDetector`** — per-tool running average output size; flags tools consuming >N% of the context window
+- **`PromptDriftDetector`** — detects system prompt changes per agent using SHA-256 hashing
+- **`GET /llm`** — aggregate LLM call summaries by model (call count, avg latency, avg tokens, avg utilisation)
+- `LLMTokenUsage` with `cache_read` field for Anthropic prompt caching
+- `ContextWindowTracker`, `ContextHogDetector`, `PromptDriftDetector` exported from top-level `anjor`
 
 ---
 
 ## [0.1.0] — 2026-04-10
 
-Phase 1: Tool Call Observability — first complete release.
+Initial release.
 
 ### Added
-
 - `anjor.patch()` — one-line httpx instrumentation; zero changes to agent code required
-- `anjor.configure()` — programmatic config override
-- **AnthropicParser** — extracts `tool_use` blocks from Anthropic `/v1/messages` responses into `ToolCallEvent`
-- **EventPipeline** — async queue with backpressure (drop-not-block), concurrent handler dispatch, graceful shutdown
+- **AnthropicParser** — extracts `tool_use` blocks from `/v1/messages` responses into `ToolCallEvent`
+- **EventPipeline** — async queue with backpressure, concurrent handler dispatch, graceful shutdown
 - **CollectorService** — local sidecar that receives events over HTTP and persists them to SQLite
-- **SQLiteBackend** — WAL mode, batch writer (flush every N events or M ms), in-memory mode for tests
+- **SQLiteBackend** — WAL mode, batch writer, in-memory mode for tests
 - **REST API** — `POST /events`, `GET /tools`, `GET /tools/{name}`, `GET /health`
 - **DriftDetector** — structural fingerprinting (SHA-256, type-sensitive, value-agnostic) with field-level diff
 - **FailureClassifier** — priority-ordered rule chain: Timeout → SchemaDrift → APIError → Unknown
-- **AnjorConfig** — Pydantic BaseSettings with env vars (`ANJOR_*`) and `.anjor.toml` support
-- Payload sanitisation — sensitive keys redacted before any storage or logging
-- 201 tests, 97.78% coverage (≥95% enforced)
-- `scripts/dev_setup.sh` — one-command development environment
-- `docs/architecture.md`, `docs/code_flow.md`, `docs/quickstart.md`
+- **AnjorConfig** — typed configuration via environment variables (`ANJOR_*`) and `.anjor.toml`
+- Payload sanitisation — keys matching `*api_key*`, `*secret*`, `*password*`, `*token*`, `*auth*`, `*bearer*` are redacted before any storage
 
-### Not in this release
-
-- LLM call tracing (Phase 2)
-- Context window intelligence (Phase 2)
-- Optimisation suggestions (Phase 3)
-- Multi-agent tracing (Phase 4)
-- Dashboard UI (API-only)
-- Cloud sync
-
-[Unreleased]: https://github.com/anjor-labs/anjor/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/anjor-labs/anjor/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/anjor-labs/anjor/releases/tag/v0.5.0
+[0.4.0]: https://github.com/anjor-labs/anjor/releases/tag/v0.4.0
+[0.3.0]: https://github.com/anjor-labs/anjor/releases/tag/v0.3.0
+[0.2.0]: https://github.com/anjor-labs/anjor/releases/tag/v0.2.0
 [0.1.0]: https://github.com/anjor-labs/anjor/releases/tag/v0.1.0
