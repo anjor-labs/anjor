@@ -165,6 +165,21 @@ class TraceSummaryItem(BaseModel):
     status: str
 
 
+class AgentAttributionItem(BaseModel):
+    """Per-agent token and failure attribution from GET /intelligence/attribution."""
+
+    agent_name: str
+    span_count: int
+    token_input: int
+    token_output: int
+    token_total: int
+    token_share_pct: float
+    tool_calls_count: int
+    llm_calls_count: int
+    failure_count: int
+    failure_rate: float
+
+
 class EventIngestRequest(BaseModel):
     """Incoming event payload. Validated before storage.
 

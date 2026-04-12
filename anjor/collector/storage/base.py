@@ -163,6 +163,11 @@ class StorageBackend(ABC):
         ...
 
     @abstractmethod
+    async def query_spans_all(self, limit: int = 5000) -> list[dict[str, Any]]:
+        """Return all spans across all traces (for global attribution)."""
+        ...
+
+    @abstractmethod
     async def list_traces(self, limit: int = 50, offset: int = 0) -> list[TraceSummary]:
         """Return one TraceSummary per trace_id, newest first."""
         ...

@@ -16,7 +16,9 @@ from fastapi import APIRouter
 from anjor.analysis.intelligence.failure_clustering import FailureClusterer
 from anjor.analysis.intelligence.quality_scorer import QualityScorer
 from anjor.analysis.intelligence.token_optimizer import TokenOptimizer
+from anjor.analysis.tracing.attribution import AttributionAnalyser
 from anjor.collector.api.schemas import (
+    AgentAttributionItem,
     AgentRunQualityScoreItem,
     FailureClusterItem,
     OptimizationSuggestionItem,
@@ -122,6 +124,35 @@ def make_intelligence_router(service: CollectorService) -> APIRouter:
                 grade=s.grade,
             )
             for s in scores
+        ]
+
+    @router.get("/attribution", response_model=list[AgentAttributionItem])
+    async def get_attribution(trace_id: str | None = None) -> list[AgentAttributionItem]:
+        """Return per-agent token and failure attribution.
+
+        If trace_id is provided, attribution is scoped to that trace only.
+        Otherwise covers all spans. Sorted by total token consumption descending.
+        """
+        if trace_id:
+            spans = await service.storage.query_spans(trace_id)
+        else:
+            spans = await service.storage.query_spans_all()
+        analyser = AttributionAnalyser()
+        results = analyser.analyse(spans)
+        return [
+            AgentAttributionItem(
+                agent_name=a.agent_name,
+                span_count=a.span_count,
+                token_input=a.token_input,
+                token_output=a.token_output,
+                token_total=a.token_total,
+                token_share_pct=a.token_share_pct,
+                tool_calls_count=a.tool_calls_count,
+                llm_calls_count=a.llm_calls_count,
+                failure_count=a.failure_count,
+                failure_rate=a.failure_rate,
+            )
+            for a in results
         ]
 
     return router

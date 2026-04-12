@@ -448,6 +448,16 @@ class SQLiteBackend(StorageBackend):
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
+    async def query_spans_all(self, limit: int = 5000) -> list[dict[str, Any]]:
+        """Return all spans across all traces."""
+        assert self._conn is not None
+        cursor = await self._conn.execute(
+            "SELECT * FROM agent_spans ORDER BY started_at ASC LIMIT ?",
+            (limit,),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
     async def list_traces(self, limit: int = 50, offset: int = 0) -> list[TraceSummary]:
         """Return one TraceSummary per trace_id, newest first."""
         assert self._conn is not None
