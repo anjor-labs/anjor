@@ -96,9 +96,7 @@ class TokenOptimizer(BaseAnalyser):
         """Generate optimization suggestions from raw event data."""
         # Derive the average context window limit from LLM call data
         limits = [
-            int(r["context_window_limit"])
-            for r in llm_calls
-            if r.get("context_window_limit")
+            int(r["context_window_limit"]) for r in llm_calls if r.get("context_window_limit")
         ]
         avg_context_limit = statistics.mean(limits) if limits else 200_000
 

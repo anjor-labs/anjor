@@ -58,9 +58,7 @@ async def storage() -> SQLiteBackend:
 
 
 class TestPatchToStorage:
-    async def test_sync_request_captured_and_stored(
-        self, storage: SQLiteBackend
-    ) -> None:
+    async def test_sync_request_captured_and_stored(self, storage: SQLiteBackend) -> None:
         handler = StorageWritingHandler(storage)
         async with EventPipeline(handlers=[handler]) as pipeline:
             interceptor = PatchInterceptor(
@@ -87,9 +85,7 @@ class TestPatchToStorage:
         assert len(results) == 1
         assert results[0]["tool_name"] == "web_search"
 
-    async def test_async_request_captured_and_stored(
-        self, storage: SQLiteBackend
-    ) -> None:
+    async def test_async_request_captured_and_stored(self, storage: SQLiteBackend) -> None:
         handler = StorageWritingHandler(storage)
         async with EventPipeline(handlers=[handler]) as pipeline:
             interceptor = PatchInterceptor(
@@ -115,9 +111,7 @@ class TestPatchToStorage:
         assert len(results) == 1
         assert results[0]["tool_name"] == "web_search"
 
-    async def test_non_anthropic_url_not_stored(
-        self, storage: SQLiteBackend
-    ) -> None:
+    async def test_non_anthropic_url_not_stored(self, storage: SQLiteBackend) -> None:
         handler = StorageWritingHandler(storage)
         async with EventPipeline(handlers=[handler]) as pipeline:
             interceptor = PatchInterceptor(
@@ -138,9 +132,7 @@ class TestPatchToStorage:
         results = await storage.query_tool_calls(QueryFilters())
         assert results == []
 
-    async def test_api_error_stored_as_failure(
-        self, storage: SQLiteBackend
-    ) -> None:
+    async def test_api_error_stored_as_failure(self, storage: SQLiteBackend) -> None:
         handler = StorageWritingHandler(storage)
         async with EventPipeline(handlers=[handler]) as pipeline:
             interceptor = PatchInterceptor(

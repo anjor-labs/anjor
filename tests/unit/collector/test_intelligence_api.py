@@ -104,9 +104,10 @@ class TestIntelligureFailures:
     def test_failures_returned_with_correct_shape(self) -> None:
         with _make_client() as client:
             client.post("/events", json=_tool_event(status="success"))
-            client.post("/events", json=_tool_event(
-                status="failure", failure_type="timeout", latency_ms=9000.0
-            ))
+            client.post(
+                "/events",
+                json=_tool_event(status="failure", failure_type="timeout", latency_ms=9000.0),
+            )
             resp = client.get("/intelligence/failures")
 
         assert resp.status_code == 200
@@ -123,12 +124,14 @@ class TestIntelligureFailures:
 
     def test_multiple_tools_clustered(self) -> None:
         with _make_client() as client:
-            client.post("/events", json=_tool_event(
-                tool_name="fetch", status="failure", failure_type="api_error"
-            ))
-            client.post("/events", json=_tool_event(
-                tool_name="search", status="failure", failure_type="schema_drift"
-            ))
+            client.post(
+                "/events",
+                json=_tool_event(tool_name="fetch", status="failure", failure_type="api_error"),
+            )
+            client.post(
+                "/events",
+                json=_tool_event(tool_name="search", status="failure", failure_type="schema_drift"),
+            )
             resp = client.get("/intelligence/failures")
 
         data = resp.json()
@@ -138,15 +141,17 @@ class TestIntelligureFailures:
     def test_sorted_by_failure_rate_desc(self) -> None:
         with _make_client() as client:
             # "slow" fails 1/1 = 100%
-            client.post("/events", json=_tool_event(
-                tool_name="slow", status="failure", failure_type="timeout"
-            ))
+            client.post(
+                "/events",
+                json=_tool_event(tool_name="slow", status="failure", failure_type="timeout"),
+            )
             # "partial" fails 1/3 ≈ 33%
             for _ in range(2):
                 client.post("/events", json=_tool_event(tool_name="partial", status="success"))
-            client.post("/events", json=_tool_event(
-                tool_name="partial", status="failure", failure_type="api_error"
-            ))
+            client.post(
+                "/events",
+                json=_tool_event(tool_name="partial", status="failure", failure_type="api_error"),
+            )
             resp = client.get("/intelligence/failures")
 
         data = resp.json()
@@ -198,9 +203,13 @@ class TestIntelligenceOptimization:
         if resp.json():
             keys = resp.json()[0].keys()
             for field in [
-                "tool_name", "avg_output_tokens", "avg_context_fraction",
-                "waste_score", "estimated_savings_tokens_per_call",
-                "estimated_savings_usd_per_1k_calls", "suggestion_text",
+                "tool_name",
+                "avg_output_tokens",
+                "avg_context_fraction",
+                "waste_score",
+                "estimated_savings_tokens_per_call",
+                "estimated_savings_usd_per_1k_calls",
+                "suggestion_text",
             ]:
                 assert field in keys
 
@@ -231,9 +240,10 @@ class TestIntelligenceQualityTools:
     def test_all_failures_grade_f(self) -> None:
         with _make_client() as client:
             for _ in range(5):
-                client.post("/events", json=_tool_event(
-                    status="failure", failure_type="timeout", latency_ms=9000.0
-                ))
+                client.post(
+                    "/events",
+                    json=_tool_event(status="failure", failure_type="timeout", latency_ms=9000.0),
+                )
             resp = client.get("/intelligence/quality/tools")
 
         data = resp.json()
@@ -248,9 +258,13 @@ class TestIntelligenceQualityTools:
         assert resp.status_code == 200
         item = resp.json()[0]
         for field in [
-            "tool_name", "call_count", "reliability_score",
-            "schema_stability_score", "latency_consistency_score",
-            "overall_score", "grade",
+            "tool_name",
+            "call_count",
+            "reliability_score",
+            "schema_stability_score",
+            "latency_consistency_score",
+            "overall_score",
+            "grade",
         ]:
             assert field in item
 
@@ -261,9 +275,10 @@ class TestIntelligenceQualityTools:
                 client.post("/events", json=_tool_event(tool_name="good", status="success"))
             # bad tool: all failure
             for _ in range(3):
-                client.post("/events", json=_tool_event(
-                    tool_name="bad", status="failure", failure_type="timeout"
-                ))
+                client.post(
+                    "/events",
+                    json=_tool_event(tool_name="bad", status="failure", failure_type="timeout"),
+                )
             resp = client.get("/intelligence/quality/tools")
 
         data = resp.json()
@@ -284,12 +299,8 @@ class TestIntelligenceQualityRuns:
 
     def test_efficient_run_gets_high_score(self) -> None:
         with _make_client() as client:
-            client.post("/events", json=_tool_event(
-                status="success", trace_id="run1"
-            ))
-            client.post("/events", json=_llm_event(
-                trace_id="run1", context_utilisation=0.1
-            ))
+            client.post("/events", json=_tool_event(status="success", trace_id="run1"))
+            client.post("/events", json=_llm_event(trace_id="run1", context_utilisation=0.1))
             resp = client.get("/intelligence/quality/runs")
 
         data = resp.json()
@@ -307,9 +318,14 @@ class TestIntelligenceQualityRuns:
         assert resp.status_code == 200
         item = resp.json()[0]
         for field in [
-            "trace_id", "llm_call_count", "tool_call_count",
-            "context_efficiency_score", "failure_recovery_score",
-            "tool_diversity_score", "overall_score", "grade",
+            "trace_id",
+            "llm_call_count",
+            "tool_call_count",
+            "context_efficiency_score",
+            "failure_recovery_score",
+            "tool_diversity_score",
+            "overall_score",
+            "grade",
         ]:
             assert field in item
 
@@ -317,17 +333,14 @@ class TestIntelligenceQualityRuns:
         with _make_client() as client:
             # good run: low context usage
             client.post("/events", json=_tool_event(status="success", trace_id="good"))
-            client.post("/events", json=_llm_event(
-                trace_id="good", context_utilisation=0.1
-            ))
+            client.post("/events", json=_llm_event(trace_id="good", context_utilisation=0.1))
             # bad run: high context usage + failures
             for _ in range(3):
-                client.post("/events", json=_tool_event(
-                    status="failure", failure_type="timeout", trace_id="bad"
-                ))
-            client.post("/events", json=_llm_event(
-                trace_id="bad", context_utilisation=0.95
-            ))
+                client.post(
+                    "/events",
+                    json=_tool_event(status="failure", failure_type="timeout", trace_id="bad"),
+                )
+            client.post("/events", json=_llm_event(trace_id="bad", context_utilisation=0.95))
             resp = client.get("/intelligence/quality/runs")
 
         data = resp.json()

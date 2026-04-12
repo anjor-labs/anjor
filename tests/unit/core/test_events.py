@@ -113,9 +113,7 @@ class TestToolCallEvent:
 
     def test_latency_must_be_non_negative(self) -> None:
         with pytest.raises(ValidationError):
-            ToolCallEvent(
-                tool_name="t", status=ToolCallStatus.SUCCESS, latency_ms=-1
-            )
+            ToolCallEvent(tool_name="t", status=ToolCallStatus.SUCCESS, latency_ms=-1)
 
     def test_frozen(self) -> None:
         event = self._make_success()
@@ -141,9 +139,7 @@ class TestToolCallEvent:
             unexpected_fields=["total"],
             expected_hash="abc123",
         )
-        event = self._make_failure(
-            failure_type=FailureType.SCHEMA_DRIFT, schema_drift=drift
-        )
+        event = self._make_failure(failure_type=FailureType.SCHEMA_DRIFT, schema_drift=drift)
         assert event.schema_drift is not None
         assert event.schema_drift.detected is True
         assert "count" in event.schema_drift.missing_fields

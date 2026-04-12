@@ -64,9 +64,7 @@ def make_intelligence_router(service: CollectorService) -> APIRouter:
         returned. Suggestions include estimated cost savings per 1,000 calls.
         """
         tool_calls = await service.storage.query_tool_calls_for_analysis()
-        llm_calls = await service.storage.query_llm_calls(
-            LLMQueryFilters(limit=2000)
-        )
+        llm_calls = await service.storage.query_llm_calls(LLMQueryFilters(limit=2000))
         optimizer = TokenOptimizer()
         suggestions = optimizer.optimize(tool_calls, llm_calls)
         return [
@@ -109,9 +107,7 @@ def make_intelligence_router(service: CollectorService) -> APIRouter:
     async def get_run_quality_scores() -> list[AgentRunQualityScoreItem]:
         """Return quality scores per agent run (trace_id), sorted by overall_score ascending."""
         tool_calls = await service.storage.query_tool_calls_for_analysis()
-        llm_calls = await service.storage.query_llm_calls(
-            LLMQueryFilters(limit=2000)
-        )
+        llm_calls = await service.storage.query_llm_calls(LLMQueryFilters(limit=2000))
         scorer = QualityScorer()
         scores = scorer.score_runs(tool_calls, llm_calls)
         return [

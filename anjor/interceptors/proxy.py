@@ -17,8 +17,7 @@ class ProxyInterceptor(BaseInterceptor):
 
     def install(self) -> None:
         raise NotImplementedError(
-            "ProxyInterceptor requires mitmproxy. "
-            "Install with: pip install anjor[proxy]"
+            "ProxyInterceptor requires mitmproxy. Install with: pip install anjor[proxy]"
         )
 
     def uninstall(self) -> None:

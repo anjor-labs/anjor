@@ -45,8 +45,7 @@ _SUGGESTIONS: dict[str, str] = {
         "Consider circuit-breaker logic to prevent cascading failures."
     ),
     "unknown": (
-        "Inspect raw tool call payloads for the affected trace IDs "
-        "to identify the root cause."
+        "Inspect raw tool call payloads for the affected trace IDs to identify the root cause."
     ),
 }
 

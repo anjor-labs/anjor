@@ -90,9 +90,7 @@ class StorageBackend(ABC):
         ...
 
     @abstractmethod
-    async def query_llm_calls(
-        self, filters: LLMQueryFilters
-    ) -> list[dict[str, Any]]:
+    async def query_llm_calls(self, filters: LLMQueryFilters) -> list[dict[str, Any]]:
         """Query stored LLM call events with optional filters."""
         ...
 
@@ -102,9 +100,7 @@ class StorageBackend(ABC):
         ...
 
     @abstractmethod
-    async def query_tool_calls(
-        self, filters: QueryFilters
-    ) -> list[dict[str, Any]]:
+    async def query_tool_calls(self, filters: QueryFilters) -> list[dict[str, Any]]:
         """Query stored tool call events with optional filters."""
         ...
 
@@ -124,9 +120,7 @@ class StorageBackend(ABC):
         ...
 
     @abstractmethod
-    async def get_schema_snapshot(
-        self, tool_name: str, payload_type: str
-    ) -> SchemaSnapshot | None:
+    async def get_schema_snapshot(self, tool_name: str, payload_type: str) -> SchemaSnapshot | None:
         """Retrieve the latest snapshot for a tool + payload_type pair."""
         ...
 

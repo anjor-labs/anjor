@@ -58,9 +58,7 @@ def fingerprint(payload: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
-def diff_schemas(
-    current: dict[str, Any], reference: dict[str, Any]
-) -> dict[str, list[str]]:
+def diff_schemas(current: dict[str, Any], reference: dict[str, Any]) -> dict[str, list[str]]:
     """Return field-level diff between current and reference payload shapes.
 
     Returns:

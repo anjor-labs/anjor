@@ -142,8 +142,7 @@ class TestFailureClusterer:
 
     def test_example_trace_ids_capped_at_five(self) -> None:
         rows = [
-            _tool_row(status="failure", failure_type="timeout", trace_id=f"t{i}")
-            for i in range(10)
+            _tool_row(status="failure", failure_type="timeout", trace_id=f"t{i}") for i in range(10)
         ]
         clusters = FailureClusterer().cluster(rows)
         assert len(clusters[0].example_trace_ids) <= 5
@@ -160,26 +159,27 @@ class TestFailureClusterer:
 
     @given(
         st.lists(
-            st.fixed_dictionaries({
-                "tool_name": st.text(min_size=1, max_size=20),
-                "status": st.sampled_from(["success", "failure"]),
-                "failure_type": st.one_of(
-                    st.none(), st.sampled_from(["timeout", "api_error", "schema_drift", "unknown"])
-                ),
-                "latency_ms": st.floats(min_value=0, max_value=100_000, allow_nan=False),
-                "trace_id": st.text(min_size=1, max_size=10),
-                "drift_detected": st.one_of(st.none(), st.just(0), st.just(1)),
-                "output_payload": st.just({"x": 1}),
-                "token_usage_output": st.one_of(
-                    st.none(), st.integers(min_value=0, max_value=10_000)
-                ),
-            }),
+            st.fixed_dictionaries(
+                {
+                    "tool_name": st.text(min_size=1, max_size=20),
+                    "status": st.sampled_from(["success", "failure"]),
+                    "failure_type": st.one_of(
+                        st.none(),
+                        st.sampled_from(["timeout", "api_error", "schema_drift", "unknown"]),
+                    ),
+                    "latency_ms": st.floats(min_value=0, max_value=100_000, allow_nan=False),
+                    "trace_id": st.text(min_size=1, max_size=10),
+                    "drift_detected": st.one_of(st.none(), st.just(0), st.just(1)),
+                    "output_payload": st.just({"x": 1}),
+                    "token_usage_output": st.one_of(
+                        st.none(), st.integers(min_value=0, max_value=10_000)
+                    ),
+                }
+            ),
             max_size=50,
         )
     )
-    def test_property_failure_rate_bounded(
-        self, tool_calls: list[dict[str, Any]]
-    ) -> None:
+    def test_property_failure_rate_bounded(self, tool_calls: list[dict[str, Any]]) -> None:
         """failure_rate is always in [0.0, 1.0] for any input."""
         clusters = FailureClusterer().cluster(tool_calls)
         for c in clusters:
@@ -187,16 +187,18 @@ class TestFailureClusterer:
 
     @given(
         st.lists(
-            st.fixed_dictionaries({
-                "tool_name": st.just("tool"),
-                "status": st.sampled_from(["success", "failure"]),
-                "failure_type": st.one_of(st.none(), st.just("timeout")),
-                "latency_ms": st.floats(min_value=0, max_value=10_000, allow_nan=False),
-                "trace_id": st.just("t1"),
-                "drift_detected": st.none(),
-                "output_payload": st.just({}),
-                "token_usage_output": st.none(),
-            }),
+            st.fixed_dictionaries(
+                {
+                    "tool_name": st.just("tool"),
+                    "status": st.sampled_from(["success", "failure"]),
+                    "failure_type": st.one_of(st.none(), st.just("timeout")),
+                    "latency_ms": st.floats(min_value=0, max_value=10_000, allow_nan=False),
+                    "trace_id": st.just("t1"),
+                    "drift_detected": st.none(),
+                    "output_payload": st.just({}),
+                    "token_usage_output": st.none(),
+                }
+            ),
             min_size=1,
             max_size=30,
         )
@@ -288,23 +290,23 @@ class TestTokenOptimizer:
 
     @given(
         st.lists(
-            st.fixed_dictionaries({
-                "tool_name": st.just("t"),
-                "status": st.just("success"),
-                "failure_type": st.none(),
-                "latency_ms": st.just(100.0),
-                "trace_id": st.just("tr"),
-                "drift_detected": st.none(),
-                "output_payload": st.just({"x": 1}),
-                "token_usage_output": st.integers(min_value=0, max_value=50_000),
-            }),
+            st.fixed_dictionaries(
+                {
+                    "tool_name": st.just("t"),
+                    "status": st.just("success"),
+                    "failure_type": st.none(),
+                    "latency_ms": st.just(100.0),
+                    "trace_id": st.just("tr"),
+                    "drift_detected": st.none(),
+                    "output_payload": st.just({"x": 1}),
+                    "token_usage_output": st.integers(min_value=0, max_value=50_000),
+                }
+            ),
             min_size=1,
             max_size=20,
         )
     )
-    def test_property_waste_score_bounded(
-        self, tool_calls: list[dict[str, Any]]
-    ) -> None:
+    def test_property_waste_score_bounded(self, tool_calls: list[dict[str, Any]]) -> None:
         llm = [_llm_row(context_window_limit=200_000)]
         suggestions = TokenOptimizer(hog_threshold=0.0).optimize(tool_calls, llm)
         for s in suggestions:
@@ -362,18 +364,21 @@ class TestCostEstimator:
 
 
 class TestGradeFunction:
-    @pytest.mark.parametrize("score,expected", [
-        (0.95, "A"),
-        (0.90, "A"),
-        (0.80, "B"),
-        (0.75, "B"),
-        (0.65, "C"),
-        (0.60, "C"),
-        (0.50, "D"),
-        (0.40, "D"),
-        (0.39, "F"),
-        (0.0, "F"),
-    ])
+    @pytest.mark.parametrize(
+        "score,expected",
+        [
+            (0.95, "A"),
+            (0.90, "A"),
+            (0.80, "B"),
+            (0.75, "B"),
+            (0.65, "C"),
+            (0.60, "C"),
+            (0.50, "D"),
+            (0.40, "D"),
+            (0.39, "F"),
+            (0.0, "F"),
+        ],
+    )
     def test_grade_thresholds(self, score: float, expected: str) -> None:
         assert _grade(score) == expected
 
@@ -391,8 +396,7 @@ class TestToolQualityScorer:
 
     def test_all_failures_score_f(self) -> None:
         rows = [
-            _tool_row(status="failure", failure_type="timeout", latency_ms=8000.0)
-            for _ in range(5)
+            _tool_row(status="failure", failure_type="timeout", latency_ms=8000.0) for _ in range(5)
         ]
         scorer = QualityScorer()
         scores = scorer.score_tools(rows)
@@ -441,25 +445,25 @@ class TestToolQualityScorer:
 
     @given(
         st.lists(
-            st.fixed_dictionaries({
-                "tool_name": st.sampled_from(["a", "b"]),
-                "status": st.sampled_from(["success", "failure"]),
-                "failure_type": st.one_of(st.none(), st.just("timeout")),
-                "latency_ms": st.floats(
-                    min_value=0, max_value=100_000, allow_nan=False, allow_infinity=False
-                ),
-                "trace_id": st.just("t"),
-                "drift_detected": st.one_of(st.none(), st.just(0), st.just(1)),
-                "output_payload": st.just({}),
-                "token_usage_output": st.none(),
-            }),
+            st.fixed_dictionaries(
+                {
+                    "tool_name": st.sampled_from(["a", "b"]),
+                    "status": st.sampled_from(["success", "failure"]),
+                    "failure_type": st.one_of(st.none(), st.just("timeout")),
+                    "latency_ms": st.floats(
+                        min_value=0, max_value=100_000, allow_nan=False, allow_infinity=False
+                    ),
+                    "trace_id": st.just("t"),
+                    "drift_detected": st.one_of(st.none(), st.just(0), st.just(1)),
+                    "output_payload": st.just({}),
+                    "token_usage_output": st.none(),
+                }
+            ),
             min_size=1,
             max_size=40,
         )
     )
-    def test_property_scores_always_bounded(
-        self, tool_calls: list[dict[str, Any]]
-    ) -> None:
+    def test_property_scores_always_bounded(self, tool_calls: list[dict[str, Any]]) -> None:
         scores = QualityScorer().score_tools(tool_calls)
         for s in scores:
             assert 0.0 <= s.reliability_score <= 1.0
@@ -517,8 +521,7 @@ class TestRunQualityScorer:
 
     def test_diverse_tools_score_higher_diversity(self) -> None:
         tool_calls = [
-            _tool_row(tool_name=f"tool_{i}", status="success", trace_id="run6")
-            for i in range(5)
+            _tool_row(tool_name=f"tool_{i}", status="success", trace_id="run6") for i in range(5)
         ]
         llm_calls = [_llm_row(trace_id="run6")]
         scores = QualityScorer().score_runs(tool_calls, llm_calls)
@@ -539,28 +542,32 @@ class TestRunQualityScorer:
 
     @given(
         st.lists(
-            st.fixed_dictionaries({
-                "tool_name": st.just("t"),
-                "status": st.sampled_from(["success", "failure"]),
-                "failure_type": st.one_of(st.none(), st.just("timeout"), st.just("api_error")),
-                "latency_ms": st.just(100.0),
-                "trace_id": st.just("tr"),
-                "drift_detected": st.none(),
-                "output_payload": st.just({}),
-                "token_usage_output": st.none(),
-            }),
+            st.fixed_dictionaries(
+                {
+                    "tool_name": st.just("t"),
+                    "status": st.sampled_from(["success", "failure"]),
+                    "failure_type": st.one_of(st.none(), st.just("timeout"), st.just("api_error")),
+                    "latency_ms": st.just(100.0),
+                    "trace_id": st.just("tr"),
+                    "drift_detected": st.none(),
+                    "output_payload": st.just({}),
+                    "token_usage_output": st.none(),
+                }
+            ),
             min_size=1,
             max_size=20,
         ),
         st.lists(
-            st.fixed_dictionaries({
-                "trace_id": st.just("tr"),
-                "model": st.just("claude-3-5-sonnet-20241022"),
-                "context_window_limit": st.just(200_000),
-                "context_window_used": st.integers(min_value=0, max_value=200_000),
-                "context_utilisation": st.floats(min_value=0.0, max_value=1.0, allow_nan=False),
-                "token_output": st.just(500),
-            }),
+            st.fixed_dictionaries(
+                {
+                    "trace_id": st.just("tr"),
+                    "model": st.just("claude-3-5-sonnet-20241022"),
+                    "context_window_limit": st.just(200_000),
+                    "context_window_used": st.integers(min_value=0, max_value=200_000),
+                    "context_utilisation": st.floats(min_value=0.0, max_value=1.0, allow_nan=False),
+                    "token_output": st.just(500),
+                }
+            ),
             min_size=0,
             max_size=10,
         ),

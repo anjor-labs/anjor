@@ -200,9 +200,7 @@ class SQLiteBackend(StorageBackend):
         )
         await self._conn.commit()
 
-    async def query_tool_calls(
-        self, filters: QueryFilters
-    ) -> list[dict[str, Any]]:
+    async def query_tool_calls(self, filters: QueryFilters) -> list[dict[str, Any]]:
         """Query tool calls with optional filters. Parameterised SQL only."""
         assert self._conn is not None
         conditions: list[str] = []
@@ -244,9 +242,7 @@ class SQLiteBackend(StorageBackend):
 
     async def list_tool_summaries(self) -> list[ToolSummary]:
         assert self._conn is not None
-        cursor = await self._conn.execute(
-            "SELECT DISTINCT tool_name FROM tool_calls"
-        )
+        cursor = await self._conn.execute("SELECT DISTINCT tool_name FROM tool_calls")
         names = [row[0] for row in await cursor.fetchall()]
         summaries = []
         for name in names:
@@ -256,9 +252,7 @@ class SQLiteBackend(StorageBackend):
         return summaries
 
     @staticmethod
-    def _compute_summary(
-        tool_name: str, rows: list[aiosqlite.Row]
-    ) -> ToolSummary:
+    def _compute_summary(tool_name: str, rows: list[aiosqlite.Row]) -> ToolSummary:
         latencies = sorted(row["latency_ms"] for row in rows)
         success_count = sum(1 for row in rows if row["status"] == "success")
         call_count = len(rows)
@@ -281,9 +275,7 @@ class SQLiteBackend(StorageBackend):
             p99_latency_ms=percentile(latencies, 99),
         )
 
-    async def query_llm_calls(
-        self, filters: LLMQueryFilters
-    ) -> list[dict[str, Any]]:
+    async def query_llm_calls(self, filters: LLMQueryFilters) -> list[dict[str, Any]]:
         """Query LLM call events with optional filters."""
         assert self._conn is not None
         conditions: list[str] = []
@@ -362,9 +354,7 @@ class SQLiteBackend(StorageBackend):
         )
         await self._conn.commit()
 
-    async def get_schema_snapshot(
-        self, tool_name: str, payload_type: str
-    ) -> SchemaSnapshot | None:
+    async def get_schema_snapshot(self, tool_name: str, payload_type: str) -> SchemaSnapshot | None:
         assert self._conn is not None
         cursor = await self._conn.execute(
             "SELECT * FROM schema_snapshots WHERE tool_name = ? AND payload_type = ?",

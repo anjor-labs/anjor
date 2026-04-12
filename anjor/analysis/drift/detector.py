@@ -24,9 +24,7 @@ class DriftDetector(BaseAnalyser):
         """Not used directly — call check() instead."""
         raise NotImplementedError("Use check(tool_name, payload) directly.")
 
-    def check(
-        self, tool_name: str, payload: dict[str, Any]
-    ) -> SchemaDrift | None:
+    def check(self, tool_name: str, payload: dict[str, Any]) -> SchemaDrift | None:
         """Check payload against baseline for tool_name.
 
         - If no baseline exists: stores this as baseline and returns None.

@@ -55,9 +55,7 @@ def _sanitise(payload: dict[str, Any]) -> dict[str, Any]:
         elif isinstance(v, dict):
             result[k] = _sanitise(v)
         elif isinstance(v, list):
-            result[k] = [
-                _sanitise(item) if isinstance(item, dict) else item for item in v
-            ]
+            result[k] = [_sanitise(item) if isinstance(item, dict) else item for item in v]
         else:
             result[k] = v
     return result
@@ -65,8 +63,10 @@ def _sanitise(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _prompt_hash(messages: list[dict[str, Any]]) -> str:
     """Structural hash of the messages list (types + roles, not content values)."""
-    shape = [{"role": m.get("role", ""), "content_type": type(m.get("content")).__name__}
-             for m in messages]
+    shape = [
+        {"role": m.get("role", ""), "content_type": type(m.get("content")).__name__}
+        for m in messages
+    ]
     canonical = json.dumps(shape, sort_keys=True)
     return hashlib.sha256(canonical.encode()).hexdigest()
 

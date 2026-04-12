@@ -57,8 +57,8 @@ class TestContextWindowTracker:
     def test_multiple_thresholds_separate_alerts(self) -> None:
         tracker = ContextWindowTracker(thresholds=[0.7, 0.9])
         tracker.record("t1", 10_000, 200_000)
-        r1 = tracker.record("t1", 145_000, 200_000)   # 72.5% → fires 0.7
-        r2 = tracker.record("t1", 185_000, 200_000)   # 92.5% → fires 0.9
+        r1 = tracker.record("t1", 145_000, 200_000)  # 72.5% → fires 0.7
+        r2 = tracker.record("t1", 185_000, 200_000)  # 92.5% → fires 0.9
         assert isinstance(r1, ContextThresholdAlert)
         assert r1.threshold == 0.7
         assert isinstance(r2, ContextThresholdAlert)
@@ -69,7 +69,7 @@ class TestContextWindowTracker:
         tracker.record("t1", 10_000, 200_000)
         tracker.record("t2", 10_000, 200_000)
         r1 = tracker.record("t1", 150_000, 200_000)  # t1 crosses 0.7
-        r2 = tracker.record("t2", 20_000, 200_000)   # t2 still below
+        r2 = tracker.record("t2", 20_000, 200_000)  # t2 still below
         assert r1 is not None
         assert r2 is None
 
@@ -137,8 +137,10 @@ class TestContextWindowTracker:
 
     def test_snapshot_dataclass_frozen(self) -> None:
         snap = ContextSnapshot(
-            trace_id="t1", turn=1,
-            context_window_used=100, context_window_limit=200,
+            trace_id="t1",
+            turn=1,
+            context_window_used=100,
+            context_window_limit=200,
             utilisation=0.5,
         )
         with pytest.raises(dataclasses.FrozenInstanceError):
@@ -201,8 +203,11 @@ class TestContextHogDetector:
 
     def test_result_is_frozen(self) -> None:
         result = ContextHogResult(
-            tool_name="t", avg_output_bytes=1.0,
-            estimated_tokens=1, context_fraction=0.0, is_hog=False,
+            tool_name="t",
+            avg_output_bytes=1.0,
+            estimated_tokens=1,
+            context_fraction=0.0,
+            is_hog=False,
         )
         with pytest.raises(dataclasses.FrozenInstanceError):
             result.is_hog = True  # type: ignore[misc]

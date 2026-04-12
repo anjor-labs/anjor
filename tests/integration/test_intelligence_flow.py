@@ -101,20 +101,27 @@ def seeded_client() -> TestClient:  # type: ignore[misc]
         for _ in range(6):
             client.post("/events", json=_tool_event("search", "success", trace_id="trace-1"))
         for _ in range(2):
-            client.post("/events", json=_tool_event(
-                "search", "failure", "timeout", latency_ms=8500.0, trace_id="trace-1"
-            ))
+            client.post(
+                "/events",
+                json=_tool_event(
+                    "search", "failure", "timeout", latency_ms=8500.0, trace_id="trace-1"
+                ),
+            )
         # Seed fetch events
         client.post("/events", json=_tool_event("fetch", "success", trace_id="trace-1"))
         for _ in range(3):
-            client.post("/events", json=_tool_event(
-                "fetch", "failure", "api_error", latency_ms=300.0, trace_id="trace-2"
-            ))
+            client.post(
+                "/events",
+                json=_tool_event(
+                    "fetch", "failure", "api_error", latency_ms=300.0, trace_id="trace-2"
+                ),
+            )
         # Seed parse events (large output — 15k tokens = 7.5% of 200k context)
         for _ in range(6):
-            client.post("/events", json=_tool_event(
-                "parse", "success", output_tokens=15_000, trace_id="trace-1"
-            ))
+            client.post(
+                "/events",
+                json=_tool_event("parse", "success", output_tokens=15_000, trace_id="trace-1"),
+            )
         # Seed LLM calls
         client.post("/events", json=_llm_event("trace-1", context_utilisation=0.3))
         client.post("/events", json=_llm_event("trace-2", context_utilisation=0.85))
@@ -130,9 +137,7 @@ class TestFailureClusteringIntegration:
         assert "search" in tools
         assert "fetch" in tools
 
-    def test_fetch_has_higher_failure_rate_than_search(
-        self, seeded_client: TestClient
-    ) -> None:
+    def test_fetch_has_higher_failure_rate_than_search(self, seeded_client: TestClient) -> None:
         resp = seeded_client.get("/intelligence/failures")
         data = resp.json()
         by_tool = {c["tool_name"]: c for c in data}
@@ -159,18 +164,14 @@ class TestFailureClusteringIntegration:
 
 
 class TestTokenOptimizationIntegration:
-    def test_parse_tool_flagged_as_optimization_candidate(
-        self, seeded_client: TestClient
-    ) -> None:
+    def test_parse_tool_flagged_as_optimization_candidate(self, seeded_client: TestClient) -> None:
         resp = seeded_client.get("/intelligence/optimization")
         assert resp.status_code == 200
         data = resp.json()
         tool_names = [s["tool_name"] for s in data]
         assert "parse" in tool_names
 
-    def test_suggestion_text_describes_parse(
-        self, seeded_client: TestClient
-    ) -> None:
+    def test_suggestion_text_describes_parse(self, seeded_client: TestClient) -> None:
         resp = seeded_client.get("/intelligence/optimization")
         data = resp.json()
         parse = next(s for s in data if s["tool_name"] == "parse")
@@ -186,26 +187,20 @@ class TestTokenOptimizationIntegration:
 
 
 class TestQualityScoresIntegration:
-    def test_tool_scores_all_three_tools(
-        self, seeded_client: TestClient
-    ) -> None:
+    def test_tool_scores_all_three_tools(self, seeded_client: TestClient) -> None:
         resp = seeded_client.get("/intelligence/quality/tools")
         data = resp.json()
         names = {s["tool_name"] for s in data}
         assert {"search", "fetch", "parse"} <= names
 
-    def test_parse_tool_gets_high_score(
-        self, seeded_client: TestClient
-    ) -> None:
+    def test_parse_tool_gets_high_score(self, seeded_client: TestClient) -> None:
         resp = seeded_client.get("/intelligence/quality/tools")
         data = resp.json()
         parse_score = next(s for s in data if s["tool_name"] == "parse")
         assert parse_score["reliability_score"] == 1.0
         assert parse_score["overall_score"] >= 0.8
 
-    def test_fetch_tool_has_low_reliability(
-        self, seeded_client: TestClient
-    ) -> None:
+    def test_fetch_tool_has_low_reliability(self, seeded_client: TestClient) -> None:
         resp = seeded_client.get("/intelligence/quality/tools")
         data = resp.json()
         fetch_score = next(s for s in data if s["tool_name"] == "fetch")
@@ -224,9 +219,7 @@ class TestQualityScoresIntegration:
         trace_ids = {s["trace_id"] for s in data}
         assert {"trace-1", "trace-2"} <= trace_ids
 
-    def test_high_context_run_has_lower_score(
-        self, seeded_client: TestClient
-    ) -> None:
+    def test_high_context_run_has_lower_score(self, seeded_client: TestClient) -> None:
         resp = seeded_client.get("/intelligence/quality/runs")
         data = resp.json()
         by_trace = {s["trace_id"]: s for s in data}

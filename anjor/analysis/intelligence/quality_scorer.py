@@ -14,7 +14,7 @@ from anjor.analysis.base import BaseAnalyser
 
 # Score weights for the overall tool quality score
 _TOOL_WEIGHTS = {
-    "reliability": 0.5,     # failure rate is the most important signal
+    "reliability": 0.5,  # failure rate is the most important signal
     "schema_stability": 0.3,
     "latency_consistency": 0.2,
 }
@@ -46,7 +46,7 @@ class ToolQualityScore:
 
     tool_name: str
     call_count: int
-    reliability_score: float      # 1 - failure_rate
+    reliability_score: float  # 1 - failure_rate
     schema_stability_score: float  # 1 - drift_rate
     latency_consistency_score: float  # 1 - coefficient_of_variation (clamped)
     overall_score: float
@@ -61,8 +61,8 @@ class AgentRunQualityScore:
     llm_call_count: int
     tool_call_count: int
     context_efficiency_score: float  # 1 - peak_context_utilisation
-    failure_recovery_score: float    # fraction of failure types not repeated in the run
-    tool_diversity_score: float      # normalised unique tools / total calls
+    failure_recovery_score: float  # fraction of failure types not repeated in the run
+    tool_diversity_score: float  # normalised unique tools / total calls
     overall_score: float
     grade: str
 
@@ -82,9 +82,7 @@ class QualityScorer(BaseAnalyser):
         tool_calls, llm_calls = data
         return self.score_tools(tool_calls), self.score_runs(tool_calls, llm_calls)
 
-    def score_tools(
-        self, tool_calls: list[dict[str, Any]]
-    ) -> list[ToolQualityScore]:
+    def score_tools(self, tool_calls: list[dict[str, Any]]) -> list[ToolQualityScore]:
         """Compute quality scores for every tool seen in the event data.
 
         Args:
@@ -137,9 +135,7 @@ class QualityScorer(BaseAnalyser):
         return sorted(scores, key=lambda s: s.overall_score)
 
     @staticmethod
-    def _score_single_tool(
-        tool_name: str, rows: list[dict[str, Any]]
-    ) -> ToolQualityScore:
+    def _score_single_tool(tool_name: str, rows: list[dict[str, Any]]) -> ToolQualityScore:
         call_count = len(rows)
         if call_count == 0:
             return ToolQualityScore(

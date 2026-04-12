@@ -74,11 +74,13 @@ class ContextHogDetector:
             estimated_tokens = max(1, int(avg / 4))
             limit = self.context_window_limit
             cf = (estimated_tokens / limit) if limit > 0 else 0.0
-            corrected.append(ContextHogResult(
-                tool_name=name,
-                avg_output_bytes=avg,
-                estimated_tokens=estimated_tokens,
-                context_fraction=cf,
-                is_hog=cf >= self.threshold,
-            ))
+            corrected.append(
+                ContextHogResult(
+                    tool_name=name,
+                    avg_output_bytes=avg,
+                    estimated_tokens=estimated_tokens,
+                    context_fraction=cf,
+                    is_hog=cf >= self.threshold,
+                )
+            )
         return sorted(corrected, key=lambda r: r.context_fraction, reverse=True)

@@ -94,6 +94,7 @@ class TestPromptDriftDetector:
 
     def test_drift_result_frozen(self) -> None:
         import datetime
+
         result = PromptDrift(
             agent_id="a",
             detected=True,

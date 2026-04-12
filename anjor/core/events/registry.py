@@ -39,10 +39,7 @@ class EventTypeRegistry:
         """Retrieve an event class. Raises KeyError on unknown type."""
         if event_type not in self._registry:
             registered = list(self._registry.keys())
-            raise KeyError(
-                f"Unknown EventType {event_type!r}. "
-                f"Registered types: {registered}"
-            )
+            raise KeyError(f"Unknown EventType {event_type!r}. Registered types: {registered}")
         return self._registry[event_type]
 
     def all(self) -> dict[EventType, type[BaseEvent]]:

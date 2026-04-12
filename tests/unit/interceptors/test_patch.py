@@ -135,9 +135,7 @@ class TestPatchInterceptor:
     def test_sync_httpx_intercepted(self) -> None:
         self.interceptor.install()
         with respx.mock:
-            respx.post(_ANTHROPIC_URL).mock(
-                return_value=httpx.Response(200, json=_TOOL_RESPONSE)
-            )
+            respx.post(_ANTHROPIC_URL).mock(return_value=httpx.Response(200, json=_TOOL_RESPONSE))
             with httpx.Client() as client:
                 client.post(
                     _ANTHROPIC_URL,
@@ -151,9 +149,7 @@ class TestPatchInterceptor:
     async def test_async_httpx_intercepted(self) -> None:
         self.interceptor.install()
         with respx.mock:
-            respx.post(_ANTHROPIC_URL).mock(
-                return_value=httpx.Response(200, json=_TOOL_RESPONSE)
-            )
+            respx.post(_ANTHROPIC_URL).mock(return_value=httpx.Response(200, json=_TOOL_RESPONSE))
             async with httpx.AsyncClient() as client:
                 await client.post(
                     _ANTHROPIC_URL,

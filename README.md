@@ -138,7 +138,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
 
 - [Quickstart — see it in action](docs/quickstart.md)
 - [Architecture — layer diagram and design decisions](docs/architecture.md)
-- [Code flow — execution traces end-to-end](docs/code_flow.md)
 
 ---
 

@@ -83,9 +83,7 @@ class TestSQLiteBackend:
         assert summary.failure_count == 1
         assert summary.success_rate == pytest.approx(2 / 3)
 
-    async def test_tool_summary_none_for_unknown_tool(
-        self, storage: SQLiteBackend
-    ) -> None:
+    async def test_tool_summary_none_for_unknown_tool(self, storage: SQLiteBackend) -> None:
         result = await storage.get_tool_summary("nonexistent")
         assert result is None
 
@@ -97,9 +95,7 @@ class TestSQLiteBackend:
         assert "search" in names
         assert "lookup" in names
 
-    async def test_write_and_get_schema_snapshot(
-        self, storage: SQLiteBackend
-    ) -> None:
+    async def test_write_and_get_schema_snapshot(self, storage: SQLiteBackend) -> None:
         snap = SchemaSnapshot(
             tool_name="search",
             payload_type="input",
@@ -132,9 +128,7 @@ class TestSQLiteBackend:
         assert retrieved is not None
         assert retrieved.schema_hash == "new"
 
-    async def test_get_schema_snapshot_none_for_unknown(
-        self, storage: SQLiteBackend
-    ) -> None:
+    async def test_get_schema_snapshot_none_for_unknown(self, storage: SQLiteBackend) -> None:
         result = await storage.get_schema_snapshot("nope", "input")
         assert result is None
 
@@ -232,10 +226,22 @@ class TestSQLiteBackendLLM:
         assert results[0]["model"] == "claude-3-opus-20240229"
 
     async def test_filter_by_trace_id(self, storage: SQLiteBackend) -> None:
-        e1 = {"trace_id": "t1", "session_id": "s1", "model": "claude", "latency_ms": 100.0,
-               "timestamp": datetime.now(UTC).isoformat(), "token_usage": {}}
-        e2 = {"trace_id": "t2", "session_id": "s2", "model": "claude", "latency_ms": 200.0,
-               "timestamp": datetime.now(UTC).isoformat(), "token_usage": {}}
+        e1 = {
+            "trace_id": "t1",
+            "session_id": "s1",
+            "model": "claude",
+            "latency_ms": 100.0,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "token_usage": {},
+        }
+        e2 = {
+            "trace_id": "t2",
+            "session_id": "s2",
+            "model": "claude",
+            "latency_ms": 200.0,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "token_usage": {},
+        }
         await storage.write_llm_event(e1)
         await storage.write_llm_event(e2)
         results = await storage.query_llm_calls(LLMQueryFilters(trace_id="t1"))
@@ -243,10 +249,22 @@ class TestSQLiteBackendLLM:
         assert results[0]["trace_id"] == "t1"
 
     async def test_filter_by_model(self, storage: SQLiteBackend) -> None:
-        e1 = {"trace_id": "t1", "session_id": "s1", "model": "sonnet", "latency_ms": 100.0,
-               "timestamp": datetime.now(UTC).isoformat(), "token_usage": {}}
-        e2 = {"trace_id": "t2", "session_id": "s2", "model": "opus", "latency_ms": 200.0,
-               "timestamp": datetime.now(UTC).isoformat(), "token_usage": {}}
+        e1 = {
+            "trace_id": "t1",
+            "session_id": "s1",
+            "model": "sonnet",
+            "latency_ms": 100.0,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "token_usage": {},
+        }
+        e2 = {
+            "trace_id": "t2",
+            "session_id": "s2",
+            "model": "opus",
+            "latency_ms": 200.0,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "token_usage": {},
+        }
         await storage.write_llm_event(e1)
         await storage.write_llm_event(e2)
         results = await storage.query_llm_calls(LLMQueryFilters(model="opus"))
@@ -255,18 +273,28 @@ class TestSQLiteBackendLLM:
 
     async def test_list_llm_summaries(self, storage: SQLiteBackend) -> None:
         for _ in range(3):
-            await storage.write_llm_event({
-                "trace_id": "t1", "session_id": "s1", "model": "sonnet",
-                "latency_ms": 300.0, "timestamp": datetime.now(UTC).isoformat(),
-                "token_usage": {"input": 100, "output": 50},
-                "context_utilisation": 0.5,
-            })
-        await storage.write_llm_event({
-            "trace_id": "t2", "session_id": "s2", "model": "opus",
-            "latency_ms": 800.0, "timestamp": datetime.now(UTC).isoformat(),
-            "token_usage": {"input": 500, "output": 200},
-            "context_utilisation": 0.3,
-        })
+            await storage.write_llm_event(
+                {
+                    "trace_id": "t1",
+                    "session_id": "s1",
+                    "model": "sonnet",
+                    "latency_ms": 300.0,
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "token_usage": {"input": 100, "output": 50},
+                    "context_utilisation": 0.5,
+                }
+            )
+        await storage.write_llm_event(
+            {
+                "trace_id": "t2",
+                "session_id": "s2",
+                "model": "opus",
+                "latency_ms": 800.0,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "token_usage": {"input": 500, "output": 200},
+                "context_utilisation": 0.3,
+            }
+        )
         summaries = await storage.list_llm_summaries()
         models = {s.model for s in summaries}
         assert "sonnet" in models
@@ -277,11 +305,16 @@ class TestSQLiteBackendLLM:
         assert sonnet.avg_token_input == pytest.approx(100.0)
 
     async def test_token_cache_read_stored(self, storage: SQLiteBackend) -> None:
-        await storage.write_llm_event({
-            "trace_id": "t1", "session_id": "s1", "model": "claude",
-            "latency_ms": 100.0, "timestamp": datetime.now(UTC).isoformat(),
-            "token_usage": {"input": 100, "output": 50, "cache_read": 200},
-        })
+        await storage.write_llm_event(
+            {
+                "trace_id": "t1",
+                "session_id": "s1",
+                "model": "claude",
+                "latency_ms": 100.0,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "token_usage": {"input": 100, "output": 50, "cache_read": 200},
+            }
+        )
         results = await storage.query_llm_calls(LLMQueryFilters())
         assert results[0]["token_cache_read"] == 200
 
@@ -289,9 +322,7 @@ class TestSQLiteBackendLLM:
 class TestSQLiteBackendPhase3:
     """Tests for Phase 3 intelligence query methods."""
 
-    async def test_query_tool_calls_for_analysis_all(
-        self, storage: SQLiteBackend
-    ) -> None:
+    async def test_query_tool_calls_for_analysis_all(self, storage: SQLiteBackend) -> None:
         for i in range(5):
             await storage.write_event(make_event(tool_name="search", latency_ms=float(i * 100)))
         results = await storage.query_tool_calls_for_analysis()
@@ -306,38 +337,32 @@ class TestSQLiteBackendPhase3:
         assert len(results) == 1
         assert results[0]["tool_name"] == "search"
 
-    async def test_query_tool_calls_for_analysis_limit(
-        self, storage: SQLiteBackend
-    ) -> None:
+    async def test_query_tool_calls_for_analysis_limit(self, storage: SQLiteBackend) -> None:
         for _ in range(10):
             await storage.write_event(make_event())
         results = await storage.query_tool_calls_for_analysis(limit=3)
         assert len(results) == 3
 
-    async def test_query_tool_calls_for_analysis_empty(
-        self, storage: SQLiteBackend
-    ) -> None:
+    async def test_query_tool_calls_for_analysis_empty(self, storage: SQLiteBackend) -> None:
         results = await storage.query_tool_calls_for_analysis()
         assert results == []
 
-    async def test_query_drift_summary_no_data(
-        self, storage: SQLiteBackend
-    ) -> None:
+    async def test_query_drift_summary_no_data(self, storage: SQLiteBackend) -> None:
         results = await storage.query_drift_summary()
         assert results == []
 
-    async def test_query_drift_summary_counts(
-        self, storage: SQLiteBackend
-    ) -> None:
-        await storage.write_event(make_event(
-            tool_name="search",
-            schema_drift={
-                "detected": True,
-                "missing_fields": [],
-                "unexpected_fields": [],
-                "expected_hash": "x",
-            },
-        ))
+    async def test_query_drift_summary_counts(self, storage: SQLiteBackend) -> None:
+        await storage.write_event(
+            make_event(
+                tool_name="search",
+                schema_drift={
+                    "detected": True,
+                    "missing_fields": [],
+                    "unexpected_fields": [],
+                    "expected_hash": "x",
+                },
+            )
+        )
         await storage.write_event(make_event(tool_name="search"))
         await storage.write_event(make_event(tool_name="search"))
         results = await storage.query_drift_summary()
@@ -347,9 +372,7 @@ class TestSQLiteBackendPhase3:
         assert row["total_calls"] == 3
         assert row["drift_calls"] == 1
 
-    async def test_query_drift_summary_multiple_tools(
-        self, storage: SQLiteBackend
-    ) -> None:
+    async def test_query_drift_summary_multiple_tools(self, storage: SQLiteBackend) -> None:
         await storage.write_event(make_event(tool_name="a"))
         await storage.write_event(make_event(tool_name="b"))
         results = await storage.query_drift_summary()

@@ -69,9 +69,7 @@ async def storage() -> SQLiteBackend:
 
 
 class TestLLMCallFlow:
-    async def test_tool_call_stores_both_events(
-        self, storage: SQLiteBackend
-    ) -> None:
+    async def test_tool_call_stores_both_events(self, storage: SQLiteBackend) -> None:
         """A tool-use response produces both LLMCallEvent and ToolCallEvent."""
         handler = StorageWritingHandler(storage)
         async with EventPipeline(handlers=[handler]) as pipeline:
@@ -105,9 +103,7 @@ class TestLLMCallFlow:
         assert llm_calls[0]["token_input"] == 200
         assert llm_calls[0]["token_output"] == 80
 
-    async def test_text_only_response_stores_only_llm_event(
-        self, storage: SQLiteBackend
-    ) -> None:
+    async def test_text_only_response_stores_only_llm_event(self, storage: SQLiteBackend) -> None:
         """A text-only response produces only LLMCallEvent (no tool calls)."""
         handler = StorageWritingHandler(storage)
         async with EventPipeline(handlers=[handler]) as pipeline:
@@ -137,9 +133,7 @@ class TestLLMCallFlow:
         assert len(llm_calls) == 1
         assert llm_calls[0]["finish_reason"] == "end_turn"
 
-    async def test_system_prompt_hash_stored(
-        self, storage: SQLiteBackend
-    ) -> None:
+    async def test_system_prompt_hash_stored(self, storage: SQLiteBackend) -> None:
         """System prompt hash is captured and stored in llm_calls."""
         handler = StorageWritingHandler(storage)
         async with EventPipeline(handlers=[handler]) as pipeline:
@@ -167,9 +161,7 @@ class TestLLMCallFlow:
         assert llm_calls[0]["system_prompt_hash"] is not None
         assert len(llm_calls[0]["system_prompt_hash"]) == 64  # SHA-256
 
-    async def test_context_utilisation_stored(
-        self, storage: SQLiteBackend
-    ) -> None:
+    async def test_context_utilisation_stored(self, storage: SQLiteBackend) -> None:
         """Context utilisation is computed and stored."""
         handler = StorageWritingHandler(storage)
         async with EventPipeline(handlers=[handler]) as pipeline:
@@ -196,9 +188,7 @@ class TestLLMCallFlow:
         assert llm_calls[0]["context_utilisation"] is not None
         assert 0.0 < llm_calls[0]["context_utilisation"] < 1.0
 
-    async def test_trace_id_consistent_across_events(
-        self, storage: SQLiteBackend
-    ) -> None:
+    async def test_trace_id_consistent_across_events(self, storage: SQLiteBackend) -> None:
         """LLMCallEvent and ToolCallEvent for the same request share trace_id."""
         req = {**_REQUEST_BODY, "metadata": {"trace_id": "shared-trace-123"}}
         handler = StorageWritingHandler(storage)
