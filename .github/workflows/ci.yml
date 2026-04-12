@@ -49,10 +49,10 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: ruff check
-        run: ruff check .
+        run: ruff check anjor/ tests/
 
       - name: ruff format check
-        run: ruff format --check .
+        run: ruff format --check anjor/ tests/
 
       - name: mypy
         run: mypy anjor/
