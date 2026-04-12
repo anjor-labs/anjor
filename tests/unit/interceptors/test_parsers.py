@@ -338,10 +338,9 @@ class TestOpenAIParser:
         parser = OpenAIParser()
         assert parser.can_parse("https://api.openai.com/v1/chat/completions") is True
 
-    def test_returns_empty_list(self) -> None:
+    def test_does_not_parse_non_completions_url(self) -> None:
         parser = OpenAIParser()
-        events = parser.parse("https://api.openai.com/v1/chat", {}, {}, 100.0, 200)
-        assert events == []
+        assert parser.can_parse("https://api.openai.com/v1/embeddings") is False
 
 
 # ---------------------------------------------------------------------------
