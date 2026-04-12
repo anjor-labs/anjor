@@ -9,7 +9,7 @@ description = "Observability and reliability platform for agentic AI systems"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
-authors = [{ name = "Anjani Kumar", email = "anjistic@gmail.com" }]
+authors = [{ name = "Anjor Labs", email = "hello@anjor.dev" }]
 keywords = ["observability", "llm", "agents", "tools", "monitoring", "anthropic"]
 classifiers = [
     "Development Status :: 3 - Alpha",
