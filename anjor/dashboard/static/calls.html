@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anjor — Calls</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="utils.js"></script>
+</head>
+<body class="min-h-screen bg-gray-950 text-gray-100 font-mono">
+  <div id="nav"></div>
+  <main class="px-6 py-8 max-w-7xl mx-auto space-y-6">
+    <div class="flex items-center justify-between flex-wrap gap-3">
+      <h1 class="text-xl font-bold text-white">Call Inspector</h1>
+      <div class="flex items-center gap-3">
+        <input id="filter" type="text" placeholder="Filter by tool name…"
+          class="bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 w-52" />
+        <span id="updated" class="text-xs text-gray-600"></span>
+      </div>
+    </div>
+    <div id="app"><p class="text-gray-600 text-sm">Loading…</p></div>
+    <div class="flex items-center gap-3 pt-2" id="pagination"></div>
+  </main>
+  <script>
+    document.getElementById('nav').innerHTML = buildNav('/ui/calls.html')
+
+    const PAGE_SIZE = 25
+    let page = 0
+    let toolFilter = ''
+    let expanded = null
+    let lastCalls = []
+
+    document.getElementById('filter').addEventListener('input', e => {
+      toolFilter = e.target.value
+      page = 0
+      load()
+    })
+
+    function jsonBlock(raw) {
+      try {
+        const parsed = JSON.parse(raw)
+        if (!parsed || Object.keys(parsed).length === 0) return '<span class="text-gray-600">{}</span>'
+        return `<pre class="text-xs text-gray-400 overflow-x-auto whitespace-pre-wrap break-words max-w-xs">${JSON.stringify(parsed, null, 2)}</pre>`
+      } catch {
+        return `<span class="text-gray-500 text-xs">${raw || '—'}</span>`
+      }
+    }
+
+    function toggle(id) {
+      expanded = expanded === id ? null : id
+      render(lastCalls)
+    }
+
+    async function load() {
+      try {
+        const params = new URLSearchParams({ limit: PAGE_SIZE, offset: page * PAGE_SIZE })
+        if (toolFilter) params.set('tool_name', toolFilter)
+        lastCalls = await fetch(`${API}/calls?${params}`).then(r => r.json())
+        document.getElementById('updated').textContent = 'Updated ' + new Date().toLocaleTimeString()
+        render(lastCalls)
+      } catch {
+        document.getElementById('app').innerHTML = errorBanner('Cannot reach collector at :' + (window.location.port || 80))
+      }
+    }
+
+    function render(calls) {
+      if (calls.length === 0) {
+        document.getElementById('app').innerHTML = '<p class="text-gray-600 text-sm">No calls found.</p>'
+        document.getElementById('pagination').innerHTML = ''
+        return
+      }
+
+      const rows = calls.map(c => {
+        const isExpanded = expanded === c.id
+        const missing = c.drift_missing ? JSON.parse(c.drift_missing) : []
+        const unexpected = c.drift_unexpected ? JSON.parse(c.drift_unexpected) : []
+
+        const expandedContent = isExpanded ? `
+          <div class="border-t border-gray-800 pt-3 pb-3 px-2 grid grid-cols-2 gap-4">
+            <div>
+              <p class="text-xs text-gray-500 uppercase mb-1">Input Payload</p>
+              ${jsonBlock(c.input_payload)}
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 uppercase mb-1">Output Payload</p>
+              ${jsonBlock(c.output_payload)}
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 uppercase mb-1">Input Schema Hash</p>
+              <code class="text-xs text-gray-400 font-mono">${c.input_schema_hash || '—'}</code>
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 uppercase mb-1">Trace ID</p>
+              <code class="text-xs text-gray-400 font-mono">${c.trace_id}</code>
+            </div>
+            ${c.drift_detected === 1 ? `
+              <div class="col-span-2 bg-yellow-950/30 border border-yellow-900/40 rounded p-3">
+                <p class="text-xs text-yellow-400 font-semibold mb-2">Schema Drift Detected</p>
+                <div class="grid grid-cols-2 gap-4">
+                  <div>
+                    <p class="text-xs text-gray-500 mb-1">Missing fields</p>
+                    <p class="text-xs text-red-400">${missing.join(', ') || '—'}</p>
+                  </div>
+                  <div>
+                    <p class="text-xs text-gray-500 mb-1">Unexpected fields</p>
+                    <p class="text-xs text-blue-400">${unexpected.join(', ') || '—'}</p>
+                  </div>
+                </div>
+              </div>` : ''}
+          </div>` : ''
+
+        return `
+          <div class="rounded ${c.drift_detected ? 'bg-yellow-950/20 border border-yellow-900/40' : 'hover:bg-gray-900/50'}">
+            <button class="w-full grid grid-cols-12 gap-2 py-2 text-left text-sm items-center cursor-pointer"
+              onclick="toggle(${c.id})">
+              <span class="col-span-3 text-gray-200 truncate">${c.tool_name}</span>
+              <span class="col-span-2 ${c.status === 'success' ? 'text-green-400' : 'text-red-400'}">
+                ${c.status}${c.drift_detected ? ' <span class="text-yellow-400 text-xs">drift</span>' : ''}
+              </span>
+              <span class="col-span-2 text-right text-gray-300">${fmt.ms(c.latency_ms)}</span>
+              <span class="col-span-2 text-right text-gray-500 text-xs">${fmt.tokens(c.token_usage_input)} / ${fmt.tokens(c.token_usage_output)}</span>
+              <span class="col-span-2 text-right text-gray-600 text-xs font-mono truncate">${c.trace_id.slice(0, 8)}</span>
+              <span class="col-span-1 text-right text-gray-600 text-xs">${fmt.ts(c.timestamp)}</span>
+            </button>
+            ${expandedContent}
+          </div>`
+      }).join('')
+
+      document.getElementById('app').innerHTML = `
+        <div class="space-y-1">
+          <div class="grid grid-cols-12 gap-2 text-xs text-gray-500 uppercase pb-2 border-b border-gray-800">
+            <span class="col-span-3">Tool</span>
+            <span class="col-span-2">Status</span>
+            <span class="col-span-2 text-right">Latency</span>
+            <span class="col-span-2 text-right">Tokens In/Out</span>
+            <span class="col-span-2 text-right">Trace</span>
+            <span class="col-span-1 text-right">Time</span>
+          </div>
+          ${rows}
+        </div>`
+
+      document.getElementById('pagination').innerHTML = `
+        <button onclick="prevPage()" ${page === 0 ? 'disabled' : ''}
+          class="text-xs text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">← Prev</button>
+        <span class="text-xs text-gray-600">Page ${page + 1}</span>
+        <button onclick="nextPage()" ${calls.length < PAGE_SIZE ? 'disabled' : ''}
+          class="text-xs text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">Next →</button>`
+    }
+
+    function prevPage() { if (page > 0) { page--; load() } }
+    function nextPage() { page++; load() }
+
+    load()
+    setInterval(load, 5000)
+  </script>
+</body>
+</html>

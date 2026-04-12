@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anjor — LLM</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="utils.js"></script>
+</head>
+<body class="min-h-screen bg-gray-950 text-gray-100 font-mono">
+  <div id="nav"></div>
+  <main class="px-6 py-8 max-w-7xl mx-auto space-y-8" id="app">
+    <p class="text-gray-600 text-sm">Loading…</p>
+  </main>
+  <script>
+    document.getElementById('nav').innerHTML = buildNav('/ui/llm.html')
+
+    let lastUpdated = ''
+
+    async function load() {
+      try {
+        const summaries = await fetch(`${API}/llm`).then(r => r.json())
+        lastUpdated = new Date().toLocaleTimeString()
+        render(summaries)
+      } catch {
+        document.getElementById('app').innerHTML = errorBanner('Cannot reach collector at :' + (window.location.port || 80))
+      }
+    }
+
+    function render(summaries) {
+      if (summaries.length === 0) {
+        document.getElementById('app').innerHTML = `
+          <div class="flex items-center justify-between">
+            <div>
+              <h1 class="text-xl font-bold text-white">LLM Calls</h1>
+              <p class="text-xs text-gray-500 mt-1">Aggregated stats per model</p>
+            </div>
+          </div>
+          <p class="text-gray-600 text-sm">No LLM calls recorded yet.</p>`
+        return
+      }
+
+      const totalCalls = summaries.reduce((s, m) => s + m.call_count, 0)
+      const avgUtil = summaries.reduce((s, m) => s + m.avg_context_utilisation * m.call_count, 0) / (totalCalls || 1)
+
+      const cards = `
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+          ${statCard('Total LLM Calls', totalCalls.toLocaleString())}
+          ${statCard('Models Used', summaries.length.toString())}
+          <div class="bg-gray-900 border border-gray-800 rounded-lg p-5">
+            <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Avg Context Util.</p>
+            <p class="text-2xl font-bold ${utilColor(avgUtil)}">${fmt.pct(avgUtil)}</p>
+          </div>
+        </div>`
+
+      const table = `
+        <table class="w-full text-sm">
+          <thead><tr class="border-b border-gray-800">
+            <th class="text-left text-xs text-gray-500 uppercase pb-3 pr-4">Model</th>
+            <th class="text-right text-xs text-gray-500 uppercase pb-3 pr-4">Calls</th>
+            <th class="text-right text-xs text-gray-500 uppercase pb-3 pr-4">Avg Latency</th>
+            <th class="text-right text-xs text-gray-500 uppercase pb-3 pr-4">Avg Tokens In</th>
+            <th class="text-right text-xs text-gray-500 uppercase pb-3 pr-4">Avg Tokens Out</th>
+            <th class="text-right text-xs text-gray-500 uppercase pb-3">Avg Context Util.</th>
+          </tr></thead>
+          <tbody>${summaries.map(m => `
+            <tr class="border-b border-gray-900 hover:bg-gray-900/50">
+              <td class="py-3 pr-4 text-gray-200 font-mono text-xs">
+                <a href="/ui/llm_trace.html?model=${encodeURIComponent(m.model)}" class="hover:text-blue-400">${m.model}</a>
+              </td>
+              <td class="py-3 pr-4 text-right text-gray-300">${m.call_count.toLocaleString()}</td>
+              <td class="py-3 pr-4 text-right text-gray-300">${fmt.ms(m.avg_latency_ms)}</td>
+              <td class="py-3 pr-4 text-right text-gray-300">${m.avg_token_input.toFixed(0)}</td>
+              <td class="py-3 pr-4 text-right text-gray-300">${m.avg_token_output.toFixed(0)}</td>
+              <td class="py-3 text-right ${utilColor(m.avg_context_utilisation)}">${fmt.pct(m.avg_context_utilisation)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+        <p class="text-xs text-gray-600">
+          To view per-trace context growth, navigate to
+          <code class="bg-gray-900 px-1.5 py-0.5 rounded">/ui/llm_trace.html?id=&lt;trace_id&gt;</code>.
+          Trace IDs appear when passed via <code class="bg-gray-900 px-1.5 py-0.5 rounded">metadata.trace_id</code>.
+        </p>`
+
+      document.getElementById('app').innerHTML = `
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-xl font-bold text-white">LLM Calls</h1>
+            <p class="text-xs text-gray-500 mt-1">Aggregated stats per model</p>
+          </div>
+          ${lastUpdatedBadge(lastUpdated)}
+        </div>
+        ${cards}
+        ${table}`
+    }
+
+    load()
+    setInterval(load, 5000)
+  </script>
+</body>
+</html>

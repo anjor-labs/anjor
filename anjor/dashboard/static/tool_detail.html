@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anjor — Tool Detail</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="utils.js"></script>
+</head>
+<body class="min-h-screen bg-gray-950 text-gray-100 font-mono">
+  <div id="nav"></div>
+  <main class="px-6 py-8 max-w-7xl mx-auto space-y-8" id="app">
+    <p class="text-gray-600 text-sm">Loading…</p>
+  </main>
+  <script>
+    document.getElementById('nav').innerHTML = buildNav('/ui/tools.html')
+
+    const toolName = new URLSearchParams(window.location.search).get('name') || ''
+    let lastUpdated = ''
+
+    async function load() {
+      try {
+        const [detail, calls] = await Promise.all([
+          fetch(`${API}/tools/${encodeURIComponent(toolName)}`).then(r => r.json()),
+          fetch(`${API}/calls?tool_name=${encodeURIComponent(toolName)}&limit=20`).then(r => r.json()),
+        ])
+        lastUpdated = new Date().toLocaleTimeString()
+        render(detail, calls)
+      } catch {
+        document.getElementById('app').innerHTML = errorBanner('Cannot reach collector or tool not found.')
+      }
+    }
+
+    function latencyBar(value, max) {
+      const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0
+      return `<div class="flex items-center gap-3">
+        <div class="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+          <div class="h-full bg-blue-500 rounded-full" style="width:${pct}%"></div>
+        </div>
+        <span class="text-gray-300 text-sm w-20 text-right">${fmt.ms(value)}</span>
+      </div>`
+    }
+
+    function render(detail, calls) {
+      const driftCalls = calls.filter(c => c.drift_detected === 1)
+
+      const cards = [
+        ['Total Calls', detail.call_count.toLocaleString()],
+        ['Success', detail.success_count.toLocaleString()],
+        ['Failures', detail.failure_count.toLocaleString()],
+        ['Success Rate', fmt.pct(detail.success_rate)],
+      ].map(([l, v]) => `<div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+        <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">${l}</p>
+        <p class="text-xl font-bold text-white">${v}</p>
+      </div>`).join('')
+
+      const latencySection = `
+        <section class="bg-gray-900 border border-gray-800 rounded-lg p-5">
+          <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">Latency Percentiles</h2>
+          <div class="space-y-3">
+            ${['p50', 'p95', 'p99'].map(p => `
+              <div class="flex items-center gap-4">
+                <span class="text-xs text-gray-500 w-8">${p.toUpperCase()}</span>
+                <div class="flex-1">${latencyBar(detail[p + '_latency_ms'], detail.p99_latency_ms)}</div>
+              </div>`).join('')}
+            <div class="flex items-center gap-4 pt-2 border-t border-gray-800">
+              <span class="text-xs text-gray-500 w-8">AVG</span>
+              <div class="flex-1">${latencyBar(detail.avg_latency_ms, detail.p99_latency_ms)}</div>
+            </div>
+          </div>
+        </section>`
+
+      const driftSection = `
+        <section>
+          <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-3">
+            Schema Drift History
+            ${driftCalls.length > 0 ? `<span class="ml-2 text-yellow-400 text-xs">(${driftCalls.length} events)</span>` : ''}
+          </h2>
+          ${driftCalls.length === 0
+            ? `<p class="text-gray-600 text-sm">No drift detected in last 20 calls.</p>`
+            : `<table class="w-full text-sm">
+                <thead><tr class="border-b border-gray-800">
+                  <th class="text-left text-xs text-gray-500 uppercase pb-2 pr-4">Missing Fields</th>
+                  <th class="text-left text-xs text-gray-500 uppercase pb-2 pr-4">Unexpected Fields</th>
+                  <th class="text-left text-xs text-gray-500 uppercase pb-2 pr-4">Expected Hash</th>
+                  <th class="text-right text-xs text-gray-500 uppercase pb-2">Time</th>
+                </tr></thead>
+                <tbody>${driftCalls.map(c => {
+                  const missing = c.drift_missing ? JSON.parse(c.drift_missing) : []
+                  const unexpected = c.drift_unexpected ? JSON.parse(c.drift_unexpected) : []
+                  return `<tr class="border-b border-gray-900">
+                    <td class="py-2 pr-4 text-red-400 text-xs">${missing.join(', ') || '—'}</td>
+                    <td class="py-2 pr-4 text-blue-400 text-xs">${unexpected.join(', ') || '—'}</td>
+                    <td class="py-2 pr-4 text-gray-500 text-xs font-mono">${(c.drift_expected_hash || '').slice(0, 8) || '—'}</td>
+                    <td class="py-2 text-right text-gray-500 text-xs">${fmt.ts(c.timestamp)}</td>
+                  </tr>`
+                }).join('')}
+                </tbody>
+              </table>`}
+        </section>`
+
+      const callsSection = `
+        <section>
+          <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-3">Recent Calls</h2>
+          <table class="w-full text-sm">
+            <thead><tr class="border-b border-gray-800">
+              <th class="text-left text-xs text-gray-500 uppercase pb-2 pr-4">Status</th>
+              <th class="text-left text-xs text-gray-500 uppercase pb-2 pr-4">Failure</th>
+              <th class="text-right text-xs text-gray-500 uppercase pb-2 pr-4">Latency</th>
+              <th class="text-right text-xs text-gray-500 uppercase pb-2 pr-4">Tokens In/Out</th>
+              <th class="text-right text-xs text-gray-500 uppercase pb-2">Time</th>
+            </tr></thead>
+            <tbody>${calls.map(c => `
+              <tr class="border-b border-gray-900 ${c.drift_detected ? 'bg-yellow-950/20' : ''}">
+                <td class="py-2 pr-4 ${c.status === 'success' ? 'text-green-400' : 'text-red-400'}">${c.status}</td>
+                <td class="py-2 pr-4 text-gray-500 text-xs">${c.failure_type || '—'}</td>
+                <td class="py-2 pr-4 text-right text-gray-300">${fmt.ms(c.latency_ms)}</td>
+                <td class="py-2 pr-4 text-right text-gray-500 text-xs">${fmt.tokens(c.token_usage_input)} / ${fmt.tokens(c.token_usage_output)}</td>
+                <td class="py-2 text-right text-gray-500 text-xs">${fmt.ts(c.timestamp)}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </section>`
+
+      document.getElementById('app').innerHTML = `
+        <div class="flex items-center justify-between">
+          <h1 class="text-xl font-bold text-white">${toolName}</h1>
+          ${lastUpdatedBadge(lastUpdated)}
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">${cards}</div>
+        ${latencySection}
+        ${driftSection}
+        ${callsSection}`
+    }
+
+    load()
+    setInterval(load, 5000)
+  </script>
+</body>
+</html>

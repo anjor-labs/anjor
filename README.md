@@ -23,10 +23,13 @@ pip install anjor
 
 ## Quickstart
 
-**1. Start the local collector** (stores events to SQLite):
+**1. Start the collector and dashboard** (one command, one port):
 
 ```bash
-python scripts/start_collector.py
+anjor start
+# Anjor collector  http://localhost:7843/health
+# Anjor dashboard  http://localhost:7843/ui/
+# Database         anjor.db
 ```
 
 **2. Add one line to your agent:**
@@ -40,19 +43,15 @@ client = anthropic.Anthropic()
 # make tool calls as normal — they're captured automatically
 ```
 
-**3. (Optional) Start the local dashboard:**
+Open `http://localhost:7843/ui/` in your browser to see the dashboard.
 
-```bash
-bash scripts/start_dashboard.sh   # opens http://localhost:7844
-```
-
-**4. Query data directly:**
+**3. Query the API directly:**
 
 ```bash
 curl http://localhost:7843/health
 curl http://localhost:7843/tools
-curl http://localhost:7843/intelligence/failures    # Phase 3: failure patterns
-curl http://localhost:7843/intelligence/quality/tools   # Phase 3: quality scores
+curl http://localhost:7843/intelligence/failures
+curl http://localhost:7843/intelligence/quality/tools
 ```
 
 No API key? Use [`respx`](https://lundberg.github.io/respx/) to replay a mock response — see the [quickstart guide](docs/quickstart.md).
@@ -122,14 +121,16 @@ anjor.patch(config=AnjorConfig(db_path="my_project.db", batch_size=1))
 
 ## Development
 
+No Node/npm required — the dashboard is bundled static HTML served by the collector.
+
 ```bash
 git clone https://github.com/anjor-labs/anjor.git
 cd anjor
-bash scripts/dev_setup.sh   # creates .venv, installs deps
-source .venv/bin/activate
-.venv/bin/pytest            # ≥95% coverage enforced
-ruff check .                # zero lint errors
-mypy anjor/            # strict type checking
+pip install -e ".[dev]"
+pytest --cov=anjor --cov-fail-under=95 -q   # ≥95% coverage enforced
+ruff check anjor/ tests/                     # zero lint errors
+mypy anjor/                                  # strict type checking
+anjor start                                  # collector + dashboard on :7843
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.

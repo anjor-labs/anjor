@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anjor — Intelligence</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="utils.js"></script>
+</head>
+<body class="min-h-screen bg-gray-950 text-gray-100 font-mono">
+  <div id="nav"></div>
+  <main class="px-6 py-8 max-w-7xl mx-auto space-y-12" id="app">
+    <p class="text-gray-600 text-sm">Loading…</p>
+  </main>
+  <script>
+    document.getElementById('nav').innerHTML = buildNav('/ui/intelligence.html')
+
+    async function load() {
+      try {
+        const [clusters, suggestions, toolScores, runScores] = await Promise.all([
+          fetch(`${API}/intelligence/failures`).then(r => r.json()),
+          fetch(`${API}/intelligence/optimization`).then(r => r.json()),
+          fetch(`${API}/intelligence/quality/tools`).then(r => r.json()),
+          fetch(`${API}/intelligence/quality/runs`).then(r => r.json()),
+        ])
+        render(clusters, suggestions, toolScores, runScores)
+      } catch (e) {
+        document.getElementById('app').innerHTML = `
+          <div>
+            <h1 class="text-xl font-bold text-white">Intelligence</h1>
+            <p class="text-sm text-gray-500 mt-1">Active recommendations derived from historical event data.</p>
+          </div>
+          <div class="bg-red-950 border border-red-800 rounded-lg p-4 text-red-300 text-sm">
+            ${e.message || 'Failed to load'} — is the collector running at localhost:${window.location.port || 7843}?
+          </div>`
+      }
+    }
+
+    function failureSection(clusters) {
+      if (clusters.length === 0)
+        return '<p class="text-sm text-gray-500 italic">No failure patterns detected — all tools passing.</p>'
+
+      return clusters.map(c => `
+        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+          <div class="flex items-start justify-between gap-3 mb-2">
+            <div>
+              <span class="font-mono text-sm text-white">${c.tool_name}</span>
+              <span class="ml-2 text-xs px-1.5 py-0.5 rounded bg-red-900 text-red-300 border border-red-700 uppercase">${c.failure_type}</span>
+            </div>
+            <div class="text-right shrink-0">
+              <span class="text-lg font-bold text-red-400">${fmt.pct(c.failure_rate)}</span>
+              <p class="text-xs text-gray-500">${c.occurrence_count}/${c.total_calls} calls</p>
+            </div>
+          </div>
+          <p class="text-xs text-gray-300 mb-2">${c.pattern_description}</p>
+          <div class="bg-gray-800 rounded p-2 text-xs text-gray-400">
+            <span class="text-yellow-400 font-medium">Suggestion: </span>${c.suggestion}
+          </div>
+          ${c.example_trace_ids && c.example_trace_ids.length > 0
+            ? `<p class="text-xs text-gray-600 mt-2">Example traces: ${c.example_trace_ids.map(id => id.slice(0, 12)).join(', ')}</p>`
+            : ''}
+        </div>`).join('')
+    }
+
+    function optimizationSection(suggestions) {
+      if (suggestions.length === 0)
+        return '<p class="text-sm text-gray-500 italic">No optimization opportunities found — all tool outputs are within context budget.</p>'
+
+      const rows = suggestions.map(s => `
+        <tr class="hover:bg-gray-900/50">
+          <td class="py-3 pr-4 font-mono text-white">${s.tool_name}</td>
+          <td class="py-3 pr-4 text-gray-300">${s.avg_output_tokens.toLocaleString()}</td>
+          <td class="py-3 pr-4 text-orange-400">${fmt.pct(s.avg_context_fraction)}</td>
+          <td class="py-3 pr-4">
+            <div class="flex items-center gap-2">
+              <div class="w-16 bg-gray-800 rounded-full h-1.5">
+                <div class="bg-orange-500 h-1.5 rounded-full" style="width:${Math.round(s.waste_score * 100)}%"></div>
+              </div>
+              <span class="text-gray-400">${Math.round(s.waste_score * 100)}%</span>
+            </div>
+          </td>
+          <td class="py-3 pr-4 text-green-400">$${s.estimated_savings_usd_per_1k_calls.toFixed(4)}</td>
+        </tr>`).join('')
+
+      const tips = suggestions.map(s => `
+        <div class="text-xs text-gray-400 bg-gray-900 rounded px-3 py-2">
+          <span class="text-blue-400 font-medium">${s.tool_name}:</span> ${s.suggestion_text}
+        </div>`).join('')
+
+      return `<div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead><tr class="text-left text-xs text-gray-500 uppercase border-b border-gray-800">
+            <th class="pb-2 pr-4">Tool</th>
+            <th class="pb-2 pr-4">Avg output tokens</th>
+            <th class="pb-2 pr-4">Context %</th>
+            <th class="pb-2 pr-4">Waste score</th>
+            <th class="pb-2 pr-4">Est. savings / 1k calls</th>
+          </tr></thead>
+          <tbody class="divide-y divide-gray-800">${rows}</tbody>
+        </table>
+        <div class="mt-4 space-y-2">${tips}</div>
+      </div>`
+    }
+
+    function toolQualitySection(scores) {
+      if (scores.length === 0)
+        return '<p class="text-sm text-gray-500 italic">No tool data yet.</p>'
+
+      return scores.map(s => `
+        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <span class="font-mono text-sm text-white">${s.tool_name}</span>
+              ${gradeBadge(s.grade)}
+            </div>
+            <div class="text-right">
+              <span class="text-lg font-bold text-white">${Math.round(s.overall_score * 100)}</span>
+              <span class="text-xs text-gray-500">/100</span>
+              <p class="text-xs text-gray-500">${s.call_count} calls</p>
+            </div>
+          </div>
+          <div class="space-y-1.5">
+            ${scoreBar(s.reliability_score, 'Reliability')}
+            ${scoreBar(s.schema_stability_score, 'Schema stability')}
+            ${scoreBar(s.latency_consistency_score, 'Latency consistency')}
+          </div>
+        </div>`).join('')
+    }
+
+    function runQualitySection(scores) {
+      if (scores.length === 0)
+        return '<p class="text-sm text-gray-500 italic">No run data yet.</p>'
+
+      const rows = scores.map(s => `
+        <tr class="hover:bg-gray-900/50">
+          <td class="py-3 pr-4 font-mono text-xs text-gray-300">${s.trace_id.slice(0, 16)}…</td>
+          <td class="py-3 pr-4">${gradeBadge(s.grade)}</td>
+          <td class="py-3 pr-4 font-bold text-white">${Math.round(s.overall_score * 100)}</td>
+          <td class="py-3 pr-4 text-gray-300">${fmt.pct(s.context_efficiency_score)}</td>
+          <td class="py-3 pr-4 text-gray-300">${fmt.pct(s.failure_recovery_score)}</td>
+          <td class="py-3 pr-4 text-gray-300">${fmt.pct(s.tool_diversity_score)}</td>
+          <td class="py-3 pr-4 text-gray-400">${s.llm_call_count}</td>
+          <td class="py-3 pr-4 text-gray-400">${s.tool_call_count}</td>
+        </tr>`).join('')
+
+      return `<div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead><tr class="text-left text-xs text-gray-500 uppercase border-b border-gray-800">
+            <th class="pb-2 pr-4">Trace ID</th>
+            <th class="pb-2 pr-4">Grade</th>
+            <th class="pb-2 pr-4">Score</th>
+            <th class="pb-2 pr-4">Context eff.</th>
+            <th class="pb-2 pr-4">Failure rec.</th>
+            <th class="pb-2 pr-4">Tool div.</th>
+            <th class="pb-2 pr-4">LLM calls</th>
+            <th class="pb-2 pr-4">Tool calls</th>
+          </tr></thead>
+          <tbody class="divide-y divide-gray-800">${rows}</tbody>
+        </table>
+      </div>`
+    }
+
+    function sectionHeader(title, count, sub) {
+      return `<div class="flex items-baseline gap-3 mb-4">
+        <h2 class="text-lg font-semibold text-white">${title}</h2>
+        ${count != null ? `<span class="text-sm text-gray-400">${count} found</span>` : ''}
+        ${sub ? `<span class="text-xs text-gray-500">${sub}</span>` : ''}
+      </div>`
+    }
+
+    function render(clusters, suggestions, toolScores, runScores) {
+      document.getElementById('app').innerHTML = `
+        <div>
+          <h1 class="text-xl font-bold text-white">Intelligence</h1>
+          <p class="text-sm text-gray-500 mt-1">Active recommendations derived from historical event data.</p>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+            <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Failure patterns</p>
+            <p class="text-2xl font-bold text-red-400">${clusters.length}</p>
+          </div>
+          <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+            <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Optimization opportunities</p>
+            <p class="text-2xl font-bold text-orange-400">${suggestions.length}</p>
+          </div>
+          <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+            <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Tools scored</p>
+            <p class="text-2xl font-bold text-blue-400">${toolScores.length}</p>
+          </div>
+          <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+            <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Runs scored</p>
+            <p class="text-2xl font-bold text-purple-400">${runScores.length}</p>
+          </div>
+        </div>
+
+        <section>
+          ${sectionHeader('Failure Patterns', clusters.length, 'Sorted by failure rate — worst first')}
+          <div class="space-y-3">${failureSection(clusters)}</div>
+        </section>
+
+        <section>
+          ${sectionHeader('Token Optimization', suggestions.length, 'Tools whose outputs consume >5% of context window')}
+          ${optimizationSection(suggestions)}
+        </section>
+
+        <section>
+          ${sectionHeader('Tool Quality Scores', toolScores.length, 'Sorted by overall score — lowest first')}
+          <div class="space-y-3">${toolQualitySection(toolScores)}</div>
+        </section>
+
+        <section>
+          ${sectionHeader('Agent Run Quality', runScores.length, 'Per trace_id — sorted by overall score ascending')}
+          ${runQualitySection(runScores)}
+        </section>`
+    }
+
+    load()
+  </script>
+</body>
+</html>

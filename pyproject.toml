@@ -33,6 +33,9 @@ dependencies = [
     "structlog>=24.0",
 ]
 
+[project.scripts]
+anjor = "anjor.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/anjor-labs/anjor"
 Repository = "https://github.com/anjor-labs/anjor"
@@ -57,7 +60,7 @@ where = ["."]
 include = ["anjor*"]
 
 [tool.setuptools.package-data]
-anjor = ["py.typed", "collector/storage/migrations/*.sql"]
+anjor = ["py.typed", "collector/storage/migrations/*.sql", "dashboard/static/*"]
 
 [tool.ruff]
 line-length = 100

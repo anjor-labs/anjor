@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anjor — Overview</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="utils.js"></script>
+</head>
+<body class="min-h-screen bg-gray-950 text-gray-100 font-mono">
+  <div id="nav"></div>
+  <main class="px-6 py-8 max-w-7xl mx-auto space-y-8" id="app">
+    <p class="text-gray-600 text-sm">Loading…</p>
+  </main>
+  <script>
+    document.getElementById('nav').innerHTML = buildNav('/')
+
+    let lastUpdated = ''
+
+    async function load() {
+      try {
+        const [health, tools, driftCalls] = await Promise.all([
+          fetch(`${API}/health`).then(r => r.json()),
+          fetch(`${API}/tools`).then(r => r.json()),
+          fetch(`${API}/calls?drift_only=true&limit=5`).then(r => r.json()),
+        ])
+        lastUpdated = new Date().toLocaleTimeString()
+        render(health, tools, driftCalls)
+      } catch {
+        document.getElementById('app').innerHTML = `
+          <div class="flex flex-col items-center justify-center min-h-64 gap-4 text-center">
+            <div class="w-3 h-3 rounded-full bg-red-500"></div>
+            <p class="text-gray-300 text-lg">Collector not reachable</p>
+            <p class="text-gray-500 text-sm">Start it with: <code class="bg-gray-900 px-2 py-1 rounded text-gray-200">anjor start</code></p>
+          </div>`
+      }
+    }
+
+    function render(health, tools, driftCalls) {
+      const totalCalls = tools.reduce((s, t) => s + t.call_count, 0)
+      const avgSuccess = tools.length
+        ? tools.reduce((s, t) => s + t.success_rate * t.call_count, 0) / (totalCalls || 1) : 0
+      const avgLatency = tools.length
+        ? tools.reduce((s, t) => s + t.avg_latency_ms * t.call_count, 0) / (totalCalls || 1) : 0
+      const slowest = [...tools].sort((a, b) => b.avg_latency_ms - a.avg_latency_ms).slice(0, 5)
+
+      const collectorBanner = health ? `
+        <div class="flex items-center gap-3 bg-gray-900 border border-gray-800 rounded-lg px-4 py-2 text-sm">
+          <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+          <span class="text-gray-300">Collector up ${Math.floor(health.uptime_seconds)}s · queue ${health.queue_depth} · ${health.db_path}</span>
+        </div>` : ''
+
+      const slowestRows = slowest.length === 0
+        ? `<p class="text-gray-600 text-sm">No tool calls recorded yet.</p>`
+        : `<table class="w-full text-sm">
+            <thead><tr class="border-b border-gray-800">
+              <th class="text-left text-xs text-gray-500 uppercase pb-2 pr-4">Tool</th>
+              <th class="text-right text-xs text-gray-500 uppercase pb-2 pr-4">Calls</th>
+              <th class="text-right text-xs text-gray-500 uppercase pb-2 pr-4">Success</th>
+              <th class="text-right text-xs text-gray-500 uppercase pb-2">Avg Latency</th>
+            </tr></thead>
+            <tbody>${slowest.map(t => `
+              <tr class="border-b border-gray-900 hover:bg-gray-900/50">
+                <td class="py-2 pr-4"><a href="/ui/tool_detail.html?name=${encodeURIComponent(t.tool_name)}" class="text-blue-400 hover:text-blue-300">${t.tool_name}</a></td>
+                <td class="py-2 pr-4 text-right text-gray-300">${t.call_count}</td>
+                <td class="py-2 pr-4 text-right ${successColor(t.success_rate)}">${fmt.pct(t.success_rate)}</td>
+                <td class="py-2 text-right text-gray-300">${fmt.ms(t.avg_latency_ms)}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>`
+
+      const driftSection = driftCalls.length === 0 ? '' : `
+        <section>
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wider">Recent Drift Events</h2>
+            <a href="/ui/alerts.html" class="text-xs text-yellow-400 hover:text-yellow-300">View all →</a>
+          </div>
+          <table class="w-full text-sm">
+            <thead><tr class="border-b border-gray-800">
+              <th class="text-left text-xs text-gray-500 uppercase pb-2 pr-4">Tool</th>
+              <th class="text-left text-xs text-gray-500 uppercase pb-2 pr-4">Missing</th>
+              <th class="text-left text-xs text-gray-500 uppercase pb-2 pr-4">Unexpected</th>
+              <th class="text-right text-xs text-gray-500 uppercase pb-2">Time</th>
+            </tr></thead>
+            <tbody>${driftCalls.map(c => {
+              const missing = c.drift_missing ? JSON.parse(c.drift_missing) : []
+              const unexpected = c.drift_unexpected ? JSON.parse(c.drift_unexpected) : []
+              return `<tr class="border-b border-gray-900 hover:bg-gray-900/50">
+                <td class="py-2 pr-4 text-yellow-400">${c.tool_name}</td>
+                <td class="py-2 pr-4 text-red-400 text-xs">${missing.join(', ') || '—'}</td>
+                <td class="py-2 pr-4 text-blue-400 text-xs">${unexpected.join(', ') || '—'}</td>
+                <td class="py-2 text-right text-gray-500 text-xs">${fmt.ts(c.timestamp)}</td>
+              </tr>`
+            }).join('')}
+            </tbody>
+          </table>
+        </section>`
+
+      document.getElementById('app').innerHTML = `
+        <div class="flex items-start justify-between">
+          <div>
+            <h1 class="text-xl font-bold text-white">Overview</h1>
+            ${lastUpdated ? `<p class="text-xs text-gray-600 mt-1">Updated ${lastUpdated} · auto-refresh 5s</p>` : ''}
+          </div>
+          ${collectorBanner}
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          ${statCard('Total Tool Calls', totalCalls.toLocaleString())}
+          ${statCard('Success Rate', fmt.pct(avgSuccess), totalCalls === 0 ? 'no data' : '')}
+          ${statCard('Avg Latency', fmt.ms(avgLatency))}
+          ${statCard('Active Drift Alerts', String(driftCalls.length), driftCalls.length > 0 ? 'last 5 shown' : 'none detected')}
+        </div>
+        <section>
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wider">Top Slowest Tools</h2>
+            <a href="/ui/tools.html" class="text-xs text-blue-400 hover:text-blue-300">View all →</a>
+          </div>
+          ${slowestRows}
+        </section>
+        ${driftSection}`
+    }
+
+    load()
+    setInterval(load, 5000)
+  </script>
+</body>
+</html>

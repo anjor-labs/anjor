@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from anjor.collector.api.routes.calls import make_calls_router
 from anjor.collector.api.routes.events import make_events_router
@@ -16,6 +19,8 @@ from anjor.collector.api.routes.llm import make_llm_router
 from anjor.collector.api.routes.tools import make_tools_router
 from anjor.collector.service import CollectorService
 from anjor.core.config import AnjorConfig
+
+_STATIC_DIR = Path(__file__).parent.parent.parent / "dashboard" / "static"
 
 
 def create_app(
@@ -44,10 +49,9 @@ def create_app(
         lifespan=lifespan,
     )
 
-    # CORS: allow the local dashboard (default :7844) to query the collector.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:7844", "http://localhost:3000"],
+        allow_origins=["*"],
         allow_methods=["GET", "POST"],
         allow_headers=["*"],
     )
@@ -58,5 +62,12 @@ def create_app(
     app.include_router(make_llm_router(resolved_service))
     app.include_router(make_calls_router(resolved_service))
     app.include_router(make_intelligence_router(resolved_service))
+
+    @app.get("/", include_in_schema=False)
+    async def root_redirect() -> RedirectResponse:
+        return RedirectResponse(url="/ui/index.html")
+
+    if _STATIC_DIR.exists():
+        app.mount("/ui", StaticFiles(directory=str(_STATIC_DIR), html=True), name="ui")
 
     return app

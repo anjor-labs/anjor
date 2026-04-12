@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anjor — Tools</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="utils.js"></script>
+</head>
+<body class="min-h-screen bg-gray-950 text-gray-100 font-mono">
+  <div id="nav"></div>
+  <main class="px-6 py-8 max-w-7xl mx-auto space-y-6" id="app">
+    <p class="text-gray-600 text-sm">Loading…</p>
+  </main>
+  <script>
+    document.getElementById('nav').innerHTML = buildNav('/ui/tools.html')
+
+    let lastUpdated = ''
+
+    async function load() {
+      try {
+        const tools = await fetch(`${API}/tools`).then(r => r.json())
+        lastUpdated = new Date().toLocaleTimeString()
+        render(tools)
+      } catch {
+        document.getElementById('app').innerHTML = errorBanner('Cannot reach collector at :' + (window.location.port || 80))
+      }
+    }
+
+    function render(tools) {
+      const sorted = [...tools].sort((a, b) => b.call_count - a.call_count)
+
+      const body = sorted.length === 0
+        ? `<p class="text-gray-600 text-sm">No tool calls recorded yet.</p>`
+        : `<table class="w-full text-sm">
+            <thead><tr class="border-b border-gray-800">
+              <th class="text-left text-xs text-gray-500 uppercase pb-3 pr-4">Tool Name</th>
+              <th class="text-right text-xs text-gray-500 uppercase pb-3 pr-4">Calls</th>
+              <th class="text-right text-xs text-gray-500 uppercase pb-3 pr-4">Success %</th>
+              <th class="text-right text-xs text-gray-500 uppercase pb-3 pr-4">Avg Latency</th>
+              <th class="text-right text-xs text-gray-500 uppercase pb-3">Detail</th>
+            </tr></thead>
+            <tbody>${sorted.map(t => `
+              <tr class="border-b border-gray-900 hover:bg-gray-900/50">
+                <td class="py-3 pr-4 text-gray-200">${t.tool_name}</td>
+                <td class="py-3 pr-4 text-right text-gray-300">${t.call_count.toLocaleString()}</td>
+                <td class="py-3 pr-4 text-right ${successColor(t.success_rate)}">${fmt.pct(t.success_rate)}</td>
+                <td class="py-3 pr-4 text-right text-gray-300">${fmt.ms(t.avg_latency_ms)}</td>
+                <td class="py-3 text-right">
+                  <a href="/ui/tool_detail.html?name=${encodeURIComponent(t.tool_name)}" class="text-xs text-blue-400 hover:text-blue-300">detail →</a>
+                </td>
+              </tr>`).join('')}
+            </tbody>
+          </table>`
+
+      document.getElementById('app').innerHTML = `
+        <div class="flex items-center justify-between">
+          <h1 class="text-xl font-bold text-white">Tool Explorer</h1>
+          ${lastUpdatedBadge(lastUpdated)}
+        </div>
+        ${body}`
+    }
+
+    load()
+    setInterval(load, 5000)
+  </script>
+</body>
+</html>

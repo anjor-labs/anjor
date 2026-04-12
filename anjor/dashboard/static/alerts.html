@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anjor — Alerts</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="utils.js"></script>
+</head>
+<body class="min-h-screen bg-gray-950 text-gray-100 font-mono">
+  <div id="nav"></div>
+  <main class="px-6 py-8 max-w-7xl mx-auto space-y-6" id="app">
+    <p class="text-gray-600 text-sm">Loading…</p>
+  </main>
+  <script>
+    document.getElementById('nav').innerHTML = buildNav('/ui/alerts.html')
+
+    let lastUpdated = ''
+
+    async function load() {
+      try {
+        const alerts = await fetch(`${API}/calls?drift_only=true&limit=200`).then(r => r.json())
+        lastUpdated = new Date().toLocaleTimeString()
+        render(alerts)
+      } catch {
+        document.getElementById('app').innerHTML = errorBanner('Cannot reach collector at :' + (window.location.port || 80))
+      }
+    }
+
+    function render(alerts) {
+      const body = alerts.length === 0
+        ? `<div class="flex flex-col items-center justify-center min-h-48 gap-3 text-center">
+            <span class="text-3xl">✓</span>
+            <p class="text-gray-400">No schema drift detected</p>
+            <p class="text-gray-600 text-sm">Alerts appear here when a tool's input structure changes</p>
+          </div>`
+        : `<table class="w-full text-sm">
+            <thead><tr class="border-b border-gray-800">
+              <th class="text-left text-xs text-gray-500 uppercase pb-3 pr-4">Tool</th>
+              <th class="text-left text-xs text-gray-500 uppercase pb-3 pr-4">Missing Fields</th>
+              <th class="text-left text-xs text-gray-500 uppercase pb-3 pr-4">Unexpected Fields</th>
+              <th class="text-left text-xs text-gray-500 uppercase pb-3 pr-4">Expected Hash</th>
+              <th class="text-left text-xs text-gray-500 uppercase pb-3 pr-4">Trace ID</th>
+              <th class="text-right text-xs text-gray-500 uppercase pb-3">Time</th>
+            </tr></thead>
+            <tbody>${alerts.map(c => {
+              const missing = c.drift_missing ? JSON.parse(c.drift_missing) : []
+              const unexpected = c.drift_unexpected ? JSON.parse(c.drift_unexpected) : []
+              return `<tr class="border-b border-gray-900 hover:bg-yellow-950/10">
+                <td class="py-3 pr-4 text-yellow-400">${c.tool_name}</td>
+                <td class="py-3 pr-4">
+                  ${missing.length > 0
+                    ? missing.map(f => `<span class="bg-red-950/50 text-red-400 text-xs px-1.5 py-0.5 rounded mr-1">-${f}</span>`).join('')
+                    : '<span class="text-gray-600">—</span>'}
+                </td>
+                <td class="py-3 pr-4">
+                  ${unexpected.length > 0
+                    ? unexpected.map(f => `<span class="bg-blue-950/50 text-blue-400 text-xs px-1.5 py-0.5 rounded mr-1">+${f}</span>`).join('')
+                    : '<span class="text-gray-600">—</span>'}
+                </td>
+                <td class="py-3 pr-4 font-mono text-gray-500 text-xs">${(c.drift_expected_hash || '').slice(0, 8) || '—'}</td>
+                <td class="py-3 pr-4 font-mono text-gray-600 text-xs">${c.trace_id.slice(0, 8)}</td>
+                <td class="py-3 text-right text-gray-500 text-xs">${fmt.ts(c.timestamp)}</td>
+              </tr>`
+            }).join('')}
+            </tbody>
+          </table>`
+
+      document.getElementById('app').innerHTML = `
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-xl font-bold text-white">Drift Alerts</h1>
+            <p class="text-xs text-gray-500 mt-1">Tool calls where schema drift was detected</p>
+          </div>
+          ${lastUpdatedBadge(lastUpdated)}
+        </div>
+        ${body}`
+    }
+
+    load()
+    setInterval(load, 5000)
+  </script>
+</body>
+</html>

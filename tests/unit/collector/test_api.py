@@ -62,6 +62,13 @@ def sample_event(**kwargs: object) -> dict:
     }
 
 
+class TestRootRedirect:
+    def test_root_redirects_to_ui(self, client: TestClient) -> None:
+        resp = client.get("/", follow_redirects=False)
+        assert resp.status_code in (301, 302, 307, 308)
+        assert "/ui/" in resp.headers["location"]
+
+
 class TestHealthEndpoint:
     def test_returns_200(self, client: TestClient) -> None:
         resp = client.get("/health")
