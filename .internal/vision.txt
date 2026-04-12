@@ -1,0 +1,259 @@
+# Anjor — Product Vision
+
+'Anjor' (अँजोर) means 'Illumination' or 'Light' in the languages of East India
+(Bihar/Jharkhand). In an era where AI agents are often stochastic black boxes,
+Anjor provides the illumination needed to make them reliable, observable, and
+production-ready.
+
+---
+
+## The Problem
+
+AI agents are deployed into production with almost no observability. When they fail:
+- Engineers have no trace of what tool calls were made
+- There's no record of what the model was "thinking" (context window state)
+- Failures are opaque — timeout? schema drift? rate limit? nobody knows
+- There's no baseline to measure regression against
+
+The result: AI agents are treated as untestable, unreliable magic. Teams fear
+deploying them. PMs don't trust them. Engineers waste hours debugging blind.
+
+## The Mission
+
+Make AI agents as observable as any other production system. Give engineers:
+1. A complete trace of every tool call and LLM interaction
+2. Automatic failure classification and pattern detection
+3. Context window intelligence — know when you're about to hit limits
+4. Quality scores that surface degrading agents before users notice
+
+Zero code changes to the agent. Install and observe.
+
+---
+
+## Roadmap
+
+### Phase 1 — Tool Call Observability ✅ COMPLETE (v0.1.0)
+
+Core instrumentation. Intercept every tool call silently.
+
+**Signals captured:**
+- Tool name, status (success/failure), failure type
+- Latency (ms)
+- Input/output payloads (sanitised)
+- Schema fingerprints + drift detection
+- Token usage per tool call
+
+**What shipped:**
+- `anjor.patch()` — one line, zero agent changes
+- SQLite storage with WAL mode
+- FastAPI collector at :7843
+- GET /tools — list with call count, success rate, avg latency
+- GET /tools/{name} — p50/p95/p99 latency, drift history
+- FailureClassifier — Timeout > SchemaDrift > APIError > Unknown
+- DriftDetector — structural fingerprint comparison
+
+### Phase 2 — LLM Call Tracing ✅ COMPLETE (v0.2.0)
+
+Capture the model's "inner monologue."
+
+**Signals captured:**
+- Model name, token usage (input/output/cache_read)
+- Context window used vs limit (utilisation %)
+- Prompt hash (detect when prompts change unexpectedly)
+- System prompt hash
+- Message count, finish reason
+
+**What shipped:**
+- GET /llm — model summary, avg latency, avg tokens
+- GET /calls — paginated raw event log (tool + LLM combined)
+- ContextWindowTracker — per-trace rolling context state
+- ContextHogDetector — flag tools consuming >20% of context budget
+- PromptDriftDetector — alert on prompt hash changes
+
+### Phase 3 — Intelligence Layer ✅ COMPLETE (v0.3.0)
+
+Turn raw signals into actionable insights.
+
+**What shipped:**
+- FailureClusterer — group failures by (tool, type), compute rate,
+  generate NL description + suggestion (retry / circuit-breaker /
+  schema validation)
+- TokenOptimizer — flag tools whose avg output exceeds 5% of context
+  window; estimate token waste and cost savings per 1k calls
+- QualityScorer:
+  - ToolQualityScore: reliability ×0.5 + schema_stability ×0.3 +
+    latency_CV ×0.2; reliability hard floor (0% success = F always)
+  - AgentRunQualityScore: context_efficiency ×0.5 +
+    failure_recovery ×0.3 + tool_diversity ×0.2
+  - Grades: A / B / C / D / F
+- Dashboard intelligence panel
+
+### Phase 4 — Multi-Agent Tracing ✅ COMPLETE (v0.4.0)
+
+When one agent spawns another, trace the full DAG.
+
+**What shipped:**
+- `AgentSpanEvent` — parent/child span linking across agent boundaries
+- W3C traceparent header injection in PatchInterceptor (zero agent code
+  changes — propagation is automatic across HTTP boundaries)
+- `TraceGraph` — DAG reconstruction, topological sort, cycle detection
+- `SpanStorage` — agent_spans table with full write/query/list support
+- GET /traces — paginated list of all traces with summary stats
+- GET /traces/{trace_id}/graph — DAG as nodes + edges, ready to render
+- GET /intelligence/attribution — per-agent token and failure breakdown
+- Dashboard trace visualiser — indented tree, attribution panel
+
+### Phase 5 — Multi-Provider Support ✅ COMPLETE (v0.5.0)
+
+Complete the "framework-agnostic" claim.
+
+**What shipped:**
+- `OpenAIParser` — `/v1/chat/completions` → LLMCallEvent + ToolCallEvents;
+  handles versioned model names, JSON-string tool args, prompt_tokens /
+  completion_tokens mapping; model context limit map with versioned suffix
+  stripping (gpt-4o-2024-08-06 → gpt-4o)
+- `GeminiParser` — `generateContent` → LLMCallEvent + ToolCallEvents;
+  model extracted from URL when absent in response; args already a dict;
+  usageMetadata token fields; gemini-* prefix fallback to 1M context limit
+- `AnthropicParser` expanded — claude-opus-4-6, claude-sonnet-4-6,
+  claude-haiku-4-5-20251001 added; any claude-* model now defaults to
+  200k context limit rather than 0
+- Dashboard LLM page — colour-coded provider badges (Anthropic / OpenAI /
+  Google) per model row
+- PyPI auto-publish — `v*` tag triggers CI gate then publishes; no manual
+  steps required
+- 549 tests, 96.94% coverage
+
+### Phase 6 — Production Storage (PLANNED, v0.6.0)
+
+SQLite is excellent for development and low-volume production. Multi-agent
+traces at scale (Phase 4+) generate concurrent writes that SQLite's WAL
+mode handles poorly above ~500 events/sec. Postgres is the natural next
+backend.
+
+**The gap:** `storage_backend = "postgres"` is accepted in config but
+raises `NotImplementedError`. The ABC and factory are already in place —
+this phase fills the implementation.
+
+**What to build:**
+- `PostgresBackend` implementing the full `StorageBackend` ABC using
+  `asyncpg` — all 10 abstract methods, same parameterised-query contract
+- Migration runner for Postgres (SQL files reused where possible)
+- Connection pool configuration (`ANJOR_STORAGE_URL`, pool size, timeout)
+- Data retention API — `DELETE /admin/retention` with configurable TTL
+  per event type (tool_calls, llm_calls, agent_spans)
+- `ANJOR_RETENTION_DAYS` config field (default: unlimited)
+- Integration tests running against a real Postgres instance (CI via
+  `services: postgres` in GitHub Actions)
+
+**Design decision:**
+ClickHouse is deferred — it only pays off above ~10M events/day, which is
+firmly Phase 9 territory. Postgres covers 99% of production deployments.
+
+### Phase 7 — Alerting & Webhooks (PLANNED, v0.7.0)
+
+Passive observability is not enough for production. Engineers need to know
+*when* something goes wrong, not just be able to diagnose it after the fact.
+
+**The gap:** All intelligence (failure clusters, quality scores, context
+hogs) is pull-based — you have to open the dashboard. Nothing pushes.
+
+**What to build:**
+- `AlertRule` model — threshold-based rules over existing signals:
+  - `failure_rate > 0.3` for tool X
+  - `context_utilisation > 0.9` for any trace
+  - `quality_score < 0.4` (grade F) for any tool
+  - `drift_detected = true` for any tool
+- `AlertEvaluator` — pure function, runs against latest event window
+- `WebhookNotifier` — POST JSON payload to a user-configured URL
+- Slack notifier (thin wrapper over webhook with Slack block format)
+- `POST /admin/alert-rules` + `GET /admin/alert-rules` management API
+- Dashboard alerts page upgrade — show fired alerts with timestamps,
+  not just drift events
+- `ANJOR_WEBHOOK_URL` config shortcut for zero-config webhook setup
+- Background evaluator task runs every 60s alongside the collector
+
+**Design decision:**
+Threshold-based rules only in this phase — no ML. The anomaly detection
+phase (Phase 8) will add learned baselines on top of this alerting
+infrastructure.
+
+### Phase 8 — Anomaly Detection (PLANNED, v0.8.0)
+
+Move from heuristics (Phase 3) to learned baselines. Requires sufficient
+historical data — this is why it comes after production storage (Phase 6)
+not before.
+
+**What to build:**
+- Baseline models trained on first N calls per tool (min 50 calls to
+  activate — below that, fall back to Phase 3 heuristics)
+- Statistical anomaly detection (z-score + IQR) for latency, token usage,
+  failure rate per tool
+- Regression alerts: "this tool's p95 latency increased 40% vs last week"
+- Context regression: "context utilisation trending up 15% week-over-week"
+- GET /intelligence/anomalies endpoint
+- Dashboard anomalies panel (replaces the static heuristic quality panel
+  once baselines are established)
+- Anomaly-triggered alert rules (integrates with Phase 7 alerting)
+
+**Design decision:**
+No LLM-powered explanations in this phase — explanations are expensive
+and the statistical signals are already actionable. LLM explanations are
+a Phase 9+ premium feature.
+
+### Phase 9 — SaaS + Team Features (PLANNED)
+
+The commercial layer. Requires Phase 6 (Postgres) and Phase 7 (alerting)
+to be solid before multi-tenancy is layered on top.
+
+**What to build:**
+- Cloud Postgres backend (managed, per-workspace)
+- Team workspaces — isolated data per team
+- API key authentication + RBAC (admin / engineer / viewer)
+- Persistent dashboard filters, saved views
+- Alerting rules UI (visual rule builder, not just config)
+- Retention policy UI
+- Audit log (who changed what alert rule, when)
+- SOC2-aligned logging and data handling
+- `anjor cloud login` / `anjor cloud push` CLI commands
+
+**Pricing (unchanged):**
+- **Local / OSS**: Free forever. Self-hosted SQLite or Postgres. No limits.
+- **Team**: $49/mo per workspace. Cloud storage, team sharing, alerting.
+- **Enterprise**: Custom. SSO, RBAC, SLA, audit log, dedicated support.
+
+---
+
+## Competitive Positioning
+
+**vs LangSmith (LangChain):** LangSmith is tightly coupled to LangChain.
+Anjor is framework-agnostic — works with raw Anthropic SDK, OpenAI SDK,
+or any httpx-based client.
+
+**vs Langfuse:** Langfuse requires explicit SDK instrumentation at every
+call site. Anjor's PatchInterceptor requires zero agent code changes.
+
+**vs Helicone:** Helicone is a proxy — all traffic routes through their
+servers. Anjor runs in-process, zero latency overhead, no data leaves
+the developer's machine.
+
+**Anjor's moat:** Zero-change instrumentation + local-first + intelligence
+layer that surfaces actionable recommendations, not just raw traces.
+
+---
+
+## Target Users
+
+1. **AI engineers** building production agents — need reliability signals
+   before deploy
+2. **ML platform teams** running many agents — need fleet-level quality
+   dashboards
+3. **Startups shipping AI products** — need confidence that their agent
+   works as expected at scale
+
+---
+
+## North Star Metric
+
+**Time to first insight** — from `pip install anjor` to seeing a meaningful
+signal on the dashboard. Target: under 60 seconds.
