@@ -381,6 +381,42 @@ class SQLiteBackend(StorageBackend):
             sample_payload=json.loads(row["sample_payload"]),
         )
 
+    async def query_tool_calls_for_analysis(
+        self, tool_name: str | None = None, limit: int = 2000
+    ) -> list[dict[str, Any]]:
+        """Return raw tool call rows for intelligence analysis.
+
+        Returns all columns (including drift_detected) so analysers can
+        compute reliability and schema stability scores.
+        """
+        assert self._conn is not None
+        if tool_name:
+            cursor = await self._conn.execute(
+                "SELECT * FROM tool_calls WHERE tool_name = ? ORDER BY timestamp DESC LIMIT ?",
+                (tool_name, limit),
+            )
+        else:
+            cursor = await self._conn.execute(
+                "SELECT * FROM tool_calls ORDER BY timestamp DESC LIMIT ?",
+                (limit,),
+            )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def query_drift_summary(self) -> list[dict[str, Any]]:
+        """Return per-tool drift counts from tool_calls table."""
+        assert self._conn is not None
+        cursor = await self._conn.execute(
+            """SELECT
+                tool_name,
+                count(*) AS total_calls,
+                sum(CASE WHEN drift_detected = 1 THEN 1 ELSE 0 END) AS drift_calls
+               FROM tool_calls
+               GROUP BY tool_name"""
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
     async def close(self) -> None:
         if self._flush_task is not None:
             self._flush_task.cancel()

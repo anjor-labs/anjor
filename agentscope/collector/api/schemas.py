@@ -73,6 +73,58 @@ class LLMDetailItem(BaseModel):
     timestamp: str = ""
 
 
+class FailureClusterItem(BaseModel):
+    """A single failure pattern cluster returned by GET /intelligence/failures."""
+
+    tool_name: str
+    failure_type: str
+    occurrence_count: int
+    total_calls: int
+    failure_rate: float
+    avg_latency_ms: float
+    pattern_description: str
+    suggestion: str
+    example_trace_ids: list[str] = Field(default_factory=list)
+
+
+class OptimizationSuggestionItem(BaseModel):
+    """A token optimization suggestion returned by GET /intelligence/optimization."""
+
+    tool_name: str
+    avg_output_tokens: float
+    avg_context_fraction: float
+    waste_score: float
+    estimated_savings_tokens_per_call: float
+    estimated_savings_usd_per_1k_calls: float
+    suggestion_text: str
+    sample_models: list[str] = Field(default_factory=list)
+
+
+class ToolQualityScoreItem(BaseModel):
+    """Per-tool quality score returned by GET /intelligence/quality/tools."""
+
+    tool_name: str
+    call_count: int
+    reliability_score: float
+    schema_stability_score: float
+    latency_consistency_score: float
+    overall_score: float
+    grade: str
+
+
+class AgentRunQualityScoreItem(BaseModel):
+    """Per-run quality score returned by GET /intelligence/quality/runs."""
+
+    trace_id: str
+    llm_call_count: int
+    tool_call_count: int
+    context_efficiency_score: float
+    failure_recovery_score: float
+    tool_diversity_score: float
+    overall_score: float
+    grade: str
+
+
 class EventIngestRequest(BaseModel):
     """Incoming event payload. Validated before storage.
 

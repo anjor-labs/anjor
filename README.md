@@ -5,9 +5,9 @@
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Observability for AI agents. One-line install. No cloud. No account required.
+Observability and intelligence for AI agents. One-line install. No cloud. No account required.
 
-AgentScope intercepts your agent's HTTP traffic at the protocol layer and gives you full visibility into every LLM call and tool use — latency, token usage, context window growth, schema drift, prompt changes — without changing how you build.
+AgentScope intercepts your agent's HTTP traffic at the protocol layer and gives you full visibility into every LLM call and tool use — latency, token usage, context window growth, schema drift, prompt changes — without changing how you build. In Phase 3 it moves from passive logging to active recommendations: failure pattern clustering, token optimization suggestions, and per-tool quality scores.
 
 ---
 
@@ -38,12 +38,19 @@ client = anthropic.Anthropic()
 # make tool calls as normal — they're captured automatically
 ```
 
-**3. Query your data:**
+**3. (Optional) Start the local dashboard:**
+
+```bash
+bash scripts/start_dashboard.sh   # opens http://localhost:7844
+```
+
+**4. Query data directly:**
 
 ```bash
 curl http://localhost:7843/health
 curl http://localhost:7843/tools
-curl http://localhost:7843/tools/web_search
+curl http://localhost:7843/intelligence/failures    # Phase 3: failure patterns
+curl http://localhost:7843/intelligence/quality/tools   # Phase 3: quality scores
 ```
 
 No API key? Use [`respx`](https://lundberg.github.io/respx/) to replay a mock response — see the [quickstart guide](docs/quickstart.md).
@@ -52,18 +59,22 @@ No API key? Use [`respx`](https://lundberg.github.io/respx/) to replay a mock re
 
 ## What it captures
 
-| Signal | Details |
-|--------|---------|
-| LLM calls | Model, latency, finish reason — for every Anthropic `/v1/messages` call |
-| Tool calls | Name, status (success/failure), failure type |
-| Token usage | Input + output + cache_read tokens per call |
-| Context window | Tokens used vs model limit, utilisation %, per-trace growth rate |
-| Context hogs | Per-tool average output size, % of context consumed |
-| System prompt drift | SHA-256 per agent — alerts when prompt changes between calls |
-| Schema fingerprints | SHA-256 structural hash of tool input/output shape |
-| Schema drift | Field-level diff against the baseline for each tool |
-| Trace context | Trace ID, session ID, agent ID — consistent across LLM + tool events |
-| Latency | Per-call and aggregated (p50/p95/p99) |
+| Signal | Phase | Details |
+|--------|-------|---------|
+| Tool calls | 1 | Name, status (success/failure), failure type |
+| Schema fingerprints | 1 | SHA-256 structural hash of tool input/output shape |
+| Schema drift | 1 | Field-level diff against the baseline for each tool |
+| Latency | 1 | Per-call and aggregated (p50/p95/p99) |
+| LLM calls | 2 | Model, latency, finish reason — for every Anthropic `/v1/messages` call |
+| Token usage | 2 | Input + output + cache_read tokens per call |
+| Context window | 2 | Tokens used vs model limit, utilisation %, per-trace growth rate |
+| Context hogs | 2 | Per-tool average output size, % of context consumed |
+| System prompt drift | 2 | SHA-256 per agent — alerts when prompt changes between calls |
+| Trace context | 1–2 | Trace ID, session ID, agent ID — consistent across LLM + tool events |
+| Failure patterns | 3 | Clustered failure analysis with natural-language descriptions and fix suggestions |
+| Token optimization | 3 | Tools consuming >5% of context window, estimated token waste and cost savings |
+| Quality scores | 3 | Per-tool reliability/schema-stability/latency-consistency grade (A–F) |
+| Run quality | 3 | Per-trace context efficiency, failure recovery, tool diversity grade (A–F) |
 
 ---
 
@@ -97,14 +108,13 @@ agentscope.patch(config=AgentScopeConfig(db_path="my_project.db", batch_size=1))
 
 ---
 
-## What is NOT in v0.2
+## What is NOT in v0.3
 
-- No optimisation suggestions (Phase 3)
 - No multi-agent tracing (Phase 4)
-- No dashboard UI — API and SQLite only
 - No cloud sync, authentication, or team management
 - `requests` library not intercepted (Anthropic SDK uses httpx by default)
 - OpenAI parser not implemented (stub only)
+- Intelligence suggestions are heuristic — no LLM-powered explanations yet
 
 ---
 

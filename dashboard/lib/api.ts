@@ -61,6 +61,51 @@ export interface LLMSummaryItem {
   avg_context_utilisation: number
 }
 
+// Phase 3 intelligence types
+export interface FailureCluster {
+  tool_name: string
+  failure_type: string
+  occurrence_count: number
+  total_calls: number
+  failure_rate: number
+  avg_latency_ms: number
+  pattern_description: string
+  suggestion: string
+  example_trace_ids: string[]
+}
+
+export interface OptimizationSuggestion {
+  tool_name: string
+  avg_output_tokens: number
+  avg_context_fraction: number
+  waste_score: number
+  estimated_savings_tokens_per_call: number
+  estimated_savings_usd_per_1k_calls: number
+  suggestion_text: string
+  sample_models: string[]
+}
+
+export interface ToolQualityScore {
+  tool_name: string
+  call_count: number
+  reliability_score: number
+  schema_stability_score: number
+  latency_consistency_score: number
+  overall_score: number
+  grade: string
+}
+
+export interface AgentRunQualityScore {
+  trace_id: string
+  llm_call_count: number
+  tool_call_count: number
+  context_efficiency_score: number
+  failure_recovery_score: number
+  tool_diversity_score: number
+  overall_score: number
+  grade: string
+}
+
 export interface LLMDetailItem {
   trace_id: string
   session_id: string
@@ -121,6 +166,12 @@ export const api = {
   llm: () => get<LLMSummaryItem[]>('/llm'),
   llmTrace: (traceId: string) =>
     get<LLMDetailItem[]>(`/llm/trace/${encodeURIComponent(traceId)}`),
+
+  // Phase 3 intelligence endpoints
+  intelligenceFailures: () => get<FailureCluster[]>('/intelligence/failures'),
+  intelligenceOptimization: () => get<OptimizationSuggestion[]>('/intelligence/optimization'),
+  intelligenceQualityTools: () => get<ToolQualityScore[]>('/intelligence/quality/tools'),
+  intelligenceQualityRuns: () => get<AgentRunQualityScore[]>('/intelligence/quality/runs'),
 }
 
 // ---------------------------------------------------------------------------

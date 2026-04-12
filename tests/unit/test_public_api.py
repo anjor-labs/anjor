@@ -69,7 +69,7 @@ class TestPublicAPI:
         assert agentscope._config is cfg
 
     def test_version_is_set(self) -> None:
-        assert agentscope.__version__ == "0.2.0"
+        assert agentscope.__version__ == "0.3.0"
 
     def test_phase2_exports_available(self) -> None:
         from agentscope import ContextHogDetector, ContextWindowTracker, PromptDriftDetector

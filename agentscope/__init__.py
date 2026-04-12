@@ -7,19 +7,26 @@ Public API:
     ContextWindowTracker   — track context usage across turns per trace
     ContextHogDetector     — identify tools with oversized outputs
     PromptDriftDetector    — detect system prompt changes per agent
+    FailureClusterer       — cluster historical failures into patterns (Phase 3)
+    TokenOptimizer         — identify context-bloating tools (Phase 3)
+    CostEstimator          — estimate cost savings for optimizations (Phase 3)
+    QualityScorer          — per-tool and per-run quality scores (Phase 3)
 """
 
 from __future__ import annotations
 
 from agentscope.analysis.context.hog_detector import ContextHogDetector
 from agentscope.analysis.context.tracker import ContextWindowTracker
+from agentscope.analysis.intelligence.failure_clustering import FailureClusterer
+from agentscope.analysis.intelligence.quality_scorer import QualityScorer
+from agentscope.analysis.intelligence.token_optimizer import CostEstimator, TokenOptimizer
 from agentscope.analysis.prompt.detector import PromptDriftDetector
 from agentscope.core.config import AgentScopeConfig
 from agentscope.core.pipeline.pipeline import EventPipeline
 from agentscope.interceptors.parsers.registry import build_default_registry
 from agentscope.interceptors.patch import PatchInterceptor
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __all__ = [
     "patch",
     "configure",
@@ -27,6 +34,10 @@ __all__ = [
     "ContextWindowTracker",
     "ContextHogDetector",
     "PromptDriftDetector",
+    "FailureClusterer",
+    "TokenOptimizer",
+    "CostEstimator",
+    "QualityScorer",
     "__version__",
 ]
 

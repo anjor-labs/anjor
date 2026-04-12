@@ -131,6 +131,21 @@ class StorageBackend(ABC):
         ...
 
     @abstractmethod
+    async def query_tool_calls_for_analysis(
+        self, tool_name: str | None = None, limit: int = 2000
+    ) -> list[dict[str, Any]]:
+        """Return raw tool call rows for intelligence analysis (Phase 3).
+
+        Higher default limit than query_tool_calls so analysers see enough history.
+        """
+        ...
+
+    @abstractmethod
+    async def query_drift_summary(self) -> list[dict[str, Any]]:
+        """Return per-tool drift counts: tool_name, total_calls, drift_calls."""
+        ...
+
+    @abstractmethod
     async def close(self) -> None:
         """Release resources."""
         ...

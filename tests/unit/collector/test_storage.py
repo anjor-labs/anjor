@@ -284,3 +284,74 @@ class TestSQLiteBackendLLM:
         })
         results = await storage.query_llm_calls(LLMQueryFilters())
         assert results[0]["token_cache_read"] == 200
+
+
+class TestSQLiteBackendPhase3:
+    """Tests for Phase 3 intelligence query methods."""
+
+    async def test_query_tool_calls_for_analysis_all(
+        self, storage: SQLiteBackend
+    ) -> None:
+        for i in range(5):
+            await storage.write_event(make_event(tool_name="search", latency_ms=float(i * 100)))
+        results = await storage.query_tool_calls_for_analysis()
+        assert len(results) == 5
+
+    async def test_query_tool_calls_for_analysis_filter_by_tool(
+        self, storage: SQLiteBackend
+    ) -> None:
+        await storage.write_event(make_event(tool_name="search"))
+        await storage.write_event(make_event(tool_name="lookup"))
+        results = await storage.query_tool_calls_for_analysis(tool_name="search")
+        assert len(results) == 1
+        assert results[0]["tool_name"] == "search"
+
+    async def test_query_tool_calls_for_analysis_limit(
+        self, storage: SQLiteBackend
+    ) -> None:
+        for _ in range(10):
+            await storage.write_event(make_event())
+        results = await storage.query_tool_calls_for_analysis(limit=3)
+        assert len(results) == 3
+
+    async def test_query_tool_calls_for_analysis_empty(
+        self, storage: SQLiteBackend
+    ) -> None:
+        results = await storage.query_tool_calls_for_analysis()
+        assert results == []
+
+    async def test_query_drift_summary_no_data(
+        self, storage: SQLiteBackend
+    ) -> None:
+        results = await storage.query_drift_summary()
+        assert results == []
+
+    async def test_query_drift_summary_counts(
+        self, storage: SQLiteBackend
+    ) -> None:
+        await storage.write_event(make_event(
+            tool_name="search",
+            schema_drift={
+                "detected": True,
+                "missing_fields": [],
+                "unexpected_fields": [],
+                "expected_hash": "x",
+            },
+        ))
+        await storage.write_event(make_event(tool_name="search"))
+        await storage.write_event(make_event(tool_name="search"))
+        results = await storage.query_drift_summary()
+        assert len(results) == 1
+        row = results[0]
+        assert row["tool_name"] == "search"
+        assert row["total_calls"] == 3
+        assert row["drift_calls"] == 1
+
+    async def test_query_drift_summary_multiple_tools(
+        self, storage: SQLiteBackend
+    ) -> None:
+        await storage.write_event(make_event(tool_name="a"))
+        await storage.write_event(make_event(tool_name="b"))
+        results = await storage.query_drift_summary()
+        names = {r["tool_name"] for r in results}
+        assert names == {"a", "b"}

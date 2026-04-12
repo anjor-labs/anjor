@@ -8,11 +8,12 @@ export const metadata: Metadata = {
 }
 
 const NAV = [
-  { href: '/',        label: 'Overview' },
-  { href: '/tools',   label: 'Tools' },
-  { href: '/calls',   label: 'Calls' },
-  { href: '/alerts',  label: 'Alerts' },
-  { href: '/llm',     label: 'LLM' },
+  { href: '/',              label: 'Overview' },
+  { href: '/tools',         label: 'Tools' },
+  { href: '/calls',         label: 'Calls' },
+  { href: '/alerts',        label: 'Alerts' },
+  { href: '/llm',           label: 'LLM' },
+  { href: '/intelligence',  label: 'Intelligence' },
 ]
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

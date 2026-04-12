@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from agentscope.collector.api.routes.calls import make_calls_router
 from agentscope.collector.api.routes.events import make_events_router
 from agentscope.collector.api.routes.health import make_health_router
+from agentscope.collector.api.routes.intelligence import make_intelligence_router
 from agentscope.collector.api.routes.llm import make_llm_router
 from agentscope.collector.api.routes.tools import make_tools_router
 from agentscope.collector.service import CollectorService
@@ -56,5 +57,6 @@ def create_app(
     app.include_router(make_tools_router(resolved_service))
     app.include_router(make_llm_router(resolved_service))
     app.include_router(make_calls_router(resolved_service))
+    app.include_router(make_intelligence_router(resolved_service))
 
     return app
