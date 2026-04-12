@@ -43,6 +43,12 @@ anjor.db
 # Claude Code
 .claude/
 
+# Internal — never commit to public repo
+CLAUDE.md
+PROGRESS.md
+vision.txt
+STATUS.md
+
 # OS
 .DS_Store
 Thumbs.db
