@@ -45,9 +45,7 @@ anjor.db
 
 # Internal — never commit to public repo
 CLAUDE.md
-PROGRESS.md
-vision.txt
-STATUS.md
+.internal/
 
 # OS
 .DS_Store
