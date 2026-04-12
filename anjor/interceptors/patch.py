@@ -96,9 +96,7 @@ class PatchInterceptor(BaseInterceptor):
         """
         if TRACEPARENT_HEADER in request.headers:
             return
-        request.headers[TRACEPARENT_HEADER] = make_traceparent(
-            new_trace_id(), new_span_id()
-        )
+        request.headers[TRACEPARENT_HEADER] = make_traceparent(new_trace_id(), new_span_id())
 
     def _make_sync_wrapper(self) -> Callable[..., Any]:
         interceptor = self

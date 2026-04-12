@@ -62,9 +62,7 @@ class AttributionAnalyser:
             if span.get("status") == "error":
                 b["failure_count"] += 1
 
-        grand_total = sum(
-            b["token_input"] + b["token_output"] for b in buckets.values()
-        )
+        grand_total = sum(b["token_input"] + b["token_output"] for b in buckets.values())
 
         results = []
         for name, b in buckets.items():

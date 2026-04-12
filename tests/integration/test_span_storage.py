@@ -80,15 +80,24 @@ class TestWriteAndQuerySpans:
         trace_id = str(uuid.uuid4())
         root_id = str(uuid.uuid4())
         child_id = str(uuid.uuid4())
-        await db.write_span(_span(
-            trace_id=trace_id, span_id=root_id, agent_name="orchestrator",
-            started_at="2026-04-12T10:00:00.000000+00:00",
-        ))
-        await db.write_span(_span(
-            trace_id=trace_id, span_id=child_id, parent_span_id=root_id,
-            agent_name="worker", span_kind="subagent",
-            started_at="2026-04-12T10:00:01.000000+00:00",
-        ))
+        await db.write_span(
+            _span(
+                trace_id=trace_id,
+                span_id=root_id,
+                agent_name="orchestrator",
+                started_at="2026-04-12T10:00:00.000000+00:00",
+            )
+        )
+        await db.write_span(
+            _span(
+                trace_id=trace_id,
+                span_id=child_id,
+                parent_span_id=root_id,
+                agent_name="worker",
+                span_kind="subagent",
+                started_at="2026-04-12T10:00:01.000000+00:00",
+            )
+        )
         rows = await db.query_spans(trace_id)
         assert len(rows) == 2
         assert rows[0]["agent_name"] == "orchestrator"
@@ -128,10 +137,14 @@ class TestListTraces:
     @pytest.mark.asyncio
     async def test_single_trace_summary(self, db: SQLiteBackend) -> None:
         trace_id = str(uuid.uuid4())
-        await db.write_span(_span(
-            trace_id=trace_id, agent_name="root_agent",
-            token_input=500, token_output=200,
-        ))
+        await db.write_span(
+            _span(
+                trace_id=trace_id,
+                agent_name="root_agent",
+                token_input=500,
+                token_output=200,
+            )
+        )
         summaries = await db.list_traces()
         assert len(summaries) == 1
         s = summaries[0]
@@ -147,10 +160,14 @@ class TestListTraces:
         trace_id = str(uuid.uuid4())
         root_id = str(uuid.uuid4())
         await db.write_span(_span(trace_id=trace_id, span_id=root_id, status="ok"))
-        await db.write_span(_span(
-            trace_id=trace_id, parent_span_id=root_id,
-            status="error", span_kind="subagent",
-        ))
+        await db.write_span(
+            _span(
+                trace_id=trace_id,
+                parent_span_id=root_id,
+                status="error",
+                span_kind="subagent",
+            )
+        )
         summaries = await db.list_traces()
         assert summaries[0].status == "error"
 
@@ -158,10 +175,12 @@ class TestListTraces:
     async def test_multiple_traces(self, db: SQLiteBackend) -> None:
         for i in range(3):
             tid = str(uuid.uuid4())
-            await db.write_span(_span(
-                trace_id=tid,
-                started_at=f"2026-04-12T10:0{i}:00.000000+00:00",
-            ))
+            await db.write_span(
+                _span(
+                    trace_id=tid,
+                    started_at=f"2026-04-12T10:0{i}:00.000000+00:00",
+                )
+            )
         summaries = await db.list_traces()
         assert len(summaries) == 3
 
@@ -178,13 +197,23 @@ class TestListTraces:
     async def test_token_totals_aggregated(self, db: SQLiteBackend) -> None:
         trace_id = str(uuid.uuid4())
         root_id = str(uuid.uuid4())
-        await db.write_span(_span(
-            trace_id=trace_id, span_id=root_id, token_input=300, token_output=100,
-        ))
-        await db.write_span(_span(
-            trace_id=trace_id, parent_span_id=root_id,
-            token_input=200, token_output=80, span_kind="subagent",
-        ))
+        await db.write_span(
+            _span(
+                trace_id=trace_id,
+                span_id=root_id,
+                token_input=300,
+                token_output=100,
+            )
+        )
+        await db.write_span(
+            _span(
+                trace_id=trace_id,
+                parent_span_id=root_id,
+                token_input=200,
+                token_output=80,
+                span_kind="subagent",
+            )
+        )
         summaries = await db.list_traces()
         assert summaries[0].total_token_input == 500
         assert summaries[0].total_token_output == 180

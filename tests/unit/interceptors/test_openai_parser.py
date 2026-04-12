@@ -54,9 +54,7 @@ _TEXT_RESPONSE = {
     "usage": {"prompt_tokens": 80, "completion_tokens": 20, "total_tokens": 100},
 }
 
-_ERROR_RESPONSE = {
-    "error": {"message": "Rate limit exceeded", "type": "rate_limit_error"}
-}
+_ERROR_RESPONSE = {"error": {"message": "Rate limit exceeded", "type": "rate_limit_error"}}
 
 
 class TestCanParse:
@@ -163,7 +161,10 @@ class TestMultipleToolCalls:
                             {
                                 "id": "call_2",
                                 "type": "function",
-                                "function": {"name": "fetch", "arguments": '{"url": "http://x.com"}'},
+                                "function": {
+                                    "name": "fetch",
+                                    "arguments": '{"url": "http://x.com"}',
+                                },
                             },
                         ],
                     },
