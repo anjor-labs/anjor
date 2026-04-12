@@ -45,11 +45,13 @@ class ParserRegistry:
 
 
 def build_default_registry() -> ParserRegistry:
-    """Build the default registry with all Phase 1 parsers."""
+    """Build the default registry with all supported parsers."""
     from anjor.interceptors.parsers.anthropic import AnthropicParser
+    from anjor.interceptors.parsers.gemini import GeminiParser
     from anjor.interceptors.parsers.openai import OpenAIParser
 
     registry = ParserRegistry()
     registry.register(AnthropicParser())
     registry.register(OpenAIParser())
+    registry.register(GeminiParser())
     return registry
