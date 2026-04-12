@@ -5,9 +5,11 @@
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Observability and intelligence for AI agents. One-line install. No cloud. No account required.
+AI agents fail silently. A tool times out, a schema drifts, the context window fills up — and you find out from a user complaint, not a dashboard.
 
-Anjor intercepts your agent's HTTP traffic at the protocol layer and gives you full visibility into every LLM call and tool use — latency, token usage, context window growth, schema drift, prompt changes — without changing how you build. In Phase 3 it moves from passive logging to active recommendations: failure pattern clustering, token optimization suggestions, and per-tool quality scores.
+Anjor fixes that. It intercepts your agent's HTTP traffic at the protocol layer and gives you full visibility into every LLM call and tool use — latency, token usage, context window growth, schema drift, prompt changes — without changing a single line of your agent code. Beyond passive logging, it surfaces actionable intelligence: failure pattern clustering, token optimization suggestions, and per-tool quality grades (A–F).
+
+One-line install. No cloud. No account required.
 
 ---
 
