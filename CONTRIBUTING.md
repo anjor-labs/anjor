@@ -6,7 +6,7 @@ Thank you for your interest in contributing. Anjor is in active early developmen
 
 ## Before You Start
 
-- Check [open issues](https://github.com/anji/anjor/issues) to avoid duplicating work.
+- Check [open issues](https://github.com/anjor-labs/anjor/issues) to avoid duplicating work.
 - For anything beyond a typo fix, open an issue first to discuss the approach.
 - Phase 1 (tool call observability) is the current focus. See `CLAUDE.md` for what's in scope.
 
@@ -17,7 +17,7 @@ Thank you for your interest in contributing. Anjor is in active early developmen
 Requires Python 3.11+.
 
 ```bash
-git clone https://github.com/anji/anjor.git
+git clone https://github.com/anjor-labs/anjor.git
 cd anjor
 bash scripts/dev_setup.sh   # creates .venv, installs deps, copies .env
 source .venv/bin/activate

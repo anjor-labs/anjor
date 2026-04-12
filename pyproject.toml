@@ -34,10 +34,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/anji/anjor"
-Repository = "https://github.com/anji/anjor"
-Issues = "https://github.com/anji/anjor/issues"
-Changelog = "https://github.com/anji/anjor/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/anjor-labs/anjor"
+Repository = "https://github.com/anjor-labs/anjor"
+Issues = "https://github.com/anjor-labs/anjor/issues"
+Changelog = "https://github.com/anjor-labs/anjor/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 proxy = ["mitmproxy>=10.0"]

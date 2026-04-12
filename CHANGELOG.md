@@ -68,5 +68,5 @@ Phase 1: Tool Call Observability — first complete release.
 - Dashboard UI (API-only)
 - Cloud sync
 
-[Unreleased]: https://github.com/anji/anjor/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/anji/anjor/releases/tag/v0.1.0
+[Unreleased]: https://github.com/anjor-labs/anjor/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/anjor-labs/anjor/releases/tag/v0.1.0

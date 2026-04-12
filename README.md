@@ -1,7 +1,7 @@
 # Anjor
 
-[![CI](https://github.com/anji/anjor/actions/workflows/ci.yml/badge.svg)](https://github.com/anji/anjor/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)](https://github.com/anji/anjor)
+[![CI](https://github.com/anjor-labs/anjor/actions/workflows/ci.yml/badge.svg)](https://github.com/anjor-labs/anjor/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)](https://github.com/anjor-labs/anjor)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -121,7 +121,7 @@ anjor.patch(config=AnjorConfig(db_path="my_project.db", batch_size=1))
 ## Development
 
 ```bash
-git clone https://github.com/anji/anjor.git
+git clone https://github.com/anjor-labs/anjor.git
 cd anjor
 bash scripts/dev_setup.sh   # creates .venv, installs deps
 source .venv/bin/activate
