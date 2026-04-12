@@ -1,0 +1,122 @@
+"""Seed realistic demo data into a running collector for dashboard development."""
+
+from __future__ import annotations
+
+import random
+import time
+import uuid
+from datetime import UTC, datetime, timedelta
+
+import httpx
+
+COLLECTOR = "http://127.0.0.1:7843"
+
+TOOLS = ["web_search", "read_file", "write_file", "parse_html", "fetch_url", "run_code"]
+MODELS = ["claude-opus-4-6", "claude-sonnet-4-6"]
+FAILURE_TYPES = ["timeout", "rate_limit", "schema_error", "unknown"]
+
+
+def ts(offset_minutes: int = 0) -> str:
+    return (datetime.now(UTC) - timedelta(minutes=offset_minutes)).isoformat()
+
+
+def post(path: str, body: dict) -> None:
+    try:
+        httpx.post(f"{COLLECTOR}{path}", json=body, timeout=5)
+    except Exception as e:
+        print(f"  warn: {e}")
+
+
+def seed_tool_calls() -> None:
+    print("Seeding tool calls...")
+    trace_ids = [str(uuid.uuid4()) for _ in range(8)]
+    seq = 0
+
+    for i in range(120):
+        tool = random.choice(TOOLS)
+        trace_id = random.choice(trace_ids)
+        success = random.random() > (0.3 if tool in ("fetch_url", "run_code") else 0.08)
+        latency = random.gauss(280 if tool == "fetch_url" else 95, 40)
+
+        body: dict = {
+            "event_type": "tool_call",
+            "tool_name": tool,
+            "trace_id": trace_id,
+            "session_id": "demo-session",
+            "agent_id": "demo-agent",
+            "timestamp": ts(120 - i),
+            "sequence_no": seq,
+            "status": "success" if success else "failure",
+            "failure_type": None if success else random.choice(FAILURE_TYPES),
+            "latency_ms": max(10.0, latency),
+            "input_payload": {"query": f"demo input {i}", "tool": tool},
+            "output_payload": {"result": "x" * random.randint(50, 800)} if success else {},
+            "input_schema_hash": f"hash_{tool}_v{'2' if i > 90 else '1'}",
+            "output_schema_hash": f"out_{tool}",
+            "token_usage_input": random.randint(100, 800),
+            "token_usage_output": random.randint(50, 2000),
+        }
+
+        # Inject a few drift events
+        if i in (30, 55, 80):
+            body["drift_detected"] = True
+            body["drift_missing"] = '["query"]'
+            body["drift_unexpected"] = '["search_query"]'
+            body["drift_expected_hash"] = f"hash_{tool}_v1"
+
+        post("/events", body)
+        seq += 1
+
+    print(f"  {seq} tool calls seeded across {len(trace_ids)} traces.")
+
+
+def seed_llm_calls() -> None:
+    print("Seeding LLM calls...")
+    trace_ids = [str(uuid.uuid4()) for _ in range(5)]
+    seq = 200
+    context_limit = 200000
+
+    for trace_id in trace_ids:
+        turns = random.randint(3, 8)
+        context_used = random.randint(2000, 8000)
+        for turn in range(turns):
+            context_used += random.randint(1000, 4000)
+            model = random.choice(MODELS)
+            body = {
+                "event_type": "llm_call",
+                "model": model,
+                "trace_id": trace_id,
+                "session_id": "demo-session",
+                "agent_id": "demo-agent",
+                "timestamp": ts(60 - turn * 5),
+                "sequence_no": seq,
+                "latency_ms": random.gauss(1800, 300),
+                "finish_reason": "end_turn" if turn < turns - 1 else "tool_use",
+                "token_input": random.randint(500, 3000),
+                "token_output": random.randint(100, 800),
+                "token_cache_read": random.randint(0, 200),
+                "context_window_used": context_used,
+                "context_window_limit": context_limit,
+                "context_utilisation": context_used / context_limit,
+                "prompt_hash": f"prompt_{trace_id[:8]}",
+                "failure_type": None,
+                "status": "success",
+            }
+            post("/events", body)
+            seq += 1
+
+    print(f"  {seq - 200} LLM calls seeded across {len(trace_ids)} traces.")
+
+
+if __name__ == "__main__":
+    print(f"Checking collector at {COLLECTOR}...")
+    try:
+        resp = httpx.get(f"{COLLECTOR}/health", timeout=3)
+        print(f"  Collector up — {resp.json()}")
+    except Exception:
+        print("  Collector not reachable. Start it first with: anjor start")
+        raise SystemExit(1)
+
+    seed_tool_calls()
+    seed_llm_calls()
+    print("\nDone. Open http://localhost:7843/ui/ to see the dashboard.")
