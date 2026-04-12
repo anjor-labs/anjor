@@ -27,6 +27,24 @@
       }
     }
 
+    function provider(model) {
+      if (model.startsWith('claude-')) return 'Anthropic'
+      if (model.startsWith('gpt-') || model.startsWith('o1') || model.startsWith('o3')) return 'OpenAI'
+      if (model.startsWith('gemini-')) return 'Google'
+      return 'Unknown'
+    }
+
+    function providerBadge(model) {
+      const p = provider(model)
+      const colours = {
+        Anthropic: 'bg-orange-900/50 text-orange-300 border border-orange-800',
+        OpenAI:    'bg-green-900/50 text-green-300 border border-green-800',
+        Google:    'bg-blue-900/50 text-blue-300 border border-blue-800',
+        Unknown:   'bg-gray-800 text-gray-400 border border-gray-700',
+      }
+      return `<span class="text-xs px-1.5 py-0.5 rounded font-sans ${colours[p]}">${p}</span>`
+    }
+
     function render(summaries) {
       if (summaries.length === 0) {
         document.getElementById('app').innerHTML = `
@@ -57,6 +75,7 @@
         <table class="w-full text-sm">
           <thead><tr class="border-b border-gray-800">
             <th class="text-left text-xs text-gray-500 uppercase pb-3 pr-4">Model</th>
+            <th class="text-left text-xs text-gray-500 uppercase pb-3 pr-4">Provider</th>
             <th class="text-right text-xs text-gray-500 uppercase pb-3 pr-4">Calls</th>
             <th class="text-right text-xs text-gray-500 uppercase pb-3 pr-4">Avg Latency</th>
             <th class="text-right text-xs text-gray-500 uppercase pb-3 pr-4">Avg Tokens In</th>
@@ -68,6 +87,7 @@
               <td class="py-3 pr-4 text-gray-200 font-mono text-xs">
                 <a href="/ui/llm_trace.html?model=${encodeURIComponent(m.model)}" class="hover:text-blue-400">${m.model}</a>
               </td>
+              <td class="py-3 pr-4">${providerBadge(m.model)}</td>
               <td class="py-3 pr-4 text-right text-gray-300">${m.call_count.toLocaleString()}</td>
               <td class="py-3 pr-4 text-right text-gray-300">${fmt.ms(m.avg_latency_ms)}</td>
               <td class="py-3 pr-4 text-right text-gray-300">${m.avg_token_input.toFixed(0)}</td>

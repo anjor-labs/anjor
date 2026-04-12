@@ -110,6 +110,46 @@ def seed_llm_calls() -> None:
     print(f"  {seq - 200} LLM calls seeded across {len(trace_ids)} traces.")
 
 
+def seed_openai_llm_calls() -> None:
+    print("Seeding OpenAI LLM calls...")
+    trace_ids = [str(uuid.uuid4()) for _ in range(4)]
+    openai_models = ["gpt-4o", "gpt-4o-mini", "gpt-4o", "o1-mini"]
+    seq = 400
+    context_limit = 128000
+
+    for trace_id in trace_ids:
+        turns = random.randint(2, 6)
+        context_used = random.randint(1000, 5000)
+        model = random.choice(openai_models)
+        for turn in range(turns):
+            context_used += random.randint(800, 3000)
+            body = {
+                "event_type": "llm_call",
+                "model": model,
+                "trace_id": trace_id,
+                "session_id": "demo-session",
+                "agent_id": "demo-agent",
+                "timestamp": ts(90 - turn * 4),
+                "sequence_no": seq,
+                "latency_ms": random.gauss(1200, 250),
+                "finish_reason": "stop" if turn < turns - 1 else "tool_calls",
+                "token_usage": {
+                    "input": random.randint(300, 2500),
+                    "output": random.randint(80, 600),
+                },
+                "context_window_used": context_used,
+                "context_window_limit": context_limit,
+                "context_utilisation": context_used / context_limit,
+                "prompt_hash": f"oai_prompt_{trace_id[:8]}",
+                "failure_type": None,
+                "status": "success",
+            }
+            post("/events", body)
+            seq += 1
+
+    print(f"  {seq - 400} OpenAI LLM calls seeded across {len(trace_ids)} traces.")
+
+
 def seed_agent_spans() -> None:
     print("Seeding agent spans...")
     # Three separate multi-agent traces
@@ -178,5 +218,6 @@ if __name__ == "__main__":
 
     seed_tool_calls()
     seed_llm_calls()
+    seed_openai_llm_calls()
     seed_agent_spans()
     print("\nDone. Open http://localhost:7843/ui/ to see the dashboard.")
