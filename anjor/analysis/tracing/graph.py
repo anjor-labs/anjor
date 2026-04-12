@@ -145,9 +145,7 @@ class TraceGraph:
                 if child_id in in_degree:
                     in_degree[child_id] += 1
 
-        queue: deque[str] = deque(
-            sid for sid, deg in in_degree.items() if deg == 0
-        )
+        queue: deque[str] = deque(sid for sid, deg in in_degree.items() if deg == 0)
         order: list[SpanNode] = []
 
         while queue:

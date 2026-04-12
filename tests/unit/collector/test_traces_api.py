@@ -106,13 +106,25 @@ class TestGetTraceGraph:
         tid = str(uuid.uuid4())
         root_id = str(uuid.uuid4())
         child_id = str(uuid.uuid4())
-        client.post("/events", json=span_event(
-            tid, span_id=root_id, agent_name="orchestrator", span_kind="orchestrator",
-        ))
-        client.post("/events", json=span_event(
-            tid, span_id=child_id, parent_span_id=root_id,
-            agent_name="worker", span_kind="subagent",
-        ))
+        client.post(
+            "/events",
+            json=span_event(
+                tid,
+                span_id=root_id,
+                agent_name="orchestrator",
+                span_kind="orchestrator",
+            ),
+        )
+        client.post(
+            "/events",
+            json=span_event(
+                tid,
+                span_id=child_id,
+                parent_span_id=root_id,
+                agent_name="worker",
+                span_kind="subagent",
+            ),
+        )
         resp = client.get(f"/traces/{tid}/graph")
         assert resp.status_code == 200
         data = resp.json()
@@ -122,9 +134,15 @@ class TestGetTraceGraph:
 
     def test_node_shape(self, client: TestClient) -> None:
         tid = str(uuid.uuid4())
-        client.post("/events", json=span_event(
-            tid, agent_name="checker", token_input=300, token_output=100,
-        ))
+        client.post(
+            "/events",
+            json=span_event(
+                tid,
+                agent_name="checker",
+                token_input=300,
+                token_output=100,
+            ),
+        )
         data = client.get(f"/traces/{tid}/graph").json()
         node = data["nodes"][0]
         assert "span_id" in node

@@ -12,9 +12,7 @@ from __future__ import annotations
 import os
 import re
 
-_TRACEPARENT_RE = re.compile(
-    r"^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$"
-)
+_TRACEPARENT_RE = re.compile(r"^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$")
 
 HEADER = "traceparent"
 

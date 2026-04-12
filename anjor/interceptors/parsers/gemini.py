@@ -150,9 +150,7 @@ class GeminiParser(BaseParser):
         # ── ToolCallEvents ────────────────────────────────────────────────────
         parts = first_candidate.get("content", {}).get("parts", [])
         function_calls = [
-            p["functionCall"]
-            for p in parts
-            if isinstance(p, dict) and "functionCall" in p
+            p["functionCall"] for p in parts if isinstance(p, dict) and "functionCall" in p
         ]
 
         if not function_calls and not is_success:
