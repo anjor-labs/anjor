@@ -329,6 +329,53 @@ class TestSanitise:
 
 
 # ---------------------------------------------------------------------------
+# AnthropicParser context limit lookup
+# ---------------------------------------------------------------------------
+
+_ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
+
+_BASE_REQUEST = {
+    "messages": [{"role": "user", "content": "Hello"}],
+}
+
+_BASE_RESPONSE = {
+    "content": [],
+    "stop_reason": "end_turn",
+    "usage": {"input_tokens": 10, "output_tokens": 5},
+}
+
+
+class TestAnthropicContextLimits:
+    def _parse(self, model: str) -> LLMCallEvent:
+        from anjor.core.events.llm_call import LLMCallEvent
+
+        req = {**_BASE_REQUEST, "model": model}
+        events = AnthropicParser().parse(_ANTHROPIC_URL, req, _BASE_RESPONSE, 100.0, 200)
+        llm = events[0]
+        assert isinstance(llm, LLMCallEvent)
+        return llm
+
+    def test_claude_opus_4_6(self) -> None:
+        assert self._parse("claude-opus-4-6").context_window_limit == 200_000
+
+    def test_claude_sonnet_4_6(self) -> None:
+        assert self._parse("claude-sonnet-4-6").context_window_limit == 200_000
+
+    def test_claude_haiku_4_5_20251001(self) -> None:
+        assert self._parse("claude-haiku-4-5-20251001").context_window_limit == 200_000
+
+    def test_future_claude_prefix_fallback(self) -> None:
+        # Any claude-* model not yet in the map should default to 200k
+        assert self._parse("claude-future-99").context_window_limit == 200_000
+
+    def test_non_claude_unknown_model_zero(self) -> None:
+        assert self._parse("some-other-model").context_window_limit == 0
+
+    def test_existing_claude_3_5_sonnet(self) -> None:
+        assert self._parse("claude-3-5-sonnet-20241022").context_window_limit == 200_000
+
+
+# ---------------------------------------------------------------------------
 # OpenAIParser stub
 # ---------------------------------------------------------------------------
 

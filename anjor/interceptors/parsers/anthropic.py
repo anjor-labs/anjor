@@ -43,7 +43,14 @@ _MODEL_CONTEXT_LIMITS: dict[str, int] = {
     "claude-opus-4-5": 200_000,
     "claude-sonnet-4-5": 200_000,
     "claude-haiku-4-5": 200_000,
+    # Claude 4.x models
+    "claude-opus-4-6": 200_000,
+    "claude-sonnet-4-6": 200_000,
+    "claude-haiku-4-5-20251001": 200_000,
 }
+
+_CLAUDE_PREFIX = "claude-"
+_CLAUDE_DEFAULT_CONTEXT_LIMIT = 200_000
 
 
 def _sanitise(payload: dict[str, Any]) -> dict[str, Any]:
@@ -129,7 +136,10 @@ class AnthropicParser(BaseParser):
         messages: list[dict[str, Any]] = request_body.get("messages", [])
         system = request_body.get("system")
         model: str = request_body.get("model", "")
-        context_limit = _MODEL_CONTEXT_LIMITS.get(model, 0)
+        context_limit = _MODEL_CONTEXT_LIMITS.get(
+            model,
+            _CLAUDE_DEFAULT_CONTEXT_LIMIT if model.startswith(_CLAUDE_PREFIX) else 0,
+        )
         context_used = (
             (usage.get("input_tokens", 0) + usage.get("output_tokens", 0)) if usage else 0
         )
