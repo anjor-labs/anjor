@@ -11,12 +11,15 @@ No secrets are logged or stored anywhere in this module.
 
 from __future__ import annotations
 
+import logging
 import tomllib
 from pathlib import Path
 from typing import Any
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource
+
+_log = logging.getLogger(__name__)
 
 
 class SanitiseConfig(BaseSettings):
@@ -77,7 +80,8 @@ class AnjorConfig(BaseSettings):
     # Mode: patch (in-process httpx monkey-patch) or proxy (mitmproxy)
     mode: str = Field(default="patch", pattern="^(patch|proxy)$")
 
-    # Network ports
+    # Network
+    host: str = Field(default="127.0.0.1")
     proxy_port: int = Field(default=7842, ge=1, le=65535)
     collector_port: int = Field(default=7843, ge=1, le=65535)
 
@@ -96,6 +100,16 @@ class AnjorConfig(BaseSettings):
 
     # Sanitisation config (nested)
     sanitise: SanitiseConfig = Field(default_factory=SanitiseConfig)
+
+    @field_validator("host")
+    @classmethod
+    def warn_if_public_bind(cls, v: str) -> str:
+        if v == "0.0.0.0":  # noqa: S104
+            _log.warning(
+                "Anjor collector is binding to 0.0.0.0 — it will be reachable "
+                "on all network interfaces. Do not expose this to untrusted networks."
+            )
+        return v
 
     @field_validator("mode")
     @classmethod

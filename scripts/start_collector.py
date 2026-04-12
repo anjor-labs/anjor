@@ -18,12 +18,15 @@ from anjor.core.config import AnjorConfig
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Anjor Collector")
+    parser.add_argument("--host", type=str, default=None, help="Bind host (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=None, help="Collector port (default: 7843)")
     parser.add_argument("--db", type=str, default=None, help="SQLite DB path")
     parser.add_argument("--log-level", default=None, help="Log level")
     args = parser.parse_args()
 
     kwargs: dict = {}
+    if args.host:
+        kwargs["host"] = args.host
     if args.port:
         kwargs["collector_port"] = args.port
     if args.db:
@@ -40,7 +43,7 @@ def main() -> None:
 
     uvicorn.run(
         app,
-        host="127.0.0.1",
+        host=config.host,
         port=config.collector_port,
         log_level=config.log_level.lower(),
     )
