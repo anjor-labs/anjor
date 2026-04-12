@@ -75,7 +75,7 @@ class TestPublicAPI:
         assert anjor._config is cfg
 
     def test_version_is_set(self) -> None:
-        assert anjor.__version__ == "0.3.0"
+        assert anjor.__version__ == "0.5.1"
 
     def test_phase2_exports_available(self) -> None:
         from anjor import ContextHogDetector, ContextWindowTracker, PromptDriftDetector

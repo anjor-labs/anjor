@@ -148,6 +148,22 @@ class PatchInterceptor(BaseInterceptor):
                 latency_ms=latency_ms,
                 status_code=response.status_code,
             )
+
+            # Override trace_id / agent_id with context-var values set by anjor.span().
+            # This is the primary mechanism for trace propagation — it doesn't rely on
+            # any provider-specific metadata fields (e.g. Anthropic only accepts user_id).
+            from anjor.context import get_agent_id, get_trace_id
+
+            ctx_trace = get_trace_id()
+            ctx_agent = get_agent_id()
+            if ctx_trace or ctx_agent:
+                overrides: dict[str, str] = {}
+                if ctx_trace:
+                    overrides["trace_id"] = ctx_trace
+                if ctx_agent:
+                    overrides["agent_id"] = ctx_agent
+                events = [e.model_copy(update=overrides) for e in events]
+
             for event in events:
                 self._pipeline.put(event)
         except Exception as exc:

@@ -57,7 +57,7 @@
             <span class="text-yellow-400 font-medium">Suggestion: </span>${c.suggestion}
           </div>
           ${c.example_trace_ids && c.example_trace_ids.length > 0
-            ? `<p class="text-xs text-gray-600 mt-2">Example traces: ${c.example_trace_ids.map(id => id.slice(0, 12)).join(', ')}</p>`
+            ? `<p class="text-xs text-gray-600 mt-2">Example traces: ${c.example_trace_ids.map(id => `<a href="/ui/traces.html?id=${encodeURIComponent(id)}" class="text-blue-500 hover:text-blue-400 font-mono">${id.slice(0, 12)}…</a>`).join(', ')}</p>`
             : ''}
         </div>`).join('')
     }
@@ -133,7 +133,7 @@
 
       const rows = scores.map(s => `
         <tr class="hover:bg-gray-900/50">
-          <td class="py-3 pr-4 font-mono text-xs text-gray-300">${s.trace_id.slice(0, 16)}…</td>
+          <td class="py-3 pr-4 font-mono text-xs text-gray-300"><a href="/ui/traces.html?id=${encodeURIComponent(s.trace_id)}" class="text-blue-500 hover:text-blue-400">${s.trace_id.slice(0, 16)}…</a></td>
           <td class="py-3 pr-4">${gradeBadge(s.grade)}</td>
           <td class="py-3 pr-4 font-bold text-white">${Math.round(s.overall_score * 100)}</td>
           <td class="py-3 pr-4 text-gray-300">${fmt.pct(s.context_efficiency_score)}</td>
