@@ -142,6 +142,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
 
 ---
 
+## Contributing & Contact
+
+- **Bug reports / feature requests** — [open an issue](https://github.com/anjor-labs/anjor/issues)
+- **Questions / ideas** — [start a discussion](https://github.com/anjor-labs/anjor/discussions)
+
 ## License
 
 [MIT](LICENSE) © Anjor Labs

@@ -9,7 +9,7 @@ description = "Observability and reliability platform for agentic AI systems"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
-authors = [{ name = "Anjor Labs", email = "hello@anjor.dev" }]
+authors = [{ name = "Anjor Labs" }]
 keywords = ["observability", "llm", "agents", "tools", "monitoring", "anthropic"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -37,6 +37,7 @@ dependencies = [
 Homepage = "https://github.com/anjor-labs/anjor"
 Repository = "https://github.com/anjor-labs/anjor"
 Issues = "https://github.com/anjor-labs/anjor/issues"
+Discussions = "https://github.com/anjor-labs/anjor/discussions"
 Changelog = "https://github.com/anjor-labs/anjor/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
