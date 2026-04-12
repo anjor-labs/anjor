@@ -45,6 +45,19 @@ class LLMQueryFilters:
 
 
 @dataclass
+class TraceSummary:
+    """Top-level summary of a single trace (for the traces list view)."""
+
+    trace_id: str
+    root_agent_name: str
+    span_count: int
+    total_token_input: int
+    total_token_output: int
+    started_at: str
+    status: str  # "ok" if all spans ok, else "error"
+
+
+@dataclass
 class LLMSummary:
     """Aggregated stats for a model."""
 
@@ -137,6 +150,21 @@ class StorageBackend(ABC):
     @abstractmethod
     async def query_drift_summary(self) -> list[dict[str, Any]]:
         """Return per-tool drift counts: tool_name, total_calls, drift_calls."""
+        ...
+
+    @abstractmethod
+    async def write_span(self, span_data: dict[str, Any]) -> None:
+        """Persist a single AgentSpanEvent dict to the agent_spans table."""
+        ...
+
+    @abstractmethod
+    async def query_spans(self, trace_id: str) -> list[dict[str, Any]]:
+        """Return all spans for a given trace_id, ordered by started_at."""
+        ...
+
+    @abstractmethod
+    async def list_traces(self, limit: int = 50, offset: int = 0) -> list[TraceSummary]:
+        """Return one TraceSummary per trace_id, newest first."""
         ...
 
     @abstractmethod

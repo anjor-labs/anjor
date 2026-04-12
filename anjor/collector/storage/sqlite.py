@@ -17,6 +17,7 @@ from anjor.collector.storage.base import (
     SchemaSnapshot,
     StorageBackend,
     ToolSummary,
+    TraceSummary,
 )
 
 _MIGRATIONS_DIR = Path(__file__).parent / "migrations"
@@ -165,6 +166,8 @@ class SQLiteBackend(StorageBackend):
                 await self._flush()
         elif event_type == "llm_call":
             await self.write_llm_event(event_data)
+        elif event_type == "agent_span":
+            await self.write_span(event_data)
 
     async def write_llm_event(self, event_data: dict[str, Any]) -> None:
         """Persist an LLMCallEvent directly to the llm_calls table (not batched)."""
@@ -406,6 +409,76 @@ class SQLiteBackend(StorageBackend):
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
+
+    async def write_span(self, span_data: dict[str, Any]) -> None:
+        """Persist an AgentSpanEvent to the agent_spans table."""
+        assert self._conn is not None
+        await self._conn.execute(
+            """INSERT OR REPLACE INTO agent_spans (
+                span_id, parent_span_id, trace_id, span_kind, agent_name,
+                agent_role, started_at, ended_at, status, failure_type,
+                token_input, token_output, tool_calls_count, llm_calls_count
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                span_data.get("span_id", ""),
+                span_data.get("parent_span_id"),
+                span_data.get("trace_id", ""),
+                span_data.get("span_kind", "root"),
+                span_data.get("agent_name", "unknown"),
+                span_data.get("agent_role", ""),
+                span_data.get("started_at", ""),
+                span_data.get("ended_at"),
+                span_data.get("status", "ok"),
+                span_data.get("failure_type"),
+                int(span_data.get("token_input", 0)),
+                int(span_data.get("token_output", 0)),
+                int(span_data.get("tool_calls_count", 0)),
+                int(span_data.get("llm_calls_count", 0)),
+            ),
+        )
+        await self._conn.commit()
+
+    async def query_spans(self, trace_id: str) -> list[dict[str, Any]]:
+        """Return all spans for a trace, ordered by started_at."""
+        assert self._conn is not None
+        cursor = await self._conn.execute(
+            "SELECT * FROM agent_spans WHERE trace_id = ? ORDER BY started_at ASC",
+            (trace_id,),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def list_traces(self, limit: int = 50, offset: int = 0) -> list[TraceSummary]:
+        """Return one TraceSummary per trace_id, newest first."""
+        assert self._conn is not None
+        cursor = await self._conn.execute(
+            """SELECT
+                trace_id,
+                min(CASE WHEN parent_span_id IS NULL THEN agent_name END) AS root_agent_name,
+                count(*) AS span_count,
+                sum(token_input) AS total_token_input,
+                sum(token_output) AS total_token_output,
+                min(started_at) AS started_at,
+                min(CASE WHEN status = 'error' THEN 'error' ELSE 'ok' END) AS status
+               FROM agent_spans
+               GROUP BY trace_id
+               ORDER BY started_at DESC
+               LIMIT ? OFFSET ?""",
+            (limit, offset),
+        )
+        rows = await cursor.fetchall()
+        return [
+            TraceSummary(
+                trace_id=row["trace_id"],
+                root_agent_name=row["root_agent_name"] or "unknown",
+                span_count=row["span_count"],
+                total_token_input=row["total_token_input"] or 0,
+                total_token_output=row["total_token_output"] or 0,
+                started_at=row["started_at"] or "",
+                status=row["status"] or "ok",
+            )
+            for row in rows
+        ]
 
     async def close(self) -> None:
         if self._flush_task is not None:
