@@ -1,15 +1,15 @@
-# AgentScope — Detailed Code Flow
+# Anjor — Detailed Code Flow
 
-This document traces every meaningful code path through the system, from `agentscope.patch()` to a row in SQLite. Read this when you want to understand *exactly* what happens, not just the broad strokes.
+This document traces every meaningful code path through the system, from `anjor.patch()` to a row in SQLite. Read this when you want to understand *exactly* what happens, not just the broad strokes.
 
 ---
 
-## 1. Install (`agentscope.patch()`)
+## 1. Install (`anjor.patch()`)
 
 ```
-agentscope.patch()
-  └── agentscope/__init__.py:patch()
-        ├── AgentScopeConfig()              # loads env vars + TOML + defaults
+anjor.patch()
+  └── anjor/__init__.py:patch()
+        ├── AnjorConfig()              # loads env vars + TOML + defaults
         ├── EventPipeline()                 # asyncio.Queue(maxsize=1000), no worker yet
         ├── build_default_registry()        # ParserRegistry with AnthropicParser + OpenAIParser
         └── PatchInterceptor.install()

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from agentscope.core.events.llm_call import LLMCallEvent
-from agentscope.core.events.tool_call import FailureType, ToolCallEvent, ToolCallStatus
-from agentscope.interceptors.parsers.anthropic import AnthropicParser, _sanitise
-from agentscope.interceptors.parsers.openai import OpenAIParser
-from agentscope.interceptors.parsers.registry import ParserRegistry, build_default_registry
+from anjor.core.events.llm_call import LLMCallEvent
+from anjor.core.events.tool_call import FailureType, ToolCallEvent, ToolCallStatus
+from anjor.interceptors.parsers.anthropic import AnthropicParser, _sanitise
+from anjor.interceptors.parsers.openai import OpenAIParser
+from anjor.interceptors.parsers.registry import ParserRegistry, build_default_registry
 
 # ---------------------------------------------------------------------------
 # Fixtures

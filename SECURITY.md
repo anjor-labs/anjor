@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-AgentScope is currently in early development (v0.x). Only the latest release receives security fixes.
+Anjor is currently in early development (v0.x). Only the latest release receives security fixes.
 
 | Version | Supported |
 | ------- | --------- |
@@ -28,7 +28,7 @@ You will receive an acknowledgement within 48 hours. We aim to release a fix wit
 
 ## Security Design
 
-AgentScope is designed with the following security properties:
+Anjor is designed with the following security properties:
 
 1. **API keys never logged or stored.** Payloads are sanitised before persistence — keys matching `*api_key*`, `*secret*`, `*password*`, `*token*`, `*auth*`, `*bearer*` are replaced with `[REDACTED]`.
 

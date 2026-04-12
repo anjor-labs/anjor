@@ -2,7 +2,7 @@
 # dev_setup.sh — one-command development environment setup
 set -e
 
-echo "=== AgentScope Dev Setup ==="
+echo "=== Anjor Dev Setup ==="
 
 # Check Python version
 python_version=$(python3 --version 2>&1 | awk '{print $2}')
@@ -27,7 +27,7 @@ source .venv/bin/activate
 
 # Install package with dev extras — use .venv/bin/pip explicitly to avoid
 # accidentally installing into a Homebrew or system Python
-echo "Installing agentscope[dev]..."
+echo "Installing anjor[dev]..."
 .venv/bin/pip install -e ".[dev]" -q
 
 # Copy .env if missing

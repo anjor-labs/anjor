@@ -1,13 +1,13 @@
-# AgentScope — Quickstart: See It In Action
+# Anjor — Quickstart: See It In Action
 
-This walks you through running AgentScope locally, making tool calls, and seeing the data. No cloud. No account. Everything runs on your machine.
+This walks you through running Anjor locally, making tool calls, and seeing the data. No cloud. No account. Everything runs on your machine.
 
 ---
 
 ## Prerequisites
 
 ```bash
-cd agentscope
+cd anjor
 bash scripts/dev_setup.sh   # creates .venv, installs deps, copies .env
 source .venv/bin/activate
 ```
@@ -24,8 +24,8 @@ python scripts/start_collector.py
 
 You should see:
 ```
-Starting AgentScope Collector on port 7843
-Database: agentscope.db
+Starting Anjor Collector on port 7843
+Database: anjor.db
 Health: http://localhost:7843/health
 INFO: Uvicorn running on http://127.0.0.1:7843
 ```
@@ -33,7 +33,7 @@ INFO: Uvicorn running on http://127.0.0.1:7843
 Verify it's running:
 ```bash
 curl http://localhost:7843/health
-# {"status":"ok","uptime_seconds":1.2,"queue_depth":0,"db_path":"agentscope.db"}
+# {"status":"ok","uptime_seconds":1.2,"queue_depth":0,"db_path":"anjor.db"}
 ```
 
 Leave this running in a terminal tab.
@@ -45,8 +45,8 @@ Leave this running in a terminal tab.
 In a new terminal (or a Python script), add one line at the top:
 
 ```python
-import agentscope
-agentscope.patch()   # that's it
+import anjor
+anjor.patch()   # that's it
 ```
 
 Now every httpx call your process makes is captured. The Anthropic SDK uses httpx internally, so it works with zero other changes.
@@ -58,8 +58,8 @@ Now every httpx call your process makes is captured. The Anthropic SDK uses http
 Here's a minimal example that generates tool calls. You need an Anthropic API key:
 
 ```python
-import agentscope
-agentscope.patch()
+import anjor
+anjor.patch()
 
 import anthropic
 
@@ -140,7 +140,7 @@ curl http://localhost:7843/tools/web_search
 ### Query the SQLite database directly
 
 ```bash
-sqlite3 agentscope.db "SELECT tool_name, status, latency_ms, timestamp FROM tool_calls;"
+sqlite3 anjor.db "SELECT tool_name, status, latency_ms, timestamp FROM tool_calls;"
 ```
 
 ```
@@ -151,14 +151,14 @@ web_search|success|1243.5|2026-04-10T19:03:21.412345+00:00
 
 ## Step 5 — See Schema Drift In Action
 
-Make the same tool call twice with a different input shape — AgentScope detects the structural change.
+Make the same tool call twice with a different input shape — Anjor detects the structural change.
 
 ```python
-import agentscope
-agentscope.patch()
+import anjor
+anjor.patch()
 
-from agentscope.analysis.drift.detector import DriftDetector
-from agentscope.analysis.drift.fingerprint import fingerprint, diff_schemas
+from anjor.analysis.drift.detector import DriftDetector
+from anjor.analysis.drift.fingerprint import fingerprint, diff_schemas
 
 detector = DriftDetector()
 
@@ -189,7 +189,7 @@ print(result)
 ## Step 6 — See Failure Classification In Action
 
 ```python
-from agentscope.analysis.classification.failure import (
+from anjor.analysis.classification.failure import (
     FailureClassifier,
     ClassificationContext,
 )
@@ -237,8 +237,8 @@ Required test coverage of 95% reached.
 You don't need an actual Anthropic API key to see the flow. Use `respx` to replay a realistic response:
 
 ```python
-import agentscope
-agentscope.patch()
+import anjor
+anjor.patch()
 
 import httpx
 import respx
@@ -322,16 +322,16 @@ Override any default via env var (no restart needed for new processes):
 
 ```bash
 # Use a specific DB path
-AGENTSCOPE_DB_PATH=./my_project.db python my_agent.py
+ANJOR_DB_PATH=./my_project.db python my_agent.py
 
 # Smaller batches — useful for development (flush more often)
-AGENTSCOPE_BATCH_SIZE=1 AGENTSCOPE_BATCH_INTERVAL_MS=100 python my_agent.py
+ANJOR_BATCH_SIZE=1 ANJOR_BATCH_INTERVAL_MS=100 python my_agent.py
 
 # Debug logging
-AGENTSCOPE_LOG_LEVEL=DEBUG python my_agent.py
+ANJOR_LOG_LEVEL=DEBUG python my_agent.py
 ```
 
-Or via `.agentscope.toml` in your project root:
+Or via `.anjor.toml` in your project root:
 
 ```toml
 mode = "patch"
@@ -344,10 +344,10 @@ log_level = "DEBUG"
 Or programmatically:
 
 ```python
-import agentscope
-from agentscope.core.config import AgentScopeConfig
+import anjor
+from anjor.core.config import AnjorConfig
 
-agentscope.patch(config=AgentScopeConfig(
+anjor.patch(config=AnjorConfig(
     db_path="my_project.db",
     batch_size=1,
 ))
@@ -359,19 +359,19 @@ agentscope.patch(config=AgentScopeConfig(
 
 **No events appearing in `/tools`**
 
-The batch writer flushes every 500ms or 100 events. If you only made one call and queried immediately, wait 600ms or set `AGENTSCOPE_BATCH_SIZE=1`.
+The batch writer flushes every 500ms or 100 events. If you only made one call and queried immediately, wait 600ms or set `ANJOR_BATCH_SIZE=1`.
 
 **`curl` returns empty list `[]`**
 
 The collector is running but no events have been written yet. Confirm your agent actually completed a tool-using call (not just a text response).
 
-**`agentscope.patch()` installs but nothing is intercepted**
+**`anjor.patch()` installs but nothing is intercepted**
 
 Your agent may be using `requests` instead of `httpx`. The current interceptor patches httpx only. The Anthropic Python SDK uses httpx by default.
 
 **Collector exits immediately**
 
-Check the port isn't already in use: `lsof -i :7843`. Change with `AGENTSCOPE_COLLECTOR_PORT=7844`.
+Check the port isn't already in use: `lsof -i :7843`. Change with `ANJOR_COLLECTOR_PORT=7844`.
 
 ---
 
@@ -405,7 +405,7 @@ curl http://localhost:7843/llm/trace/my-trace-id
 ### Track context window growth in code
 
 ```python
-from agentscope import ContextWindowTracker
+from anjor import ContextWindowTracker
 
 tracker = ContextWindowTracker(thresholds=[0.7, 0.9])
 
@@ -426,7 +426,7 @@ print(f"Growing at {rate:,.0f} tokens/turn")
 ### Detect bloated tool outputs
 
 ```python
-from agentscope import ContextHogDetector
+from anjor import ContextHogDetector
 
 detector = ContextHogDetector(threshold=0.10, context_window_limit=200_000)
 
@@ -445,7 +445,7 @@ for r in detector.summary():
 ### Detect system prompt drift
 
 ```python
-from agentscope import PromptDriftDetector
+from anjor import PromptDriftDetector
 
 detector = PromptDriftDetector()
 

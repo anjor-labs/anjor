@@ -1,4 +1,4 @@
-# AgentScope — Architecture
+# Anjor — Architecture
 
 ## Layer Diagram
 
@@ -57,7 +57,7 @@
 
 | Module | Phase | Responsibility |
 |--------|-------|----------------|
-| `agentscope/__init__.py` | 1–3 | Public API: `patch()`, `configure()`, `get_pipeline()`, intelligence classes |
+| `anjor/__init__.py` | 1–3 | Public API: `patch()`, `configure()`, `get_pipeline()`, intelligence classes |
 | `core/events/` | 1–2 | Immutable Pydantic event models, EventTypeRegistry |
 | `core/pipeline/` | 1 | Async queue, handler dispatch, built-in handlers |
 | `core/config.py` | 1 | Typed configuration (env + TOML + defaults) |

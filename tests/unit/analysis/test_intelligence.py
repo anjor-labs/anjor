@@ -12,16 +12,16 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agentscope.analysis.intelligence.failure_clustering import (
+from anjor.analysis.intelligence.failure_clustering import (
     FailureClusterer,
 )
-from agentscope.analysis.intelligence.quality_scorer import (
+from anjor.analysis.intelligence.quality_scorer import (
     AgentRunQualityScore,
     QualityScorer,
     ToolQualityScore,
     _grade,
 )
-from agentscope.analysis.intelligence.token_optimizer import (
+from anjor.analysis.intelligence.token_optimizer import (
     CostEstimator,
     OptimizationSuggestion,
     TokenOptimizer,

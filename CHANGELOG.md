@@ -25,7 +25,7 @@ Phase 2: Context & LLM Call Intelligence.
 - **Storage migration 002** — `llm_calls` and `prompt_snapshots` tables in SQLite
 - **`GET /llm`** — aggregate LLM call summaries by model (call count, avg latency, avg tokens, avg utilisation)
 - **`GET /llm/trace/{trace_id}`** — all LLM calls for a specific trace
-- **`ContextWindowTracker`, `ContextHogDetector`, `PromptDriftDetector`** exported from `agentscope` top-level
+- **`ContextWindowTracker`, `ContextHogDetector`, `PromptDriftDetector`** exported from `anjor` top-level
 - `LLMTokenUsage` with cache_read field for Anthropic prompt caching
 - 284 tests, 97.65% coverage
 
@@ -44,8 +44,8 @@ Phase 1: Tool Call Observability — first complete release.
 
 ### Added
 
-- `agentscope.patch()` — one-line httpx instrumentation; zero changes to agent code required
-- `agentscope.configure()` — programmatic config override
+- `anjor.patch()` — one-line httpx instrumentation; zero changes to agent code required
+- `anjor.configure()` — programmatic config override
 - **AnthropicParser** — extracts `tool_use` blocks from Anthropic `/v1/messages` responses into `ToolCallEvent`
 - **EventPipeline** — async queue with backpressure (drop-not-block), concurrent handler dispatch, graceful shutdown
 - **CollectorService** — local sidecar that receives events over HTTP and persists them to SQLite
@@ -53,7 +53,7 @@ Phase 1: Tool Call Observability — first complete release.
 - **REST API** — `POST /events`, `GET /tools`, `GET /tools/{name}`, `GET /health`
 - **DriftDetector** — structural fingerprinting (SHA-256, type-sensitive, value-agnostic) with field-level diff
 - **FailureClassifier** — priority-ordered rule chain: Timeout → SchemaDrift → APIError → Unknown
-- **AgentScopeConfig** — Pydantic BaseSettings with env vars (`AGENTSCOPE_*`) and `.agentscope.toml` support
+- **AnjorConfig** — Pydantic BaseSettings with env vars (`ANJOR_*`) and `.anjor.toml` support
 - Payload sanitisation — sensitive keys redacted before any storage or logging
 - 201 tests, 97.78% coverage (≥95% enforced)
 - `scripts/dev_setup.sh` — one-command development environment
@@ -68,5 +68,5 @@ Phase 1: Tool Call Observability — first complete release.
 - Dashboard UI (API-only)
 - Cloud sync
 
-[Unreleased]: https://github.com/anji/agentscope/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/anji/agentscope/releases/tag/v0.1.0
+[Unreleased]: https://github.com/anji/anjor/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/anji/anjor/releases/tag/v0.1.0

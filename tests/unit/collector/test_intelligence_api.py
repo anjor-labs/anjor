@@ -12,16 +12,16 @@ from datetime import UTC, datetime
 import pytest
 from fastapi.testclient import TestClient
 
-from agentscope.collector.api.app import create_app
-from agentscope.collector.service import CollectorService
-from agentscope.collector.storage.sqlite import SQLiteBackend
-from agentscope.core.config import AgentScopeConfig
-from agentscope.core.pipeline.pipeline import EventPipeline
+from anjor.collector.api.app import create_app
+from anjor.collector.service import CollectorService
+from anjor.collector.storage.sqlite import SQLiteBackend
+from anjor.core.config import AnjorConfig
+from anjor.core.pipeline.pipeline import EventPipeline
 
 
 def _make_client() -> TestClient:
     svc = CollectorService(
-        config=AgentScopeConfig(db_path=":memory:", batch_size=1, batch_interval_ms=9999),  # type: ignore[call-arg]
+        config=AnjorConfig(db_path=":memory:", batch_size=1, batch_interval_ms=9999),  # type: ignore[call-arg]
         storage=SQLiteBackend(db_path=":memory:", batch_size=1),
         pipeline=EventPipeline(),
     )

@@ -1,12 +1,12 @@
-# Contributing to AgentScope
+# Contributing to Anjor
 
-Thank you for your interest in contributing. AgentScope is in active early development — contributions that align with the [product vision](vision.txt) are very welcome.
+Thank you for your interest in contributing. Anjor is in active early development — contributions that align with the [product vision](vision.txt) are very welcome.
 
 ---
 
 ## Before You Start
 
-- Check [open issues](https://github.com/anji/agentscope/issues) to avoid duplicating work.
+- Check [open issues](https://github.com/anji/anjor/issues) to avoid duplicating work.
 - For anything beyond a typo fix, open an issue first to discuss the approach.
 - Phase 1 (tool call observability) is the current focus. See `CLAUDE.md` for what's in scope.
 
@@ -17,8 +17,8 @@ Thank you for your interest in contributing. AgentScope is in active early devel
 Requires Python 3.11+.
 
 ```bash
-git clone https://github.com/anji/agentscope.git
-cd agentscope
+git clone https://github.com/anji/anjor.git
+cd anjor
 bash scripts/dev_setup.sh   # creates .venv, installs deps, copies .env
 source .venv/bin/activate
 ```
@@ -54,7 +54,7 @@ This project uses `ruff` for formatting and linting, and `mypy` (strict) for typ
 ```bash
 ruff check .          # lint
 ruff format .         # format
-mypy agentscope/      # type check
+mypy anjor/      # type check
 ```
 
 Rules:

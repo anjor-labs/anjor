@@ -6,8 +6,8 @@ import dataclasses
 
 import pytest
 
-from agentscope.analysis.context.hog_detector import ContextHogDetector, ContextHogResult
-from agentscope.analysis.context.tracker import (
+from anjor.analysis.context.hog_detector import ContextHogDetector, ContextHogResult
+from anjor.analysis.context.tracker import (
     ContextSnapshot,
     ContextThresholdAlert,
     ContextWindowTracker,

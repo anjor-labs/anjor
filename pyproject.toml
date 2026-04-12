@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agentscope"
+name = "anjor"
 version = "0.2.0"
 description = "Observability and reliability platform for agentic AI systems"
 readme = "README.md"
@@ -34,10 +34,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/anji/agentscope"
-Repository = "https://github.com/anji/agentscope"
-Issues = "https://github.com/anji/agentscope/issues"
-Changelog = "https://github.com/anji/agentscope/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/anji/anjor"
+Repository = "https://github.com/anji/anjor"
+Issues = "https://github.com/anji/anjor/issues"
+Changelog = "https://github.com/anji/anjor/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 proxy = ["mitmproxy>=10.0"]
@@ -53,10 +53,10 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["agentscope*"]
+include = ["anjor*"]
 
 [tool.setuptools.package-data]
-agentscope = ["py.typed", "collector/storage/migrations/*.sql"]
+anjor = ["py.typed", "collector/storage/migrations/*.sql"]
 
 [tool.ruff]
 line-length = 100
@@ -75,7 +75,7 @@ strict = true
 exclude = ["tests/"]
 
 [tool.coverage.run]
-source = ["agentscope"]
+source = ["anjor"]
 omit = ["tests/*"]
 
 [tool.coverage.report]

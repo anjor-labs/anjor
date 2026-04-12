@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from agentscope.analysis.drift.detector import DriftDetector
+from anjor.analysis.drift.detector import DriftDetector
 
 
 class TestDriftDetector:
@@ -31,7 +31,7 @@ class TestDriftDetector:
         assert "offset" in result.unexpected_fields
 
     def test_drift_has_expected_hash(self) -> None:
-        from agentscope.analysis.drift.fingerprint import fingerprint
+        from anjor.analysis.drift.fingerprint import fingerprint
 
         detector = DriftDetector()
         baseline = {"a": 1, "b": 2}

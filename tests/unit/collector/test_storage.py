@@ -6,8 +6,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from agentscope.collector.storage.base import LLMQueryFilters, QueryFilters, SchemaSnapshot
-from agentscope.collector.storage.sqlite import SQLiteBackend
+from anjor.collector.storage.base import LLMQueryFilters, QueryFilters, SchemaSnapshot
+from anjor.collector.storage.sqlite import SQLiteBackend
 
 
 @pytest.fixture

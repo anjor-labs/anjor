@@ -5,7 +5,7 @@ from __future__ import annotations
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agentscope.analysis.classification.failure import (
+from anjor.analysis.classification.failure import (
     APIErrorRule,
     ClassificationContext,
     FailureClassifier,
@@ -13,7 +13,7 @@ from agentscope.analysis.classification.failure import (
     TimeoutRule,
     UnknownRule,
 )
-from agentscope.core.events.tool_call import FailureType
+from anjor.core.events.tool_call import FailureType
 
 
 class TestTimeoutRule:

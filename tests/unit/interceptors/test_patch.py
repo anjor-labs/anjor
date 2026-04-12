@@ -8,11 +8,11 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
-from agentscope.core.events.base import BaseEvent, EventType
-from agentscope.core.events.llm_call import LLMCallEvent
-from agentscope.core.events.tool_call import ToolCallEvent
-from agentscope.core.pipeline.pipeline import EventPipeline
-from agentscope.interceptors.patch import PatchInterceptor, ProxyInterceptor, _body_to_dict
+from anjor.core.events.base import BaseEvent, EventType
+from anjor.core.events.llm_call import LLMCallEvent
+from anjor.core.events.tool_call import ToolCallEvent
+from anjor.core.pipeline.pipeline import EventPipeline
+from anjor.interceptors.patch import PatchInterceptor, ProxyInterceptor, _body_to_dict
 
 # ---------------------------------------------------------------------------
 # Helpers

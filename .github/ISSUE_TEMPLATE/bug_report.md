@@ -18,13 +18,13 @@ What you expected to happen.
 What actually happened (include the full traceback if relevant).
 
 **Environment**
-- AgentScope version: (run `python -c "import agentscope; print(agentscope.__version__)"`)
+- Anjor version: (run `python -c "import anjor; print(anjor.__version__)"`)
 - Python version: (run `python --version`)
 - OS:
 
 **Minimal reproduction script**
 
 ```python
-import agentscope
+import anjor
 # ...
 ```

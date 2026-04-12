@@ -1,20 +1,20 @@
-# AgentScope
+# Anjor
 
-[![CI](https://github.com/anji/agentscope/actions/workflows/ci.yml/badge.svg)](https://github.com/anji/agentscope/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)](https://github.com/anji/agentscope)
+[![CI](https://github.com/anji/anjor/actions/workflows/ci.yml/badge.svg)](https://github.com/anji/anjor/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)](https://github.com/anji/anjor)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Observability and intelligence for AI agents. One-line install. No cloud. No account required.
 
-AgentScope intercepts your agent's HTTP traffic at the protocol layer and gives you full visibility into every LLM call and tool use — latency, token usage, context window growth, schema drift, prompt changes — without changing how you build. In Phase 3 it moves from passive logging to active recommendations: failure pattern clustering, token optimization suggestions, and per-tool quality scores.
+Anjor intercepts your agent's HTTP traffic at the protocol layer and gives you full visibility into every LLM call and tool use — latency, token usage, context window growth, schema drift, prompt changes — without changing how you build. In Phase 3 it moves from passive logging to active recommendations: failure pattern clustering, token optimization suggestions, and per-tool quality scores.
 
 ---
 
 ## Install
 
 ```bash
-pip install agentscope
+pip install anjor
 ```
 
 ---
@@ -30,8 +30,8 @@ python scripts/start_collector.py
 **2. Add one line to your agent:**
 
 ```python
-import agentscope
-agentscope.patch()   # that's it — httpx is now instrumented
+import anjor
+anjor.patch()   # that's it — httpx is now instrumented
 
 import anthropic
 client = anthropic.Anthropic()
@@ -83,12 +83,12 @@ No API key? Use [`respx`](https://lundberg.github.io/respx/) to replay a mock re
 Via environment variables:
 
 ```bash
-AGENTSCOPE_DB_PATH=./my_project.db python my_agent.py
-AGENTSCOPE_BATCH_SIZE=1 AGENTSCOPE_BATCH_INTERVAL_MS=100 python my_agent.py
-AGENTSCOPE_LOG_LEVEL=DEBUG python my_agent.py
+ANJOR_DB_PATH=./my_project.db python my_agent.py
+ANJOR_BATCH_SIZE=1 ANJOR_BATCH_INTERVAL_MS=100 python my_agent.py
+ANJOR_LOG_LEVEL=DEBUG python my_agent.py
 ```
 
-Via `.agentscope.toml` in your project root:
+Via `.anjor.toml` in your project root:
 
 ```toml
 db_path = "my_project.db"
@@ -100,10 +100,10 @@ log_level = "DEBUG"
 Via code:
 
 ```python
-import agentscope
-from agentscope.core.config import AgentScopeConfig
+import anjor
+from anjor.core.config import AnjorConfig
 
-agentscope.patch(config=AgentScopeConfig(db_path="my_project.db", batch_size=1))
+anjor.patch(config=AnjorConfig(db_path="my_project.db", batch_size=1))
 ```
 
 ---
@@ -121,13 +121,13 @@ agentscope.patch(config=AgentScopeConfig(db_path="my_project.db", batch_size=1))
 ## Development
 
 ```bash
-git clone https://github.com/anji/agentscope.git
-cd agentscope
+git clone https://github.com/anji/anjor.git
+cd anjor
 bash scripts/dev_setup.sh   # creates .venv, installs deps
 source .venv/bin/activate
 .venv/bin/pytest            # ≥95% coverage enforced
 ruff check .                # zero lint errors
-mypy agentscope/            # strict type checking
+mypy anjor/            # strict type checking
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.

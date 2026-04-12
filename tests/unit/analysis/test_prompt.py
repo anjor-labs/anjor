@@ -6,7 +6,7 @@ import dataclasses
 
 import pytest
 
-from agentscope.analysis.prompt.detector import PromptDrift, PromptDriftDetector
+from anjor.analysis.prompt.detector import PromptDrift, PromptDriftDetector
 
 
 class TestPromptDriftDetector:

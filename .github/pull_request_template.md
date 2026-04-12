@@ -19,7 +19,7 @@ Closes #
 - [ ] New tests added (or explain why not needed)
 - [ ] `pytest` passes locally (`≥95%` coverage maintained)
 - [ ] `ruff check .` passes
-- [ ] `mypy agentscope/` passes
+- [ ] `mypy anjor/` passes
 
 ## Checklist
 

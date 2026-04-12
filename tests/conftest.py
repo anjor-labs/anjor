@@ -1,13 +1,13 @@
-"""Shared pytest fixtures for AgentScope test suite."""
+"""Shared pytest fixtures for Anjor test suite."""
 
 from __future__ import annotations
 
 import pytest
 
-from agentscope.collector.storage.sqlite import SQLiteBackend
-from agentscope.core.events.base import BaseEvent, EventType
-from agentscope.core.events.tool_call import ToolCallEvent, ToolCallStatus
-from agentscope.core.pipeline.pipeline import EventPipeline
+from anjor.collector.storage.sqlite import SQLiteBackend
+from anjor.core.events.base import BaseEvent, EventType
+from anjor.core.events.tool_call import ToolCallEvent, ToolCallStatus
+from anjor.core.pipeline.pipeline import EventPipeline
 
 
 @pytest.fixture

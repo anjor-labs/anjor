@@ -3,7 +3,7 @@ import Link from 'next/link'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'AgentScope',
+  title: 'Anjor',
   description: 'Observability for AI agents',
 }
 
@@ -22,7 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen bg-gray-950 text-gray-100 font-mono">
         <nav className="sticky top-0 z-10 border-b border-gray-800 bg-gray-950/90 backdrop-blur px-6 py-3 flex items-center gap-8">
           <span className="font-bold text-white tracking-tight">
-            AgentScope
+            Anjor
           </span>
           <div className="flex items-center gap-6">
             {NAV.map(({ href, label }) => (

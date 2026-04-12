@@ -5,7 +5,7 @@ from __future__ import annotations
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agentscope.analysis.drift.fingerprint import diff_schemas, fingerprint
+from anjor.analysis.drift.fingerprint import diff_schemas, fingerprint
 
 # ---------------------------------------------------------------------------
 # Property-based tests

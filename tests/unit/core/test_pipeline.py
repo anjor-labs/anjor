@@ -5,14 +5,14 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from agentscope.core.events.base import BaseEvent, EventType
-from agentscope.core.pipeline.handlers import (
+from anjor.core.events.base import BaseEvent, EventType
+from anjor.core.pipeline.handlers import (
     CollectorHandler,
     EventHandler,
     LogHandler,
     NoOpHandler,
 )
-from agentscope.core.pipeline.pipeline import EventPipeline
+from anjor.core.pipeline.pipeline import EventPipeline
 
 if TYPE_CHECKING:
     pass

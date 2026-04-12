@@ -8,12 +8,12 @@ from __future__ import annotations
 import httpx
 import respx
 
-from agentscope.collector.storage.base import QueryFilters
-from agentscope.collector.storage.sqlite import SQLiteBackend
-from agentscope.core.events.base import BaseEvent
-from agentscope.core.pipeline.pipeline import EventPipeline
-from agentscope.interceptors.parsers.registry import build_default_registry
-from agentscope.interceptors.patch import PatchInterceptor
+from anjor.collector.storage.base import QueryFilters
+from anjor.collector.storage.sqlite import SQLiteBackend
+from anjor.core.events.base import BaseEvent
+from anjor.core.pipeline.pipeline import EventPipeline
+from anjor.interceptors.parsers.registry import build_default_registry
+from anjor.interceptors.patch import PatchInterceptor
 
 _ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 

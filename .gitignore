@@ -37,8 +37,8 @@ htmlcov/
 *.db-wal
 *.sqlite
 *.sqlite3
-agentscope.db
-.agentscope/
+anjor.db
+.anjor/
 
 # Claude Code
 .claude/

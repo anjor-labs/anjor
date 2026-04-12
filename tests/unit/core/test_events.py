@@ -7,10 +7,10 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from agentscope.core.events.base import BaseEvent, EventType
-from agentscope.core.events.llm_call import LLMCallEvent, LLMTokenUsage
-from agentscope.core.events.registry import EventTypeRegistry, default_registry
-from agentscope.core.events.tool_call import (
+from anjor.core.events.base import BaseEvent, EventType
+from anjor.core.events.llm_call import LLMCallEvent, LLMTokenUsage
+from anjor.core.events.registry import EventTypeRegistry, default_registry
+from anjor.core.events.tool_call import (
     FailureType,
     SchemaDrift,
     TokenUsage,
