@@ -46,6 +46,8 @@ class EventPipeline:
         self._stats = PipelineStats()
         self._worker_task: asyncio.Task[None] | None = None
         self._running = False
+        # Set by start() so cross-thread put() calls can schedule onto the right loop.
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     @property
     def stats(self) -> PipelineStats:
@@ -54,8 +56,36 @@ class EventPipeline:
     def add_handler(self, handler: EventHandler) -> None:
         self._handlers.append(handler)
 
+    def _enqueue(self, event: BaseEvent) -> None:
+        """Put an event onto the queue. Must run inside the pipeline's event loop."""
+        try:
+            self._queue.put_nowait(event)
+            self._stats.enqueued += 1
+        except asyncio.QueueFull:
+            self._stats.dropped += 1
+            logger.warning(
+                "event_dropped_queue_full",
+                event_type=event.event_type,
+                trace_id=event.trace_id,
+                queue_size=self._queue.qsize(),
+            )
+
     def put(self, event: BaseEvent) -> bool:
-        """Enqueue an event. Non-blocking. Returns False if queue is full."""
+        """Enqueue an event. Non-blocking. Thread-safe. Returns False if queue is full."""
+        if self._loop is not None:
+            try:
+                running_loop = asyncio.get_running_loop()
+            except RuntimeError:
+                running_loop = None
+
+            if running_loop is not self._loop:
+                # DECISION: cross-thread call — schedule onto the pipeline's own loop via
+                # call_soon_threadsafe so asyncio.Queue internals are only touched from
+                # the loop thread. Always returns True; actual drop tracking in _enqueue().
+                self._loop.call_soon_threadsafe(self._enqueue, event)
+                return True
+
+        # Same-thread (or no background loop yet): put_nowait directly.
         try:
             # DECISION: put_nowait (non-blocking) so the agent's call stack never stalls
             # waiting for queue space — observability must have zero impact on agent latency.
@@ -114,6 +144,7 @@ class EventPipeline:
     async def start(self) -> None:
         """Start the background worker."""
         self._running = True
+        self._loop = asyncio.get_running_loop()
         self._worker_task = asyncio.create_task(self._worker())
 
     async def stop(self) -> None:

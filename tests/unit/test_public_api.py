@@ -19,6 +19,12 @@ class TestPublicAPI:
         if anjor._interceptor is not None:
             anjor._interceptor.uninstall()
         anjor._interceptor = None
+        # Background loop/thread are daemon threads — leave them running to avoid
+        # race conditions on teardown, but clear the module refs so the next test
+        # that calls patch() re-evaluates whether a live loop exists.
+        if anjor._bg_loop is not None and not anjor._bg_loop.is_running():
+            anjor._bg_loop = None
+            anjor._bg_thread = None
 
     def test_patch_returns_interceptor(self) -> None:
         interceptor = anjor.patch()

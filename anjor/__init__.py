@@ -15,6 +15,9 @@ Public API:
 
 from __future__ import annotations
 
+import asyncio
+import threading
+
 from anjor.analysis.context.hog_detector import ContextHogDetector
 from anjor.analysis.context.tracker import ContextWindowTracker
 from anjor.analysis.intelligence.failure_clustering import FailureClusterer
@@ -45,6 +48,25 @@ __all__ = [
 _config: AnjorConfig | None = None
 _pipeline: EventPipeline | None = None
 _interceptor: PatchInterceptor | None = None
+_bg_loop: asyncio.AbstractEventLoop | None = None
+_bg_thread: threading.Thread | None = None
+
+
+def _ensure_background_loop() -> asyncio.AbstractEventLoop:
+    """Return (creating if needed) a background event loop running in a daemon thread.
+
+    The loop is used to run the pipeline worker so it processes events without
+    blocking the agent's own thread — which may have no event loop at all.
+    """
+    global _bg_loop, _bg_thread
+    if _bg_loop is not None and _bg_loop.is_running():
+        return _bg_loop
+    loop = asyncio.new_event_loop()
+    t = threading.Thread(target=loop.run_forever, daemon=True, name="anjor-pipeline")
+    t.start()
+    _bg_loop = loop
+    _bg_thread = t
+    return loop
 
 
 def configure(config: AnjorConfig | None = None, **kwargs: object) -> AnjorConfig:
@@ -100,6 +122,17 @@ def patch(
     resolved_pipeline = pipeline or get_pipeline()
 
     if _interceptor is None:
+        from anjor.core.pipeline.handlers import CollectorHandler
+
+        # Wire the CollectorHandler so events are forwarded to the collector REST API.
+        collector_url = f"http://{_config.host}:{_config.collector_port}"
+        resolved_pipeline.add_handler(CollectorHandler(collector_url))
+
+        # The pipeline worker is async; start it inside a long-lived background event loop
+        # so the agent's synchronous call stack is never blocked.
+        loop = _ensure_background_loop()
+        asyncio.run_coroutine_threadsafe(resolved_pipeline.start(), loop).result(timeout=5)
+
         _interceptor = PatchInterceptor(
             pipeline=resolved_pipeline,
             parser_registry=build_default_registry(),
