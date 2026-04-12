@@ -80,7 +80,6 @@ class TestParseTraceparent:
 
 class TestPatchInterceptorInjectsTraceparent:
     def test_injects_when_absent(self) -> None:
-
         from anjor.interceptors.patch import PatchInterceptor
 
         interceptor = PatchInterceptor()

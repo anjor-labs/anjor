@@ -238,7 +238,7 @@ class TestCycleDetection:
         assert g.has_cycle() is True
 
     def test_three_node_cycle(self) -> None:
-        a_id, b_id, c_id = [str(uuid.uuid4()) for _ in range(3)]
+        a_id, b_id, c_id = (str(uuid.uuid4()) for _ in range(3))
         spans = [
             make_span(span_id=a_id, parent_span_id=c_id),
             make_span(span_id=b_id, parent_span_id=a_id),
