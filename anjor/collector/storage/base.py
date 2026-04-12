@@ -140,6 +140,11 @@ class StorageBackend(ABC):
         ...
 
     @abstractmethod
+    async def connect(self) -> None:
+        """Open the connection / run migrations."""
+        ...
+
+    @abstractmethod
     async def close(self) -> None:
         """Release resources."""
         ...

@@ -86,7 +86,9 @@ class AnjorConfig(BaseSettings):
     collector_port: int = Field(default=7843, ge=1, le=65535)
 
     # Storage
-    db_path: str = "anjor.db"
+    storage_backend: str = Field(default="sqlite", pattern="^(sqlite|postgres|clickhouse)$")
+    storage_url: str | None = None  # required for postgres/clickhouse; unused by sqlite
+    db_path: str = "anjor.db"  # sqlite only
 
     # Logging
     log_level: str = Field(default="INFO", pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")

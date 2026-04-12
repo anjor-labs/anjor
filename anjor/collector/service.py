@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from anjor.collector.storage.sqlite import SQLiteBackend
+from anjor.collector.storage import StorageBackend, create_storage_backend
 from anjor.core.config import AnjorConfig
 from anjor.core.pipeline.pipeline import EventPipeline
 
@@ -13,15 +13,11 @@ class CollectorService:
     def __init__(
         self,
         config: AnjorConfig | None = None,
-        storage: SQLiteBackend | None = None,
+        storage: StorageBackend | None = None,
         pipeline: EventPipeline | None = None,
     ) -> None:
         self.config = config or AnjorConfig()
-        self.storage = storage or SQLiteBackend(
-            db_path=self.config.db_path,
-            batch_size=self.config.batch_size,
-            batch_interval_ms=self.config.batch_interval_ms,
-        )
+        self.storage = storage or create_storage_backend(self.config)
         self.pipeline = pipeline or EventPipeline()
 
     async def start(self) -> None:
