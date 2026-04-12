@@ -125,6 +125,46 @@ class AgentRunQualityScoreItem(BaseModel):
     grade: str
 
 
+class SpanNodeItem(BaseModel):
+    """A single span node as returned by GET /traces/{trace_id}/graph."""
+
+    span_id: str
+    parent_span_id: str | None
+    agent_name: str
+    span_kind: str
+    depth: int
+    status: str
+    token_input: int
+    token_output: int
+    tool_calls_count: int
+    llm_calls_count: int
+    started_at: str
+    ended_at: str | None
+    duration_ms: float | None
+
+
+class TraceGraphResponse(BaseModel):
+    """Response for GET /traces/{trace_id}/graph."""
+
+    trace_id: str
+    node_count: int
+    has_cycle: bool
+    nodes: list[SpanNodeItem]
+    edges: list[tuple[str, str]]
+
+
+class TraceSummaryItem(BaseModel):
+    """One row from GET /traces."""
+
+    trace_id: str
+    root_agent_name: str
+    span_count: int
+    total_token_input: int
+    total_token_output: int
+    started_at: str
+    status: str
+
+
 class EventIngestRequest(BaseModel):
     """Incoming event payload. Validated before storage.
 
