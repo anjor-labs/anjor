@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anjor — MCP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="utils.js"></script>
+</head>
+<body class="min-h-screen bg-gray-950 text-gray-100 font-mono">
+  <div id="nav"></div>
+  <main class="px-6 py-8 max-w-7xl mx-auto space-y-8" id="app">
+    <p class="text-gray-600 text-sm">Loading…</p>
+  </main>
+  <script>
+    document.getElementById('nav').innerHTML = buildNav('/ui/mcp.html')
+
+    const DAY_OPTIONS = [
+      { value: 1,    label: '1d' },
+      { value: 7,    label: '7d' },
+      { value: 14,   label: '14d' },
+      { value: 30,   label: '30d' },
+      { value: 90,   label: '90d' },
+      { value: null, label: 'All time' },
+    ]
+
+    let selectedDays = 30
+    let data = { servers: [], tools: [] }
+
+    // ── Server colour palette ─────────────────────────────────────────────────
+    const SERVER_COLOURS = [
+      'bg-blue-900/50 text-blue-300 border-blue-800',
+      'bg-purple-900/50 text-purple-300 border-purple-800',
+      'bg-orange-900/50 text-orange-300 border-orange-800',
+      'bg-green-900/50 text-green-300 border-green-800',
+      'bg-pink-900/50 text-pink-300 border-pink-800',
+      'bg-cyan-900/50 text-cyan-300 border-cyan-800',
+      'bg-yellow-900/50 text-yellow-300 border-yellow-800',
+    ]
+    const serverColourMap = {}
+    function serverBadge(name) {
+      if (!serverColourMap[name]) {
+        const idx = Object.keys(serverColourMap).length % SERVER_COLOURS.length
+        serverColourMap[name] = SERVER_COLOURS[idx]
+      }
+      return `<span class="text-xs px-1.5 py-0.5 rounded border font-sans ${serverColourMap[name]}">${name}</span>`
+    }
+
+    async function load() {
+      try {
+        const url = selectedDays !== null ? `${API}/mcp?days=${selectedDays}` : `${API}/mcp`
+        data = await fetch(url).then(r => r.json())
+        render()
+      } catch {
+        document.getElementById('app').innerHTML =
+          errorBanner('Cannot reach collector at :' + (window.location.port || 80))
+      }
+    }
+
+    function dayLabel() {
+      return selectedDays === null ? 'all time' : `last ${selectedDays}d`
+    }
+
+    function render() {
+      const { servers, tools } = data
+      if (servers.length === 0 && tools.length === 0) {
+        document.getElementById('app').innerHTML = `
+          <h1 class="text-xl font-bold text-white">MCP</h1>
+          <p class="text-gray-600 text-sm">No MCP tool calls recorded yet. MCP tools are identified by the <code class="text-gray-400">mcp__server__tool</code> naming convention.</p>`
+        return
+      }
+
+      const totalCalls   = servers.reduce((a, s) => a + s.call_count, 0)
+      const totalSuccess = servers.reduce((a, s) => a + s.success_count, 0)
+      const overallRate  = totalCalls > 0 ? totalSuccess / totalCalls : 0
+      const serverCount  = servers.length
+      const toolCount    = tools.length
+
+      document.getElementById('app').innerHTML = `
+        <div class="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h1 class="text-xl font-bold text-white">MCP</h1>
+            <p class="text-xs text-gray-500 mt-1">Model Context Protocol server and tool analytics</p>
+          </div>
+          <div class="flex items-center gap-1 bg-gray-900 border border-gray-700 rounded overflow-hidden">
+            ${DAY_OPTIONS.map(opt => {
+              const val = opt.value === null ? 'null' : String(opt.value)
+              const active = opt.value === selectedDays
+              return `<button data-days="${val}" class="px-2.5 py-1 text-xs font-mono transition-colors ${active ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}">${opt.label}</button>`
+            }).join('')}
+          </div>
+        </div>
+
+        ${heroCards(totalCalls, serverCount, toolCount, overallRate)}
+        ${serverChart(servers)}
+        ${serverTable(servers)}
+        ${toolTable(tools)}
+      `
+
+      document.querySelectorAll('[data-days]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const raw = btn.getAttribute('data-days')
+          selectedDays = raw === 'null' ? null : Number(raw)
+          load()
+        })
+      })
+    }
+
+    // ── Hero cards ─────────────────────────────────────────────────────────────
+    function heroCards(totalCalls, serverCount, toolCount, overallRate) {
+      const rateColour = overallRate >= 0.9 ? 'text-green-400' : overallRate >= 0.7 ? 'text-yellow-400' : 'text-red-400'
+      return `<div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+          <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Total MCP calls</p>
+          <p class="text-xl font-bold text-white">${totalCalls.toLocaleString()}</p>
+        </div>
+        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+          <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Servers</p>
+          <p class="text-xl font-bold text-blue-400">${serverCount}</p>
+        </div>
+        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+          <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Unique tools</p>
+          <p class="text-xl font-bold text-purple-400">${toolCount}</p>
+        </div>
+        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+          <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Success rate</p>
+          <p class="text-xl font-bold ${rateColour}">${fmt.pct(overallRate)}</p>
+        </div>
+      </div>`
+    }
+
+    // ── Server breakdown bar chart ─────────────────────────────────────────────
+    function serverChart(servers) {
+      if (servers.length === 0) return ''
+      const maxCalls = Math.max(...servers.map(s => s.call_count), 1)
+
+      const bars = servers.map((s, i) => {
+        const pct = Math.round((s.call_count / maxCalls) * 100)
+        const colour = ['bg-blue-500', 'bg-purple-500', 'bg-orange-500', 'bg-green-500', 'bg-pink-500', 'bg-cyan-500', 'bg-yellow-500'][i % 7]
+        const rateColour = s.success_rate >= 0.9 ? 'text-green-400' : s.success_rate >= 0.7 ? 'text-yellow-400' : 'text-red-400'
+        return `<div class="flex items-center gap-3">
+          <span class="text-xs text-gray-300 w-28 truncate shrink-0">${s.server_name}</span>
+          <div class="flex-1 bg-gray-800 rounded-full h-2">
+            <div class="${colour} h-2 rounded-full transition-all" style="width:${pct}%"></div>
+          </div>
+          <span class="text-xs text-gray-400 w-10 text-right shrink-0">${s.call_count.toLocaleString()}</span>
+          <span class="text-xs w-12 text-right shrink-0 ${rateColour}">${fmt.pct(s.success_rate)}</span>
+        </div>`
+      }).join('')
+
+      return `
+        <section>
+          <h2 class="text-sm font-semibold text-white mb-3">Calls by server <span class="text-gray-500 font-normal">(${dayLabel()})</span></h2>
+          <div class="bg-gray-900 border border-gray-800 rounded-lg p-5 space-y-3">
+            ${bars}
+            <div class="flex items-center gap-3 pt-1 border-t border-gray-800 text-xs text-gray-600">
+              <span class="w-28 shrink-0"></span>
+              <span class="flex-1"></span>
+              <span class="w-10 text-right shrink-0">Calls</span>
+              <span class="w-12 text-right shrink-0">Success</span>
+            </div>
+          </div>
+        </section>`
+    }
+
+    // ── Server table ───────────────────────────────────────────────────────────
+    function serverTable(servers) {
+      if (servers.length === 0) return ''
+      const rows = servers.map(s => {
+        const rateColour = successColor(s.success_rate)
+        return `<tr class="border-b border-gray-900 hover:bg-gray-900/50">
+          <td class="py-3 pr-4 text-xs font-medium text-white">${serverBadge(s.server_name)}</td>
+          <td class="py-3 pr-4 text-right text-gray-300">${s.tool_count}</td>
+          <td class="py-3 pr-4 text-right text-gray-300">${s.call_count.toLocaleString()}</td>
+          <td class="py-3 pr-4 text-right ${rateColour}">${fmt.pct(s.success_rate)}</td>
+          <td class="py-3 text-right text-gray-400">${fmt.ms(s.avg_latency_ms)}</td>
+        </tr>`
+      }).join('')
+
+      return `
+        <section>
+          <h2 class="text-sm font-semibold text-white mb-3">Servers</h2>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead><tr class="border-b border-gray-800 text-left text-xs text-gray-500 uppercase">
+                <th class="pb-3 pr-4">Server</th>
+                <th class="text-right pb-3 pr-4">Tools</th>
+                <th class="text-right pb-3 pr-4">Calls</th>
+                <th class="text-right pb-3 pr-4">Success</th>
+                <th class="text-right pb-3">Avg latency</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </section>`
+    }
+
+    // ── Tool table ─────────────────────────────────────────────────────────────
+    function toolTable(tools) {
+      if (tools.length === 0) return ''
+      const rows = tools.map(t => {
+        const rateColour = successColor(t.success_rate)
+        return `<tr class="border-b border-gray-900 hover:bg-gray-900/50">
+          <td class="py-3 pr-4 text-xs">
+            <a href="/ui/tool_detail.html?name=${encodeURIComponent(t.tool_name)}" class="text-gray-200 hover:text-blue-400">${t.short_name}</a>
+          </td>
+          <td class="py-3 pr-4">${serverBadge(t.server_name)}</td>
+          <td class="py-3 pr-4 text-right text-gray-300">${t.call_count.toLocaleString()}</td>
+          <td class="py-3 pr-4 text-right ${rateColour}">${fmt.pct(t.success_rate)}</td>
+          <td class="py-3 text-right text-gray-400">${fmt.ms(t.avg_latency_ms)}</td>
+        </tr>`
+      }).join('')
+
+      return `
+        <section>
+          <h2 class="text-sm font-semibold text-white mb-3">Tools <span class="text-gray-500 font-normal">(sorted by call count)</span></h2>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead><tr class="border-b border-gray-800 text-left text-xs text-gray-500 uppercase">
+                <th class="pb-3 pr-4">Tool</th>
+                <th class="pb-3 pr-4">Server</th>
+                <th class="text-right pb-3 pr-4">Calls</th>
+                <th class="text-right pb-3 pr-4">Success</th>
+                <th class="text-right pb-3">Avg latency</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+          <p class="text-xs text-gray-600 mt-2">MCP tools identified by <code>mcp__server__tool</code> naming convention. Click a tool name for full detail.</p>
+        </section>`
+    }
+
+    load()
+    setInterval(load, 10000)
+  </script>
+</body>
+</html>

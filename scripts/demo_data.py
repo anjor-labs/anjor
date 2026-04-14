@@ -12,6 +12,14 @@ import httpx
 COLLECTOR = "http://127.0.0.1:7843"
 
 TOOLS = ["web_search", "read_file", "write_file", "parse_html", "fetch_url", "run_code"]
+
+MCP_TOOLS = {
+    "github":      ["create_pull_request", "search_issues", "get_file_contents", "list_commits", "create_issue"],
+    "filesystem":  ["read_file", "write_file", "list_directory", "create_directory"],
+    "brave_search":["web_search", "local_search"],
+    "slack":       ["post_message", "get_channels", "list_messages"],
+    "postgres":    ["query", "list_tables", "describe_table"],
+}
 MODELS = ["claude-opus-4-6", "claude-sonnet-4-6"]
 FAILURE_TYPES = ["timeout", "rate_limit", "schema_error", "unknown"]
 
@@ -150,6 +158,48 @@ def seed_openai_llm_calls() -> None:
     print(f"  {seq - 400} OpenAI LLM calls seeded across {len(trace_ids)} traces.")
 
 
+def seed_mcp_calls() -> None:
+    print("Seeding MCP tool calls...")
+    # Build flat list of (server, tool) pairs with realistic failure rates per server
+    failure_rates = {"github": 0.08, "filesystem": 0.04, "brave_search": 0.15, "slack": 0.10, "postgres": 0.06}
+    latency_means = {"github": 320, "filesystem": 45, "brave_search": 480, "slack": 180, "postgres": 95}
+
+    trace_ids = [str(uuid.uuid4()) for _ in range(6)]
+    seq = 600
+    count = 0
+
+    for _ in range(90):
+        server = random.choice(list(MCP_TOOLS.keys()))
+        tool_short = random.choice(MCP_TOOLS[server])
+        tool_name = f"mcp__{server}__{tool_short}"
+        trace_id = random.choice(trace_ids)
+        failure_rate = failure_rates[server]
+        success = random.random() > failure_rate
+        latency = random.gauss(latency_means[server], latency_means[server] * 0.25)
+
+        body: dict = {
+            "event_type": "tool_call",
+            "tool_name": tool_name,
+            "trace_id": trace_id,
+            "session_id": "demo-session",
+            "agent_id": "demo-agent",
+            "timestamp": ts(90 - count),
+            "sequence_no": seq,
+            "status": "success" if success else "failure",
+            "failure_type": None if success else random.choice(["timeout", "api_error", "unknown"]),
+            "latency_ms": max(5.0, latency),
+            "input_payload": {"tool": tool_name, "args": {"query": f"demo {tool_short}"}},
+            "output_payload": {"result": "x" * random.randint(20, 400)} if success else {},
+            "input_schema_hash": f"mcp_{server}_{tool_short}_v1",
+            "output_schema_hash": f"mcp_{server}_{tool_short}_out",
+        }
+        post("/events", body)
+        seq += 1
+        count += 1
+
+    print(f"  {count} MCP tool calls seeded across {len(MCP_TOOLS)} servers.")
+
+
 def seed_agent_spans() -> None:
     print("Seeding agent spans...")
     # Three separate multi-agent traces
@@ -217,6 +267,7 @@ if __name__ == "__main__":
         raise SystemExit(1)
 
     seed_tool_calls()
+    seed_mcp_calls()
     seed_llm_calls()
     seed_openai_llm_calls()
     seed_agent_spans()

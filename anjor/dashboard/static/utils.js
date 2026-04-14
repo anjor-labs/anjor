@@ -46,6 +46,7 @@ function scoreBar(score, label) {
 const NAV_LINKS = [
   ['/', 'Overview'],
   ['/ui/tools.html', 'Tools'],
+  ['/ui/mcp.html', 'MCP'],
   ['/ui/calls.html', 'Calls'],
   ['/ui/alerts.html', 'Alerts'],
   ['/ui/llm.html', 'Usage'],
