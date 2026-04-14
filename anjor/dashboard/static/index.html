@@ -9,23 +9,66 @@
 </head>
 <body class="min-h-screen bg-gray-950 text-gray-100 font-mono">
   <div id="nav"></div>
-  <main class="px-6 py-8 max-w-7xl mx-auto space-y-8" id="app">
+  <main class="px-6 py-8 max-w-7xl mx-auto space-y-6" id="app">
     <p class="text-gray-600 text-sm">Loading…</p>
   </main>
   <script>
     document.getElementById('nav').innerHTML = buildNav('/')
 
+    // ── Cost table (same as llm.html) ─────────────────────────────────────────
+    const COST = {
+      'claude-opus-4-6':            [15.00, 18.75,  1.50, 75.00],
+      'claude-sonnet-4-6':          [ 3.00,  3.75,  0.30, 15.00],
+      'claude-haiku-4-5-20251001':  [ 0.80,  1.00,  0.08,  4.00],
+      'claude-haiku-4-5':           [ 0.80,  1.00,  0.08,  4.00],
+      'claude-3-5-sonnet-20241022': [ 3.00,  3.75,  0.30, 15.00],
+      'claude-3-5-haiku-20241022':  [ 0.80,  1.00,  0.08,  4.00],
+      'claude-3-opus-20240229':     [15.00, 18.75,  1.50, 75.00],
+      'gpt-4o':                     [ 2.50,  2.50,  1.25, 10.00],
+      'gpt-4o-mini':                [ 0.15,  0.15,  0.075, 0.60],
+      'gpt-4-turbo':                [10.00, 10.00,  5.00, 30.00],
+      'o1':                         [15.00, 15.00,  7.50, 60.00],
+      'o3-mini':                    [ 1.10,  1.10,  0.55,  4.40],
+      'gemini-2.0-flash':           [ 0.10,  0.10,  0.025, 0.40],
+      'gemini-1.5-pro':             [ 1.25,  1.25,  0.3125, 5.00],
+      'gemini-1.5-flash':           [ 0.075, 0.075, 0.01875, 0.30],
+    }
+    const DEFAULT_COST = [3.00, 3.75, 0.30, 15.00]
+
+    function modelCost(model, tokensIn, cacheWrite, cacheRead, tokensOut) {
+      const r = COST[model] || DEFAULT_COST
+      return (tokensIn * r[0] + cacheWrite * r[1] + cacheRead * r[2] + tokensOut * r[3]) / 1_000_000
+    }
+
+    function fmtCost(usd) {
+      if (usd < 0.0001) return '$0.0000'
+      if (usd < 0.01)   return '$' + usd.toFixed(4)
+      return '$' + usd.toFixed(2)
+    }
+
+    function provider(model) {
+      if (model.startsWith('claude-')) return 'Anthropic'
+      if (model.startsWith('gpt-') || model.startsWith('o1') || model.startsWith('o3')) return 'OpenAI'
+      if (model.startsWith('gemini-')) return 'Google'
+      return 'Unknown'
+    }
+
     let lastUpdated = ''
 
     async function load() {
       try {
-        const [health, tools, driftCalls] = await Promise.all([
+        const [health, tools, llmSummaries, mcpData, failures, toolScores, driftCalls, dailyUsage] = await Promise.all([
           fetch(`${API}/health`).then(r => r.json()),
           fetch(`${API}/tools`).then(r => r.json()),
+          fetch(`${API}/llm`).then(r => r.json()),
+          fetch(`${API}/mcp`).then(r => r.json()),
+          fetch(`${API}/intelligence/failures`).then(r => r.json()),
+          fetch(`${API}/intelligence/quality/tools`).then(r => r.json()),
           fetch(`${API}/calls?drift_only=true&limit=5`).then(r => r.json()),
+          fetch(`${API}/llm/usage/daily?days=14`).then(r => r.json()),
         ])
         lastUpdated = new Date().toLocaleTimeString()
-        render(health, tools, driftCalls)
+        render(health, tools, llmSummaries, mcpData, failures, toolScores, driftCalls, dailyUsage)
       } catch {
         document.getElementById('app').innerHTML = `
           <div class="flex flex-col items-center justify-center min-h-64 gap-4 text-center">
@@ -36,92 +79,286 @@
       }
     }
 
-    function render(health, tools, driftCalls) {
-      const totalCalls = tools.reduce((s, t) => s + t.call_count, 0)
-      const avgSuccess = tools.length
-        ? tools.reduce((s, t) => s + t.success_rate * t.call_count, 0) / (totalCalls || 1) : 0
-      const avgLatency = tools.length
-        ? tools.reduce((s, t) => s + t.avg_latency_ms * t.call_count, 0) / (totalCalls || 1) : 0
-      const slowest = [...tools].sort((a, b) => b.avg_latency_ms - a.avg_latency_ms).slice(0, 5)
+    // ── Metric card ───────────────────────────────────────────────────────────
+    function metricCard(label, value, colour, sub, href) {
+      const inner = `
+        <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">${label}</p>
+        <p class="text-2xl font-bold ${colour}">${value}</p>
+        ${sub ? `<p class="text-xs text-gray-600 mt-1">${sub}</p>` : ''}`
+      return href
+        ? `<a href="${href}" class="bg-gray-900 border border-gray-800 rounded-lg p-4 hover:border-gray-600 transition-colors block">${inner}</a>`
+        : `<div class="bg-gray-900 border border-gray-800 rounded-lg p-4">${inner}</div>`
+    }
 
-      const collectorBanner = health ? `
-        <div class="flex items-center gap-3 bg-gray-900 border border-gray-800 rounded-lg px-4 py-2 text-sm">
-          <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
-          <span class="text-gray-300">Collector up ${Math.floor(health.uptime_seconds)}s · queue ${health.queue_depth} · ${health.db_path}</span>
-        </div>` : ''
+    // ── Mini bar (inline width %) ─────────────────────────────────────────────
+    function miniBar(value, max, colour) {
+      const pct = max > 0 ? Math.round((value / max) * 100) : 0
+      return `<div class="w-16 bg-gray-800 rounded-full h-1.5 shrink-0">
+        <div class="${colour} h-1.5 rounded-full" style="width:${pct}%"></div>
+      </div>`
+    }
 
-      const slowestRows = slowest.length === 0
-        ? `<p class="text-gray-600 text-sm">No tool calls recorded yet.</p>`
-        : `<table class="w-full text-sm">
-            <thead><tr class="border-b border-gray-800">
-              <th class="text-left text-xs text-gray-500 uppercase pb-2 pr-4">Tool</th>
-              <th class="text-right text-xs text-gray-500 uppercase pb-2 pr-4">Calls</th>
-              <th class="text-right text-xs text-gray-500 uppercase pb-2 pr-4">Success</th>
-              <th class="text-right text-xs text-gray-500 uppercase pb-2">Avg Latency</th>
-            </tr></thead>
-            <tbody>${slowest.map(t => `
-              <tr class="border-b border-gray-900 hover:bg-gray-900/50">
-                <td class="py-2 pr-4"><a href="/ui/tool_detail.html?name=${encodeURIComponent(t.tool_name)}" class="text-blue-400 hover:text-blue-300">${t.tool_name}</a></td>
-                <td class="py-2 pr-4 text-right text-gray-300">${t.call_count}</td>
-                <td class="py-2 pr-4 text-right ${successColor(t.success_rate)}">${fmt.pct(t.success_rate)}</td>
-                <td class="py-2 text-right text-gray-300">${fmt.ms(t.avg_latency_ms)}</td>
-              </tr>`).join('')}
-            </tbody>
-          </table>`
+    // ── Sparkline (14-day total tokens) ──────────────────────────────────────
+    function sparkline(dailyRows) {
+      if (!dailyRows.length) return ''
+      const byDate = {}
+      for (const r of dailyRows) {
+        byDate[r.date] = (byDate[r.date] || 0) + r.tokens_in + r.tokens_out
+      }
+      const dates = Object.keys(byDate).sort().slice(-14)
+      if (dates.length < 2) return ''
+      const vals = dates.map(d => byDate[d])
+      const maxV  = Math.max(...vals, 1)
+      const W = 120, H = 28
+      const step = W / (dates.length - 1)
+      const points = vals.map((v, i) => `${Math.round(i * step)},${Math.round(H - (v / maxV) * H)}`).join(' ')
+      return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" class="opacity-60">
+        <polyline points="${points}" fill="none" stroke="#60a5fa" stroke-width="1.5" stroke-linejoin="round"/>
+      </svg>`
+    }
 
-      const driftSection = driftCalls.length === 0 ? '' : `
-        <section>
-          <div class="flex items-center justify-between mb-3">
-            <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wider">Recent Drift Events</h2>
-            <a href="/ui/alerts.html" class="text-xs text-yellow-400 hover:text-yellow-300">View all →</a>
-          </div>
-          <table class="w-full text-sm">
-            <thead><tr class="border-b border-gray-800">
-              <th class="text-left text-xs text-gray-500 uppercase pb-2 pr-4">Tool</th>
-              <th class="text-left text-xs text-gray-500 uppercase pb-2 pr-4">Missing</th>
-              <th class="text-left text-xs text-gray-500 uppercase pb-2 pr-4">Unexpected</th>
-              <th class="text-right text-xs text-gray-500 uppercase pb-2">Time</th>
-            </tr></thead>
-            <tbody>${driftCalls.map(c => {
-              const missing = c.drift_missing ? JSON.parse(c.drift_missing) : []
-              const unexpected = c.drift_unexpected ? JSON.parse(c.drift_unexpected) : []
-              return `<tr class="border-b border-gray-900 hover:bg-gray-900/50">
-                <td class="py-2 pr-4 text-yellow-400">${c.tool_name}</td>
-                <td class="py-2 pr-4 text-red-400 text-xs">${missing.join(', ') || '—'}</td>
-                <td class="py-2 pr-4 text-blue-400 text-xs">${unexpected.join(', ') || '—'}</td>
-                <td class="py-2 text-right text-gray-500 text-xs">${fmt.ts(c.timestamp)}</td>
-              </tr>`
-            }).join('')}
-            </tbody>
-          </table>
-        </section>`
+    // ── Tool health panel ─────────────────────────────────────────────────────
+    function toolPanel(tools) {
+      const top = [...tools].sort((a, b) => b.call_count - a.call_count).slice(0, 7)
+      if (!top.length) return `<p class="text-xs text-gray-600">No tool calls yet.</p>`
+      const maxCalls = top[0].call_count
+      return top.map(t => `
+        <div class="flex items-center gap-2 text-xs">
+          <a href="/ui/tool_detail.html?name=${encodeURIComponent(t.tool_name)}" class="text-gray-300 hover:text-blue-400 truncate w-28 shrink-0">${t.tool_name}</a>
+          ${miniBar(t.call_count, maxCalls, 'bg-blue-500')}
+          <span class="w-8 text-right text-gray-500 shrink-0">${fmt.num(t.call_count)}</span>
+          <span class="w-10 text-right shrink-0 ${successColor(t.success_rate)}">${fmt.pct(t.success_rate)}</span>
+        </div>`).join('')
+    }
+
+    // ── LLM model panel ───────────────────────────────────────────────────────
+    function llmPanel(summaries, dailyRows) {
+      if (!summaries.length) return `<p class="text-xs text-gray-600">No LLM calls yet.</p>`
+      const totalCost = summaries.reduce((a, s) => a + modelCost(s.model, s.total_token_input || 0, s.total_cache_write || 0, s.total_cache_read || 0, s.total_token_output || 0), 0)
+      const maxCost = summaries.reduce((max, s) => {
+        const c = modelCost(s.model, s.total_token_input || 0, s.total_cache_write || 0, s.total_cache_read || 0, s.total_token_output || 0)
+        return c > max ? c : max
+      }, 0)
+
+      const providerColours = { Anthropic: 'bg-orange-500', OpenAI: 'bg-green-500', Google: 'bg-blue-500', Unknown: 'bg-gray-500' }
+
+      const rows = [...summaries]
+        .sort((a, b) => {
+          const ca = modelCost(a.model, a.total_token_input || 0, a.total_cache_write || 0, a.total_cache_read || 0, a.total_token_output || 0)
+          const cb = modelCost(b.model, b.total_token_input || 0, b.total_cache_write || 0, b.total_cache_read || 0, b.total_token_output || 0)
+          return cb - ca
+        })
+        .slice(0, 6)
+        .map(s => {
+          const cost = modelCost(s.model, s.total_token_input || 0, s.total_cache_write || 0, s.total_cache_read || 0, s.total_token_output || 0)
+          const p = provider(s.model)
+          const barColour = providerColours[p]
+          return `<div class="flex items-center gap-2 text-xs">
+            <span class="text-gray-300 truncate w-32 shrink-0">${s.model}</span>
+            ${miniBar(cost, maxCost, barColour)}
+            <span class="w-14 text-right text-yellow-400 shrink-0">${fmtCost(cost)}</span>
+          </div>`
+        }).join('')
+
+      const spark = sparkline(dailyRows)
+      return `${rows}
+        ${spark ? `<div class="mt-3 pt-3 border-t border-gray-800 flex items-end justify-between gap-2">
+          <span class="text-xs text-gray-600">14d token trend</span>
+          ${spark}
+        </div>` : ''}`
+    }
+
+    // ── MCP server panel ──────────────────────────────────────────────────────
+    function mcpPanel(mcpData) {
+      const { servers } = mcpData
+      if (!servers.length) return `<p class="text-xs text-gray-600">No MCP tool calls yet.</p>`
+      const maxCalls = Math.max(...servers.map(s => s.call_count), 1)
+      const barColours = ['bg-purple-500', 'bg-cyan-500', 'bg-orange-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500']
+      return servers.slice(0, 7).map((s, i) => `
+        <div class="flex items-center gap-2 text-xs">
+          <span class="text-gray-300 truncate w-24 shrink-0">${s.server_name}</span>
+          ${miniBar(s.call_count, maxCalls, barColours[i % barColours.length])}
+          <span class="w-8 text-right text-gray-500 shrink-0">${fmt.num(s.call_count)}</span>
+          <span class="w-10 text-right shrink-0 ${successColor(s.success_rate)}">${fmt.pct(s.success_rate)}</span>
+        </div>`).join('')
+    }
+
+    // ── Intelligence highlights ───────────────────────────────────────────────
+    function intelligencePanel(failures, toolScores) {
+      const cards = []
+
+      // Worst failure cluster
+      if (failures.length) {
+        const top = failures[0]
+        cards.push(`
+          <div class="bg-gray-900 border border-red-900/50 rounded-lg p-4 flex-1 min-w-0">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs text-red-400 uppercase tracking-wider font-medium">Top failure pattern</span>
+              <a href="/ui/intelligence.html" class="text-xs text-gray-600 hover:text-gray-400">Details →</a>
+            </div>
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <p class="text-sm text-white font-medium truncate">${top.tool_name}</p>
+                <p class="text-xs text-gray-500 mt-0.5">${top.occurrence_count} / ${top.total_calls} calls failing</p>
+              </div>
+              <span class="text-xl font-bold text-red-400 shrink-0">${fmt.pct(top.failure_rate)}</span>
+            </div>
+            <div class="mt-2 text-xs text-gray-500 bg-gray-800/50 rounded px-2 py-1.5">${top.suggestion}</div>
+          </div>`)
+      }
+
+      // Worst quality tool (grade D or F)
+      const worst = toolScores.filter(s => s.grade === 'F' || s.grade === 'D').sort((a, b) => a.overall_score - b.overall_score)[0]
+        || toolScores.sort((a, b) => a.overall_score - b.overall_score)[0]
+      if (worst) {
+        cards.push(`
+          <div class="bg-gray-900 border border-gray-800 rounded-lg p-4 flex-1 min-w-0">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs text-gray-500 uppercase tracking-wider font-medium">Lowest quality tool</span>
+              <a href="/ui/intelligence.html" class="text-xs text-gray-600 hover:text-gray-400">Details →</a>
+            </div>
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <p class="text-sm text-white font-medium truncate">${worst.tool_name}</p>
+                <p class="text-xs text-gray-500 mt-0.5">${worst.call_count} calls · ${worst.grade}-grade</p>
+              </div>
+              <div class="text-right shrink-0">
+                ${gradeBadge(worst.grade)}
+                <p class="text-lg font-bold text-white mt-1">${Math.round(worst.overall_score * 100)}<span class="text-xs text-gray-500">/100</span></p>
+              </div>
+            </div>
+            <div class="mt-2 space-y-1">
+              ${scoreBar(worst.reliability_score, 'Reliability')}
+              ${scoreBar(worst.latency_consistency_score, 'Latency')}
+            </div>
+          </div>`)
+      }
+
+      if (!cards.length) return ''
+      return `<div class="flex gap-4 flex-wrap">${cards.join('')}</div>`
+    }
+
+    // ── Drift alerts strip ────────────────────────────────────────────────────
+    function driftStrip(driftCalls) {
+      if (!driftCalls.length) return ''
+      return `<section>
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Recent Schema Drift</h2>
+          <a href="/ui/alerts.html" class="text-xs text-yellow-400 hover:text-yellow-300">View all →</a>
+        </div>
+        <div class="space-y-1.5">
+          ${driftCalls.map(c => {
+            const missing    = c.drift_missing    ? JSON.parse(c.drift_missing)    : []
+            const unexpected = c.drift_unexpected ? JSON.parse(c.drift_unexpected) : []
+            return `<div class="flex items-center gap-3 bg-gray-900 border border-yellow-900/40 rounded px-3 py-2 text-xs">
+              <span class="text-yellow-400 w-28 truncate shrink-0">${c.tool_name}</span>
+              ${missing.length    ? `<span class="text-red-400">−${missing.join(', ')}</span>`    : ''}
+              ${unexpected.length ? `<span class="text-blue-400">+${unexpected.join(', ')}</span>` : ''}
+              <span class="ml-auto text-gray-600 shrink-0">${fmt.ts(c.timestamp)}</span>
+            </div>`
+          }).join('')}
+        </div>
+      </section>`
+    }
+
+    // ── Main render ───────────────────────────────────────────────────────────
+    function render(health, tools, llmSummaries, mcpData, failures, toolScores, driftCalls, dailyUsage) {
+      // Fleet totals
+      const totalToolCalls = tools.reduce((s, t) => s + t.call_count, 0)
+      const toolSuccessRate = totalToolCalls
+        ? tools.reduce((s, t) => s + t.success_rate * t.call_count, 0) / totalToolCalls : 0
+
+      const totalLLMCalls = llmSummaries.reduce((s, m) => s + m.call_count, 0)
+      const totalCost = llmSummaries.reduce((s, m) => s + modelCost(m.model, m.total_token_input || 0, m.total_cache_write || 0, m.total_cache_read || 0, m.total_token_output || 0), 0)
+
+      const totalMCPCalls   = mcpData.servers.reduce((s, sv) => s + sv.call_count, 0)
+      const activeMCPServers = mcpData.servers.length
+
+      const failurePatterns = failures.length
+      const driftCount      = driftCalls.length
+
+      const uptimeFmt = health
+        ? `up ${health.uptime_seconds >= 3600
+            ? (health.uptime_seconds / 3600).toFixed(1) + 'h'
+            : health.uptime_seconds >= 60
+              ? Math.floor(health.uptime_seconds / 60) + 'm'
+              : Math.floor(health.uptime_seconds) + 's'}`
+        : ''
 
       document.getElementById('app').innerHTML = `
-        <div class="flex items-start justify-between">
+        <!-- Header -->
+        <div class="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 class="text-xl font-bold text-white">Overview</h1>
-            ${lastUpdated ? `<p class="text-xs text-gray-600 mt-1">Updated ${lastUpdated} · auto-refresh 5s</p>` : ''}
+            ${lastUpdated ? `<p class="text-xs text-gray-600 mt-0.5">Updated ${lastUpdated} · auto-refresh 10s</p>` : ''}
           </div>
-          ${collectorBanner}
+          ${health ? `<div class="flex items-center gap-2.5 bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-gray-400">
+            <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse shrink-0"></span>
+            Collector ${uptimeFmt} · queue ${health.queue_depth} · ${health.db_path}
+          </div>` : ''}
         </div>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-          ${statCard('Total Tool Calls', totalCalls.toLocaleString())}
-          ${statCard('Success Rate', fmt.pct(avgSuccess), totalCalls === 0 ? 'no data' : '')}
-          ${statCard('Avg Latency', fmt.ms(avgLatency))}
-          ${statCard('Active Drift Alerts', String(driftCalls.length), driftCalls.length > 0 ? 'last 5 shown' : 'none detected')}
+
+        <!-- Hero metrics -->
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          ${metricCard('Tool calls', fmt.num(totalToolCalls), 'text-white', `${fmt.pct(toolSuccessRate)} success`, '/ui/tools.html')}
+          ${metricCard('LLM calls', fmt.num(totalLLMCalls), 'text-blue-400', `${llmSummaries.length} model${llmSummaries.length !== 1 ? 's' : ''}`, '/ui/llm.html')}
+          ${metricCard('Est. cost', fmtCost(totalCost), 'text-yellow-400', 'all time', '/ui/llm.html')}
+          ${metricCard('MCP calls', fmt.num(totalMCPCalls), 'text-purple-400', `${activeMCPServers} server${activeMCPServers !== 1 ? 's' : ''}`, '/ui/mcp.html')}
+          ${metricCard('Failure patterns', String(failurePatterns), failurePatterns > 0 ? 'text-red-400' : 'text-green-400', failurePatterns > 0 ? 'needs attention' : 'all clear', '/ui/intelligence.html')}
+          ${metricCard('Drift alerts', String(driftCount), driftCount > 0 ? 'text-yellow-400' : 'text-green-400', driftCount > 0 ? 'last 5 shown' : 'none detected', '/ui/alerts.html')}
         </div>
-        <section>
+
+        <!-- Three panels -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Top Tools</h2>
+              <a href="/ui/tools.html" class="text-xs text-blue-400 hover:text-blue-300">All →</a>
+            </div>
+            <div class="space-y-2.5">
+              ${toolPanel(tools)}
+            </div>
+            ${tools.length > 0 ? `<p class="text-xs text-gray-600 mt-3 flex justify-between"><span>Call volume</span><span>Success</span></p>` : ''}
+          </div>
+
+          <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">LLM Usage</h2>
+              <a href="/ui/llm.html" class="text-xs text-blue-400 hover:text-blue-300">All →</a>
+            </div>
+            <div class="space-y-2.5">
+              ${llmPanel(llmSummaries, dailyUsage)}
+            </div>
+            ${llmSummaries.length > 0 ? `<p class="text-xs text-gray-600 mt-3">Est. cost</p>` : ''}
+          </div>
+
+          <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">MCP Servers</h2>
+              <a href="/ui/mcp.html" class="text-xs text-blue-400 hover:text-blue-300">All →</a>
+            </div>
+            <div class="space-y-2.5">
+              ${mcpPanel(mcpData)}
+            </div>
+            ${activeMCPServers > 0 ? `<p class="text-xs text-gray-600 mt-3 flex justify-between"><span>Call volume</span><span>Success</span></p>` : ''}
+          </div>
+        </div>
+
+        <!-- Intelligence highlights -->
+        ${failures.length || toolScores.length ? `<section>
           <div class="flex items-center justify-between mb-3">
-            <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wider">Top Slowest Tools</h2>
-            <a href="/ui/tools.html" class="text-xs text-blue-400 hover:text-blue-300">View all →</a>
+            <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Intelligence Highlights</h2>
+            <a href="/ui/intelligence.html" class="text-xs text-blue-400 hover:text-blue-300">Full report →</a>
           </div>
-          ${slowestRows}
-        </section>
-        ${driftSection}`
+          ${intelligencePanel(failures, toolScores)}
+        </section>` : ''}
+
+        <!-- Drift strip -->
+        ${driftStrip(driftCalls)}`
     }
 
     load()
-    setInterval(load, 5000)
+    setInterval(load, 10000)
   </script>
 </body>
 </html>
