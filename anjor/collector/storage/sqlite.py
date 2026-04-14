@@ -177,10 +177,10 @@ class SQLiteBackend(StorageBackend):
             """INSERT INTO llm_calls (
                 trace_id, session_id, agent_id, timestamp, sequence_no,
                 model, latency_ms,
-                token_input, token_output, token_cache_read,
+                token_input, token_output, token_cache_read, token_cache_write,
                 context_window_used, context_window_limit, context_utilisation,
                 prompt_hash, system_prompt_hash, messages_count, finish_reason
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 event_data.get("trace_id", ""),
                 event_data.get("session_id", ""),
@@ -192,6 +192,7 @@ class SQLiteBackend(StorageBackend):
                 usage.get("input"),
                 usage.get("output"),
                 usage.get("cache_read"),
+                usage.get("cache_creation"),
                 event_data.get("context_window_used"),
                 event_data.get("context_window_limit"),
                 event_data.get("context_utilisation"),
@@ -316,11 +317,15 @@ class SQLiteBackend(StorageBackend):
         cursor = await self._conn.execute(
             """SELECT
                 model,
-                count(*) as call_count,
-                avg(latency_ms) as avg_latency_ms,
-                avg(token_input) as avg_token_input,
-                avg(token_output) as avg_token_output,
-                avg(context_utilisation) as avg_context_utilisation
+                count(*)                    AS call_count,
+                avg(latency_ms)             AS avg_latency_ms,
+                avg(token_input)            AS avg_token_input,
+                avg(token_output)           AS avg_token_output,
+                avg(context_utilisation)    AS avg_context_utilisation,
+                sum(coalesce(token_input,  0)) AS total_token_input,
+                sum(coalesce(token_output, 0)) AS total_token_output,
+                sum(coalesce(token_cache_read,  0)) AS total_cache_read,
+                sum(coalesce(token_cache_write, 0)) AS total_cache_write
                FROM llm_calls
                GROUP BY model"""
         )
@@ -333,9 +338,34 @@ class SQLiteBackend(StorageBackend):
                 avg_token_input=row["avg_token_input"] or 0.0,
                 avg_token_output=row["avg_token_output"] or 0.0,
                 avg_context_utilisation=row["avg_context_utilisation"] or 0.0,
+                total_token_input=row["total_token_input"] or 0,
+                total_token_output=row["total_token_output"] or 0,
+                total_cache_read=row["total_cache_read"] or 0,
+                total_cache_write=row["total_cache_write"] or 0,
             )
             for row in rows
         ]
+
+    async def list_daily_usage(self, days: int = 14) -> list[dict[str, Any]]:
+        """Return token usage grouped by date and model for the last N days."""
+        assert self._conn is not None
+        cursor = await self._conn.execute(
+            """SELECT
+                substr(timestamp, 1, 10)       AS date,
+                model,
+                sum(coalesce(token_input,  0)) AS tokens_in,
+                sum(coalesce(token_output, 0)) AS tokens_out,
+                sum(coalesce(token_cache_read,  0)) AS cache_read,
+                sum(coalesce(token_cache_write, 0)) AS cache_write,
+                count(*)                       AS calls
+               FROM llm_calls
+               WHERE timestamp >= datetime('now', ?)
+               GROUP BY date, model
+               ORDER BY date ASC""",
+            (f"-{days} days",),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
 
     async def write_schema_snapshot(self, snap: SchemaSnapshot) -> None:
         assert self._conn is not None

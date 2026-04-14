@@ -105,11 +105,16 @@ class OpenAIParser(BaseParser):
         usage = response_body.get("usage", {})
         token_input = usage.get("prompt_tokens", 0)
         token_output = usage.get("completion_tokens", 0)
+        # OpenAI surfaces cached prompt tokens in prompt_tokens_details (read-only, no creation)
+        prompt_details = usage.get("prompt_tokens_details") or {}
+        token_cache_read = prompt_details.get("cached_tokens", 0)
         token_usage: TokenUsage | None = None
         llm_token_usage: LLMTokenUsage | None = None
         if usage:
             token_usage = TokenUsage(input=token_input, output=token_output)
-            llm_token_usage = LLMTokenUsage(input=token_input, output=token_output)
+            llm_token_usage = LLMTokenUsage(
+                input=token_input, output=token_output, cache_read=token_cache_read
+            )
 
         # ── IDs ───────────────────────────────────────────────────────────────
         trace_id_val = str(uuid4())

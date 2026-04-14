@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, HTTPException
 
-from anjor.collector.api.schemas import LLMDetailItem, LLMSummaryItem
+from anjor.collector.api.schemas import DailyUsageItem, LLMDetailItem, LLMSummaryItem
 from anjor.collector.storage.base import LLMQueryFilters
 
 if TYPE_CHECKING:
@@ -28,9 +28,19 @@ def make_llm_router(service: CollectorService) -> APIRouter:
                 avg_token_input=s.avg_token_input,
                 avg_token_output=s.avg_token_output,
                 avg_context_utilisation=s.avg_context_utilisation,
+                total_token_input=s.total_token_input,
+                total_token_output=s.total_token_output,
+                total_cache_read=s.total_cache_read,
+                total_cache_write=s.total_cache_write,
             )
             for s in summaries
         ]
+
+    @llm_router.get("/llm/usage/daily", response_model=list[DailyUsageItem])
+    async def get_daily_usage(days: int = 14) -> list[DailyUsageItem]:
+        """Return token usage grouped by date and model for the last N days."""
+        rows = await service.storage.list_daily_usage(days=days)
+        return [DailyUsageItem(**row) for row in rows]
 
     @llm_router.get("/llm/trace/{trace_id}", response_model=list[LLMDetailItem])
     async def get_llm_calls_for_trace(trace_id: str) -> list[dict[str, Any]]:

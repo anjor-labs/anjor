@@ -378,3 +378,82 @@ class TestSQLiteBackendPhase3:
         results = await storage.query_drift_summary()
         names = {r["tool_name"] for r in results}
         assert names == {"a", "b"}
+
+
+class TestCacheTokenStorage:
+    """Tests for cache_creation (write) token storage and LLM summary totals."""
+
+    def _llm_event(self, model: str = "claude-haiku-4-5-20251001", **usage_kwargs: object) -> dict:
+        from datetime import UTC, datetime
+
+        return {
+            "trace_id": "t1",
+            "session_id": "s1",
+            "model": model,
+            "latency_ms": 100.0,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "token_usage": {
+                "input": 100,
+                "output": 50,
+                "cache_read": 0,
+                "cache_creation": 0,
+                **usage_kwargs,
+            },
+        }
+
+    async def test_cache_write_stored(self, storage: SQLiteBackend) -> None:
+        await storage.write_llm_event(self._llm_event(cache_creation=500))
+        rows = await storage.query_llm_calls(LLMQueryFilters())
+        assert rows[0]["token_cache_write"] == 500
+
+    async def test_cache_read_and_write_both_stored(self, storage: SQLiteBackend) -> None:
+        await storage.write_llm_event(self._llm_event(cache_read=1000, cache_creation=200))
+        rows = await storage.query_llm_calls(LLMQueryFilters())
+        assert rows[0]["token_cache_read"] == 1000
+        assert rows[0]["token_cache_write"] == 200
+
+    async def test_llm_summary_includes_totals(self, storage: SQLiteBackend) -> None:
+        await storage.write_llm_event(self._llm_event(input=100, output=50))
+        await storage.write_llm_event(self._llm_event(input=200, output=80))
+        summaries = await storage.list_llm_summaries()
+        assert len(summaries) == 1
+        s = summaries[0]
+        assert s.total_token_input == 300
+        assert s.total_token_output == 130
+
+    async def test_llm_summary_includes_cache_totals(self, storage: SQLiteBackend) -> None:
+        await storage.write_llm_event(self._llm_event(cache_read=1000, cache_creation=400))
+        await storage.write_llm_event(self._llm_event(cache_read=500, cache_creation=200))
+        summaries = await storage.list_llm_summaries()
+        s = summaries[0]
+        assert s.total_cache_read == 1500
+        assert s.total_cache_write == 600
+
+    async def test_list_daily_usage_empty(self, storage: SQLiteBackend) -> None:
+        rows = await storage.list_daily_usage(days=14)
+        assert rows == []
+
+    async def test_list_daily_usage_returns_today(self, storage: SQLiteBackend) -> None:
+        await storage.write_llm_event(
+            self._llm_event(input=100, output=50, cache_read=200, cache_creation=30)
+        )
+        rows = await storage.list_daily_usage(days=14)
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["model"] == "claude-haiku-4-5-20251001"
+        assert row["tokens_in"] == 100
+        assert row["tokens_out"] == 50
+        assert row["cache_read"] == 200
+        assert row["cache_write"] == 30
+        assert row["calls"] == 1
+
+    async def test_list_daily_usage_aggregates_by_model(self, storage: SQLiteBackend) -> None:
+        await storage.write_llm_event(self._llm_event("modelA", input=100, output=50))
+        await storage.write_llm_event(self._llm_event("modelA", input=200, output=80))
+        await storage.write_llm_event(self._llm_event("modelB", input=300, output=100))
+        rows = await storage.list_daily_usage(days=14)
+        models = {r["model"]: r for r in rows}
+        assert "modelA" in models
+        assert "modelB" in models
+        assert models["modelA"]["tokens_in"] == 300
+        assert models["modelB"]["tokens_in"] == 300

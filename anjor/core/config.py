@@ -100,6 +100,9 @@ class AnjorConfig(BaseSettings):
     batch_size: int = Field(default=100, ge=1)
     batch_interval_ms: int = Field(default=500, ge=1)
 
+    # Terminal summary printed at process exit (disable with ANJOR_SHOW_SUMMARY=false)
+    show_summary: bool = Field(default=True)
+
     # Sanitisation config (nested)
     sanitise: SanitiseConfig = Field(default_factory=SanitiseConfig)
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Anjor — LLM</title>
+  <title>Anjor — Usage</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="utils.js"></script>
 </head>
@@ -15,16 +15,35 @@
   <script>
     document.getElementById('nav').innerHTML = buildNav('/ui/llm.html')
 
-    let lastUpdated = ''
+    // ── Cost table (input_per_m, cache_write_per_m, cache_read_per_m, output_per_m) ──
+    const COST = {
+      'claude-opus-4-6':            [15.00, 18.75,  1.50, 75.00],
+      'claude-sonnet-4-6':          [ 3.00,  3.75,  0.30, 15.00],
+      'claude-haiku-4-5-20251001':  [ 0.80,  1.00,  0.08,  4.00],
+      'claude-haiku-4-5':           [ 0.80,  1.00,  0.08,  4.00],
+      'claude-3-5-sonnet-20241022': [ 3.00,  3.75,  0.30, 15.00],
+      'claude-3-5-haiku-20241022':  [ 0.80,  1.00,  0.08,  4.00],
+      'claude-3-opus-20240229':     [15.00, 18.75,  1.50, 75.00],
+      'gpt-4o':                     [ 2.50,  2.50,  1.25, 10.00],
+      'gpt-4o-mini':                [ 0.15,  0.15,  0.075, 0.60],
+      'gpt-4-turbo':                [10.00, 10.00,  5.00, 30.00],
+      'o1':                         [15.00, 15.00,  7.50, 60.00],
+      'o3-mini':                    [ 1.10,  1.10,  0.55,  4.40],
+      'gemini-2.0-flash':           [ 0.10,  0.10,  0.025, 0.40],
+      'gemini-1.5-pro':             [ 1.25,  1.25,  0.3125, 5.00],
+      'gemini-1.5-flash':           [ 0.075, 0.075, 0.01875, 0.30],
+    }
+    const DEFAULT_COST = [3.00, 3.75, 0.30, 15.00]
 
-    async function load() {
-      try {
-        const summaries = await fetch(`${API}/llm`).then(r => r.json())
-        lastUpdated = new Date().toLocaleTimeString()
-        render(summaries)
-      } catch {
-        document.getElementById('app').innerHTML = errorBanner('Cannot reach collector at :' + (window.location.port || 80))
-      }
+    function modelCost(model, tokensIn, cacheWrite, cacheRead, tokensOut) {
+      const r = COST[model] || DEFAULT_COST
+      return (tokensIn * r[0] + cacheWrite * r[1] + cacheRead * r[2] + tokensOut * r[3]) / 1_000_000
+    }
+
+    function cacheSavings(model, cacheRead) {
+      // Savings = what cacheRead tokens would have cost at full input rate minus what was paid
+      const r = COST[model] || DEFAULT_COST
+      return cacheRead * (r[0] - r[2]) / 1_000_000
     }
 
     function provider(model) {
@@ -45,77 +64,246 @@
       return `<span class="text-xs px-1.5 py-0.5 rounded font-sans ${colours[p]}">${p}</span>`
     }
 
-    function render(summaries) {
+    function fmtCost(usd) {
+      if (usd < 0.0001) return '$0.0000'
+      if (usd < 0.01)   return '$' + usd.toFixed(4)
+      return '$' + usd.toFixed(2)
+    }
+
+    let selectedModel = 'all'
+    let summaries = []
+    let dailyRows = []
+
+    async function load() {
+      try {
+        ;[summaries, dailyRows] = await Promise.all([
+          fetch(`${API}/llm`).then(r => r.json()),
+          fetch(`${API}/llm/usage/daily?days=14`).then(r => r.json()),
+        ])
+        render()
+      } catch {
+        document.getElementById('app').innerHTML =
+          errorBanner('Cannot reach collector at :' + (window.location.port || 80))
+      }
+    }
+
+    function render() {
       if (summaries.length === 0) {
         document.getElementById('app').innerHTML = `
-          <div class="flex items-center justify-between">
-            <div>
-              <h1 class="text-xl font-bold text-white">LLM Calls</h1>
-              <p class="text-xs text-gray-500 mt-1">Aggregated stats per model</p>
-            </div>
-          </div>
+          <h1 class="text-xl font-bold text-white">Usage</h1>
           <p class="text-gray-600 text-sm">No LLM calls recorded yet.</p>`
         return
       }
 
-      const totalCalls = summaries.reduce((s, m) => s + m.call_count, 0)
-      const avgUtil = summaries.reduce((s, m) => s + m.avg_context_utilisation * m.call_count, 0) / (totalCalls || 1)
+      const visible = selectedModel === 'all'
+        ? summaries
+        : summaries.filter(s => s.model === selectedModel)
 
-      const cards = `
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-          ${statCard('Total LLM Calls', totalCalls.toLocaleString())}
-          ${statCard('Models Used', summaries.length.toString())}
-          <div class="bg-gray-900 border border-gray-800 rounded-lg p-5">
-            <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Avg Context Util.</p>
-            <p class="text-2xl font-bold ${utilColor(avgUtil)}">${fmt.pct(avgUtil)}</p>
-          </div>
-        </div>`
-
-      const table = `
-        <table class="w-full text-sm">
-          <thead><tr class="border-b border-gray-800">
-            <th class="text-left text-xs text-gray-500 uppercase pb-3 pr-4">Model</th>
-            <th class="text-left text-xs text-gray-500 uppercase pb-3 pr-4">Provider</th>
-            <th class="text-right text-xs text-gray-500 uppercase pb-3 pr-4">Calls</th>
-            <th class="text-right text-xs text-gray-500 uppercase pb-3 pr-4">Avg Latency</th>
-            <th class="text-right text-xs text-gray-500 uppercase pb-3 pr-4">Avg Tokens In</th>
-            <th class="text-right text-xs text-gray-500 uppercase pb-3 pr-4">Avg Tokens Out</th>
-            <th class="text-right text-xs text-gray-500 uppercase pb-3">Avg Context Util.</th>
-          </tr></thead>
-          <tbody>${summaries.map(m => `
-            <tr class="border-b border-gray-900 hover:bg-gray-900/50">
-              <td class="py-3 pr-4 text-gray-200 font-mono text-xs">
-                <a href="/ui/llm_trace.html?model=${encodeURIComponent(m.model)}" class="hover:text-blue-400">${m.model}</a>
-              </td>
-              <td class="py-3 pr-4">${providerBadge(m.model)}</td>
-              <td class="py-3 pr-4 text-right text-gray-300">${m.call_count.toLocaleString()}</td>
-              <td class="py-3 pr-4 text-right text-gray-300">${fmt.ms(m.avg_latency_ms)}</td>
-              <td class="py-3 pr-4 text-right text-gray-300">${m.avg_token_input.toFixed(0)}</td>
-              <td class="py-3 pr-4 text-right text-gray-300">${m.avg_token_output.toFixed(0)}</td>
-              <td class="py-3 text-right ${utilColor(m.avg_context_utilisation)}">${fmt.pct(m.avg_context_utilisation)}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-        <p class="text-xs text-gray-600">
-          To view per-trace context growth, navigate to
-          <code class="bg-gray-900 px-1.5 py-0.5 rounded">/ui/llm_trace.html?id=&lt;trace_id&gt;</code>.
-          Trace IDs appear when passed via <code class="bg-gray-900 px-1.5 py-0.5 rounded">metadata.trace_id</code>.
-        </p>`
+      // ── Fleet-level totals ────────────────────────────────────────────────
+      const totIn    = visible.reduce((a, s) => a + (s.total_token_input  || 0), 0)
+      const totOut   = visible.reduce((a, s) => a + (s.total_token_output || 0), 0)
+      const totCW    = visible.reduce((a, s) => a + (s.total_cache_write  || 0), 0)
+      const totCR    = visible.reduce((a, s) => a + (s.total_cache_read   || 0), 0)
+      const totCost  = visible.reduce((a, s) => a + modelCost(s.model, s.total_token_input || 0, s.total_cache_write || 0, s.total_cache_read || 0, s.total_token_output || 0), 0)
+      const totSaved = visible.reduce((a, s) => a + cacheSavings(s.model, s.total_cache_read || 0), 0)
+      const totCalls = visible.reduce((a, s) => a + s.call_count, 0)
+      const hasCacheData = totCW > 0 || totCR > 0
 
       document.getElementById('app').innerHTML = `
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 class="text-xl font-bold text-white">LLM Calls</h1>
-            <p class="text-xs text-gray-500 mt-1">Aggregated stats per model</p>
+            <h1 class="text-xl font-bold text-white">Usage</h1>
+            <p class="text-xs text-gray-500 mt-1">Token consumption and cost across all LLM calls</p>
           </div>
-          ${lastUpdatedBadge(lastUpdated)}
+          <div class="flex items-center gap-2">
+            <label class="text-xs text-gray-500">Model</label>
+            <select id="modelFilter" class="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 font-mono">
+              <option value="all">All models</option>
+              ${summaries.map(s => `<option value="${s.model}" ${s.model === selectedModel ? 'selected' : ''}>${s.model}</option>`).join('')}
+            </select>
+          </div>
         </div>
-        ${cards}
-        ${table}`
+
+        ${heroCards(totIn, totOut, totCW, totCR, totCost, totSaved, totCalls, hasCacheData)}
+        ${perModelTable(visible, hasCacheData)}
+        ${dailyChart(dailyRows, selectedModel)}
+      `
+
+      document.getElementById('modelFilter').addEventListener('change', e => {
+        selectedModel = e.target.value
+        render()
+      })
+    }
+
+    // ── Hero cards ────────────────────────────────────────────────────────────
+    function heroCards(totIn, totOut, totCW, totCR, totCost, totSaved, totCalls, hasCacheData) {
+      const cards = [
+        heroCard('Total tokens in',  fmt.num(totIn),  'text-blue-400'),
+        heroCard('Total tokens out', fmt.num(totOut), 'text-purple-400'),
+        heroCard('Estimated cost',   fmtCost(totCost), 'text-yellow-400'),
+        heroCard('LLM calls',        totCalls.toLocaleString(), 'text-gray-200'),
+      ]
+      if (hasCacheData) {
+        cards.push(heroCard('Cache writes', fmt.num(totCW), 'text-orange-400'))
+        cards.push(heroCard('Cache reads',  fmt.num(totCR), 'text-green-400'))
+        if (totSaved > 0)
+          cards.push(heroCard('Cache savings', fmtCost(totSaved), 'text-green-300'))
+      }
+      const cols = cards.length <= 4 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-7'
+      return `<div class="grid ${cols} gap-3">${cards.join('')}</div>`
+    }
+
+    function heroCard(label, value, colour) {
+      return `<div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+        <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">${label}</p>
+        <p class="text-xl font-bold ${colour}">${value}</p>
+      </div>`
+    }
+
+    // ── Per-model table ───────────────────────────────────────────────────────
+    function perModelTable(visible, hasCacheData) {
+      const sorted = [...visible].sort((a, b) => {
+        const ca = modelCost(a.model, a.total_token_input || 0, a.total_cache_write || 0, a.total_cache_read || 0, a.total_token_output || 0)
+        const cb = modelCost(b.model, b.total_token_input || 0, b.total_cache_write || 0, b.total_cache_read || 0, b.total_token_output || 0)
+        return cb - ca
+      })
+
+      const cacheHeaders = hasCacheData
+        ? `<th class="text-right pb-3 pr-4">Cache write</th>
+           <th class="text-right pb-3 pr-4">Cache read</th>
+           <th class="text-right pb-3 pr-4">Cache saved</th>`
+        : ''
+
+      const rows = sorted.map(s => {
+        const cost = modelCost(s.model, s.total_token_input || 0, s.total_cache_write || 0, s.total_cache_read || 0, s.total_token_output || 0)
+        const saved = cacheSavings(s.model, s.total_cache_read || 0)
+        const cacheHitRate = (s.total_cache_read || 0) + (s.total_token_input || 0) > 0
+          ? (s.total_cache_read || 0) / ((s.total_cache_read || 0) + (s.total_token_input || 0))
+          : null
+        const cacheCells = hasCacheData
+          ? `<td class="py-3 pr-4 text-right text-orange-300/80 text-xs">${fmt.num(s.total_cache_write || 0)}</td>
+             <td class="py-3 pr-4 text-right">
+               <span class="text-green-300/80 text-xs">${fmt.num(s.total_cache_read || 0)}</span>
+               ${cacheHitRate !== null && cacheHitRate > 0 ? `<span class="ml-1 text-xs text-gray-600">${fmt.pct(cacheHitRate)} hit</span>` : ''}
+             </td>
+             <td class="py-3 pr-4 text-right text-green-400 text-xs">${saved > 0 ? fmtCost(saved) : '—'}</td>`
+          : ''
+        return `<tr class="border-b border-gray-900 hover:bg-gray-900/50">
+          <td class="py-3 pr-4 text-xs">
+            <a href="/ui/llm_trace.html?model=${encodeURIComponent(s.model)}" class="text-gray-200 hover:text-blue-400">${s.model}</a>
+          </td>
+          <td class="py-3 pr-4">${providerBadge(s.model)}</td>
+          <td class="py-3 pr-4 text-right text-gray-300">${s.call_count.toLocaleString()}</td>
+          <td class="py-3 pr-4 text-right text-blue-300/80 text-xs">${fmt.num(s.total_token_input || 0)}</td>
+          <td class="py-3 pr-4 text-right text-purple-300/80 text-xs">${fmt.num(s.total_token_output || 0)}</td>
+          ${cacheCells}
+          <td class="py-3 pr-4 text-right text-yellow-400 font-medium">${fmtCost(cost)}</td>
+          <td class="py-3 text-right ${utilColor(s.avg_context_utilisation)}">${fmt.pct(s.avg_context_utilisation)}</td>
+        </tr>`
+      }).join('')
+
+      return `
+        <section>
+          <h2 class="text-sm font-semibold text-white mb-3">By model <span class="text-gray-500 font-normal">(sorted by cost)</span></h2>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead><tr class="border-b border-gray-800 text-left text-xs text-gray-500 uppercase">
+                <th class="pb-3 pr-4">Model</th>
+                <th class="pb-3 pr-4">Provider</th>
+                <th class="text-right pb-3 pr-4">Calls</th>
+                <th class="text-right pb-3 pr-4">Tokens in</th>
+                <th class="text-right pb-3 pr-4">Tokens out</th>
+                ${cacheHeaders}
+                <th class="text-right pb-3 pr-4">Est. cost</th>
+                <th class="text-right pb-3">Ctx util.</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+          <p class="text-xs text-gray-600 mt-2">Cost estimates use published list prices. Cache rates: write 1.25× input, read 0.10× input (Anthropic); read 0.50× input (OpenAI).</p>
+        </section>`
+    }
+
+    // ── Daily usage chart (SVG bars) ──────────────────────────────────────────
+    function dailyChart(rows, modelFilter) {
+      const filtered = modelFilter === 'all' ? rows : rows.filter(r => r.model === modelFilter)
+      if (filtered.length === 0)
+        return `<section><h2 class="text-sm font-semibold text-white mb-2">Daily trend</h2>
+          <p class="text-xs text-gray-600">No daily data yet.</p></section>`
+
+      // Aggregate by date across models
+      const byDate = {}
+      for (const r of filtered) {
+        if (!byDate[r.date]) byDate[r.date] = { tokens_in: 0, tokens_out: 0, cache_read: 0, cache_write: 0, calls: 0 }
+        byDate[r.date].tokens_in    += r.tokens_in
+        byDate[r.date].tokens_out   += r.tokens_out
+        byDate[r.date].cache_read   += r.cache_read
+        byDate[r.date].cache_write  += r.cache_write
+        byDate[r.date].calls        += r.calls
+      }
+
+      const dates = Object.keys(byDate).sort()
+      const maxTotal = Math.max(...dates.map(d => byDate[d].tokens_in + byDate[d].tokens_out + byDate[d].cache_read + byDate[d].cache_write), 1)
+
+      const W = 720, H = 120, pad = 4
+      const barW = Math.max(4, Math.floor((W - pad * (dates.length + 1)) / dates.length))
+      const gap  = Math.floor((W - barW * dates.length) / (dates.length + 1))
+
+      let bars = ''
+      dates.forEach((date, i) => {
+        const d = byDate[date]
+        const x = gap + i * (barW + gap)
+        const totalToks = d.tokens_in + d.tokens_out + d.cache_read + d.cache_write
+        const fullH = H - 20
+        const scale = fullH / maxTotal
+
+        // Stacked: cache_write (orange) / tokens_in (blue) / cache_read (green) / tokens_out (purple)
+        let y = H - 16
+        const segments = [
+          { val: d.cache_write, colour: '#f97316' },
+          { val: d.tokens_in,   colour: '#60a5fa' },
+          { val: d.cache_read,  colour: '#4ade80' },
+          { val: d.tokens_out,  colour: '#a78bfa' },
+        ]
+        for (const seg of segments) {
+          if (!seg.val) continue
+          const h = Math.max(1, Math.round(seg.val * scale))
+          y -= h
+          bars += `<rect x="${x}" y="${y}" width="${barW}" height="${h}" fill="${seg.colour}" opacity="0.8">
+            <title>${date} · ${seg.colour === '#60a5fa' ? 'in' : seg.colour === '#a78bfa' ? 'out' : seg.colour === '#4ade80' ? 'cache read' : 'cache write'}: ${fmt.num(seg.val)}</title>
+          </rect>`
+        }
+        // Date label (every other to avoid overlap)
+        if (i % Math.ceil(dates.length / 7) === 0 || i === dates.length - 1) {
+          const label = date.slice(5) // MM-DD
+          bars += `<text x="${x + barW / 2}" y="${H}" text-anchor="middle" font-size="9" fill="#6b7280">${label}</text>`
+        }
+      })
+
+      const hasCacheInChart = dates.some(d => byDate[d].cache_read > 0 || byDate[d].cache_write > 0)
+      const legend = `
+        <div class="flex items-center gap-4 text-xs text-gray-400 mt-2">
+          <span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-sm" style="background:#60a5fa"></span>Tokens in</span>
+          <span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-sm" style="background:#a78bfa"></span>Tokens out</span>
+          ${hasCacheInChart ? `
+          <span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-sm" style="background:#f97316"></span>Cache write</span>
+          <span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-sm" style="background:#4ade80"></span>Cache read</span>` : ''}
+        </div>`
+
+      return `
+        <section>
+          <h2 class="text-sm font-semibold text-white mb-3">Daily trend <span class="text-gray-500 font-normal">(last 14 days)</span></h2>
+          <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+            <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" class="overflow-visible">
+              ${bars}
+            </svg>
+            ${legend}
+          </div>
+        </section>`
     }
 
     load()
-    setInterval(load, 5000)
+    setInterval(load, 10000)
   </script>
 </body>
 </html>

@@ -50,6 +50,22 @@ class LLMSummaryItem(BaseModel):
     avg_token_input: float
     avg_token_output: float
     avg_context_utilisation: float
+    total_token_input: int = 0
+    total_token_output: int = 0
+    total_cache_read: int = 0
+    total_cache_write: int = 0
+
+
+class DailyUsageItem(BaseModel):
+    """Token usage for a single model on a single day."""
+
+    date: str
+    model: str
+    tokens_in: int
+    tokens_out: int
+    cache_read: int
+    cache_write: int
+    calls: int
 
 
 class LLMDetailItem(BaseModel):

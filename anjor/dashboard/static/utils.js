@@ -7,6 +7,7 @@ const fmt = {
   pct:     (v) => v == null ? '—' : (v * 100).toFixed(1) + '%',
   ms:      (v) => v == null ? '—' : v >= 1000 ? (v / 1000).toFixed(2) + 's' : v.toFixed(0) + 'ms',
   tokens:  (v) => v == null ? '—' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v),
+  num:     (v) => v == null ? '—' : v >= 1_000_000 ? (v / 1_000_000).toFixed(2) + 'M' : v >= 1_000 ? (v / 1_000).toFixed(1) + 'k' : String(v),
   ts:      (v) => v == null ? '—' : new Date(v).toLocaleTimeString(),
   utilPct: (v) => v == null ? '—' : (v * 100).toFixed(1) + '%',
 }
@@ -47,7 +48,7 @@ const NAV_LINKS = [
   ['/ui/tools.html', 'Tools'],
   ['/ui/calls.html', 'Calls'],
   ['/ui/alerts.html', 'Alerts'],
-  ['/ui/llm.html', 'LLM'],
+  ['/ui/llm.html', 'Usage'],
   ['/ui/intelligence.html', 'Intelligence'],
   ['/ui/traces.html', 'Traces'],
 ]

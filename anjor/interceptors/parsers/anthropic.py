@@ -123,6 +123,7 @@ class AnthropicParser(BaseParser):
             llm_token_usage = LLMTokenUsage(
                 input=usage.get("input_tokens", 0),
                 output=usage.get("output_tokens", 0),
+                cache_creation=usage.get("cache_creation_input_tokens", 0),
                 cache_read=usage.get("cache_read_input_tokens", 0),
             )
 

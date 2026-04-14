@@ -17,8 +17,10 @@ class LLMTokenUsage(BaseModel):
 
     input: int = Field(ge=0)
     output: int = Field(ge=0)
-    # DECISION: cache_read separate from input so cost calculations can distinguish
-    # cached vs fresh tokens. Cached tokens are billed at a lower rate.
+    # DECISION: cache fields separate from input so cost calculations can use
+    # provider-specific rates. cache_creation is billed at 1.25× input rate;
+    # cache_read is billed at 0.10× input rate (Anthropic prompt caching).
+    cache_creation: int = Field(default=0, ge=0)
     cache_read: int = Field(default=0, ge=0)
 
 

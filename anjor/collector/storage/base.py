@@ -67,6 +67,10 @@ class LLMSummary:
     avg_token_input: float
     avg_token_output: float
     avg_context_utilisation: float
+    total_token_input: int = 0
+    total_token_output: int = 0
+    total_cache_read: int = 0
+    total_cache_write: int = 0
 
 
 @dataclass
@@ -110,6 +114,11 @@ class StorageBackend(ABC):
     @abstractmethod
     async def list_llm_summaries(self) -> list[LLMSummary]:
         """Return aggregated stats per model."""
+        ...
+
+    @abstractmethod
+    async def list_daily_usage(self, days: int = 14) -> list[dict[str, Any]]:
+        """Return token usage grouped by date and model for the last N days."""
         ...
 
     @abstractmethod

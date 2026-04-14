@@ -275,3 +275,54 @@ class TestCallsEndpoint:
         client.post("/events", json=sample_llm_event())
         resp = client.get("/calls")
         assert resp.json() == []
+
+
+class TestLLMUsageEndpoints:
+    """Tests for cache fields in /llm and new /llm/usage/daily endpoint."""
+
+    def test_llm_summary_includes_totals(self, client: TestClient) -> None:
+        client.post("/events", json=sample_llm_event())
+        client.post("/events", json=sample_llm_event())
+        item = client.get("/llm").json()[0]
+        assert "total_token_input" in item
+        assert "total_token_output" in item
+        assert item["total_token_input"] == 200  # 2 × 100
+        assert item["total_token_output"] == 100  # 2 × 50
+
+    def test_llm_summary_includes_cache_fields(self, client: TestClient) -> None:
+        usage = {"input": 100, "output": 50, "cache_read": 300, "cache_creation": 150}
+        event = sample_llm_event(token_usage=usage)
+        client.post("/events", json=event)
+        item = client.get("/llm").json()[0]
+        assert "total_cache_read" in item
+        assert "total_cache_write" in item
+        assert item["total_cache_read"] == 300
+        assert item["total_cache_write"] == 150
+
+    def test_daily_usage_empty(self, client: TestClient) -> None:
+        resp = client.get("/llm/usage/daily")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_daily_usage_returns_data(self, client: TestClient) -> None:
+        client.post("/events", json=sample_llm_event())
+        resp = client.get("/llm/usage/daily?days=14")
+        assert resp.status_code == 200
+        rows = resp.json()
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["model"] == "claude-3-5-sonnet-20241022"
+        assert row["tokens_in"] == 100
+        assert row["tokens_out"] == 50
+        assert row["calls"] == 1
+
+    def test_daily_usage_fields(self, client: TestClient) -> None:
+        client.post("/events", json=sample_llm_event())
+        row = client.get("/llm/usage/daily").json()[0]
+        assert "date" in row
+        assert "model" in row
+        assert "tokens_in" in row
+        assert "tokens_out" in row
+        assert "cache_read" in row
+        assert "cache_write" in row
+        assert "calls" in row

@@ -199,6 +199,15 @@ class TestLLMCallEvent:
         usage = LLMTokenUsage(input=100, output=50)
         assert usage.cache_read == 0
 
+    def test_token_usage_cache_creation(self) -> None:
+        usage = LLMTokenUsage(input=100, output=50, cache_creation=400, cache_read=1000)
+        assert usage.cache_creation == 400
+        assert usage.cache_read == 1000
+
+    def test_token_usage_cache_creation_defaults_zero(self) -> None:
+        usage = LLMTokenUsage(input=100, output=50)
+        assert usage.cache_creation == 0
+
     def test_prompt_hash(self) -> None:
         event = self._make(
             prompt_hash="abc123",
