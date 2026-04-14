@@ -51,6 +51,8 @@ dev = [
     "pytest-cov>=5.0",
     "hypothesis>=6.100",
     "respx>=0.21",
+    "requests>=2.31",
+    "types-requests>=2.31",
     "ruff>=0.4",
     "mypy>=1.10",
     "pre-commit>=3.7",
@@ -73,6 +75,8 @@ ignore = ["S101", "S603"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
+# E402 fires on imports that follow pytest.importorskip() — this is intentional.
+"tests/**/test_requests_patch.py" = ["E402"]
 
 [tool.mypy]
 python_version = "3.11"

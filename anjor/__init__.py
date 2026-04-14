@@ -35,6 +35,7 @@ from anjor.core.config import AnjorConfig
 from anjor.core.pipeline.pipeline import EventPipeline
 from anjor.interceptors.parsers.registry import build_default_registry
 from anjor.interceptors.patch import PatchInterceptor
+from anjor.interceptors.requests_patch import RequestsInterceptor as _RequestsInterceptor
 
 __version__ = "0.5.1"
 __all__ = [
@@ -59,6 +60,8 @@ _interceptor: PatchInterceptor | None = None
 _bg_loop: asyncio.AbstractEventLoop | None = None
 _bg_thread: threading.Thread | None = None
 _session_trace_id: str | None = None  # auto-generated at patch() time
+
+_requests_interceptor: _RequestsInterceptor | None = None
 
 
 def _ensure_background_loop() -> asyncio.AbstractEventLoop:
@@ -160,7 +163,7 @@ def patch(
     Returns:
         The installed PatchInterceptor (idempotent — safe to call multiple times).
     """
-    global _interceptor, _config, _session_trace_id
+    global _interceptor, _config, _session_trace_id, _requests_interceptor
 
     if config is not None:
         _config = config
@@ -198,5 +201,16 @@ def patch(
 
     if not _interceptor.is_installed:
         _interceptor.install()
+
+    # Also intercept the requests library if it is installed.  Both interceptors
+    # share the same pipeline so all events flow to the same collector.
+    if _requests_interceptor is None:
+        _requests_interceptor = _RequestsInterceptor(
+            pipeline=resolved_pipeline,
+            parser_registry=build_default_registry(),
+            default_trace_id=_session_trace_id or "",
+        )
+    if not _requests_interceptor.is_installed:
+        _requests_interceptor.install()  # silent no-op when requests is absent
 
     return _interceptor

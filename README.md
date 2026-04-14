@@ -207,8 +207,6 @@ anjor.patch(config=AnjorConfig(db_path="my_project.db", batch_size=1))
 
 ## Limitations
 
-- `requests` library not intercepted — all three provider SDKs use httpx by default
-- Streaming responses are not parsed; only non-streaming calls are captured
 - No cloud sync, authentication, or team features
 
 ---

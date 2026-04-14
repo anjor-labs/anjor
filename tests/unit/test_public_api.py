@@ -14,20 +14,27 @@ from anjor.interceptors.patch import PatchInterceptor
 from anjor.interceptors.proxy import ProxyInterceptor
 
 
+def _reset_anjor_globals() -> None:
+    """Reset all module-level singletons between tests."""
+    anjor._config = None
+    anjor._pipeline = None
+    if anjor._interceptor is not None:
+        anjor._interceptor.uninstall()
+    anjor._interceptor = None
+    if anjor._requests_interceptor is not None:
+        anjor._requests_interceptor.uninstall()
+    anjor._requests_interceptor = None
+    # Background loop/thread are daemon threads — leave them running to avoid
+    # race conditions on teardown, but clear the module refs so the next test
+    # that calls patch() re-evaluates whether a live loop exists.
+    if anjor._bg_loop is not None and not anjor._bg_loop.is_running():
+        anjor._bg_loop = None
+        anjor._bg_thread = None
+
+
 class TestPublicAPI:
     def teardown_method(self) -> None:
-        """Reset global state between tests."""
-        anjor._config = None
-        anjor._pipeline = None
-        if anjor._interceptor is not None:
-            anjor._interceptor.uninstall()
-        anjor._interceptor = None
-        # Background loop/thread are daemon threads — leave them running to avoid
-        # race conditions on teardown, but clear the module refs so the next test
-        # that calls patch() re-evaluates whether a live loop exists.
-        if anjor._bg_loop is not None and not anjor._bg_loop.is_running():
-            anjor._bg_loop = None
-            anjor._bg_thread = None
+        _reset_anjor_globals()
 
     def test_patch_returns_interceptor(self) -> None:
         interceptor = anjor.patch()
@@ -95,14 +102,7 @@ class TestPublicAPI:
 
 class TestAutoStart:
     def teardown_method(self) -> None:
-        anjor._config = None
-        anjor._pipeline = None
-        if anjor._interceptor is not None:
-            anjor._interceptor.uninstall()
-        anjor._interceptor = None
-        if anjor._bg_loop is not None and not anjor._bg_loop.is_running():
-            anjor._bg_loop = None
-            anjor._bg_thread = None
+        _reset_anjor_globals()
 
     def test_auto_start_disabled_skips_health_check(self) -> None:
         with mock_patch("anjor._collector_running") as mock_check:
