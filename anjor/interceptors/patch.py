@@ -6,7 +6,7 @@ import hashlib
 import threading
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import structlog
@@ -14,6 +14,12 @@ import structlog
 from anjor.core.pipeline.pipeline import EventPipeline
 from anjor.interceptors.base import BaseInterceptor
 from anjor.interceptors.parsers.registry import ParserRegistry, build_default_registry
+from anjor.interceptors.streaming import (
+    _AsyncAccumulatingStream,
+    _SyncAccumulatingStream,
+    build_stream_response_body,
+    parse_sse_events,
+)
 from anjor.interceptors.traceparent import (
     HEADER as TRACEPARENT_HEADER,
 )
@@ -28,6 +34,20 @@ logger = structlog.get_logger(__name__)
 # DECISION: module-level threading.Lock (not asyncio.Lock) because install/uninstall
 # can be called from any thread (e.g. test teardown on a different thread than setup).
 _lock = threading.Lock()
+
+
+def _is_sse_stream(response: httpx.Response) -> bool:
+    """Return True when the response is a live, unread SSE stream.
+
+    Two conditions must both hold:
+    1. Content-Type header signals text/event-stream.
+    2. The response body has not yet been consumed.
+       httpx.Response.is_stream_consumed is False when stream=True was used;
+       it becomes True after read() is called.
+    """
+    if "text/event-stream" not in response.headers.get("content-type", ""):
+        return False
+    return not response.is_stream_consumed
 
 
 def _body_to_dict(content: bytes) -> dict[str, Any]:
@@ -136,6 +156,20 @@ class PatchInterceptor(BaseInterceptor):
             interceptor._inject_traceparent(request)
             start = time.monotonic()
             response = original(client, request, **kwargs)
+
+            if _is_sse_stream(response):
+                # Install a tee wrapper — events are emitted when the stream is exhausted.
+                status_code = response.status_code
+
+                def _on_stream_complete(raw_bytes: bytes) -> None:
+                    latency_ms = (time.monotonic() - start) * 1000
+                    interceptor._process_stream(request, raw_bytes, latency_ms, status_code)
+
+                response.stream = _SyncAccumulatingStream(
+                    cast(httpx.SyncByteStream, response.stream), _on_stream_complete
+                )
+                return response
+
             latency_ms = (time.monotonic() - start) * 1000
             interceptor._process(request, response, latency_ms)
             return response
@@ -152,11 +186,66 @@ class PatchInterceptor(BaseInterceptor):
             interceptor._inject_traceparent(request)
             start = time.monotonic()
             response = await original(client, request, **kwargs)
+
+            if _is_sse_stream(response):
+                status_code = response.status_code
+
+                def _on_async_stream_complete(raw_bytes: bytes) -> None:
+                    latency_ms = (time.monotonic() - start) * 1000
+                    interceptor._process_stream(request, raw_bytes, latency_ms, status_code)
+
+                response.stream = _AsyncAccumulatingStream(
+                    cast(httpx.AsyncByteStream, response.stream), _on_async_stream_complete
+                )
+                return response
+
             latency_ms = (time.monotonic() - start) * 1000
             interceptor._process(request, response, latency_ms)
             return response
 
         return wrapped_async_send
+
+    def _emit_events(
+        self,
+        url: str,
+        request_body: dict[str, Any],
+        response_body: dict[str, Any],
+        latency_ms: float,
+        status_code: int,
+    ) -> None:
+        """Parse events from req/resp bodies, apply context overrides, enqueue all.
+
+        Shared by both the non-streaming (_process) and streaming (_process_stream) paths.
+        """
+        events = self._registry.parse(
+            url=url,
+            request_body=request_body,
+            response_body=response_body,
+            latency_ms=latency_ms,
+            status_code=status_code,
+        )
+
+        # Resolve trace_id and agent_id using a three-level priority:
+        #   1. anjor.span() context vars  — explicit user annotation (highest)
+        #   2. Inferred from request body — auto-detected, zero user changes
+        #   3. Parser-assigned default    — whatever the parser set (lowest)
+        from anjor.context import get_agent_id, get_trace_id
+
+        ctx_trace = get_trace_id()
+        ctx_agent = get_agent_id()
+        effective_trace = ctx_trace or self._default_trace_id
+        effective_agent = ctx_agent or _infer_agent_id(request_body)
+
+        overrides: dict[str, str] = {}
+        if effective_trace:
+            overrides["trace_id"] = effective_trace
+        if effective_agent:
+            overrides["agent_id"] = effective_agent
+        if overrides:
+            events = [e.model_copy(update=overrides) for e in events]
+
+        for event in events:
+            self._pipeline.put(event)
 
     def _process(
         self,
@@ -164,46 +253,39 @@ class PatchInterceptor(BaseInterceptor):
         response: httpx.Response,
         latency_ms: float,
     ) -> None:
-        """Extract events from the request/response and enqueue them."""
+        """Extract events from a completed (non-streaming) request/response."""
         try:
             url = str(request.url)
             request_body = _body_to_dict(request.content)
             response_body = _body_to_dict(response.content)
-            events = self._registry.parse(
-                url=url,
-                request_body=request_body,
-                response_body=response_body,
-                latency_ms=latency_ms,
-                status_code=response.status_code,
-            )
-
-            # Resolve trace_id and agent_id using a three-level priority:
-            #   1. anjor.span() context vars  — explicit user annotation (highest)
-            #   2. Inferred from request body — auto-detected, zero user changes
-            #   3. Parser-assigned default    — whatever the parser set (lowest)
-            from anjor.context import get_agent_id, get_trace_id
-
-            ctx_trace = get_trace_id()
-            ctx_agent = get_agent_id()
-
-            effective_trace = ctx_trace or self._default_trace_id
-            effective_agent = ctx_agent or _infer_agent_id(request_body)
-
-            overrides: dict[str, str] = {}
-            if effective_trace:
-                overrides["trace_id"] = effective_trace
-            if effective_agent:
-                overrides["agent_id"] = effective_agent
-            if overrides:
-                events = [e.model_copy(update=overrides) for e in events]
-
-            for event in events:
-                self._pipeline.put(event)
+            self._emit_events(url, request_body, response_body, latency_ms, response.status_code)
         except Exception as exc:
-            # DECISION: swallow all exceptions here — the interceptor sits on the agent's
-            # critical path; any unhandled error would crash the agent's HTTP call.
+            # DECISION: swallow all exceptions — the interceptor is on the agent's critical path.
             logger.warning(
                 "patch_interceptor_process_error",
+                error=str(exc),
+                url=str(request.url),
+            )
+
+    def _process_stream(
+        self,
+        request: httpx.Request,
+        raw_bytes: bytes,
+        latency_ms: float,
+        status_code: int,
+    ) -> None:
+        """Extract events from accumulated SSE bytes after a streaming response is exhausted."""
+        try:
+            url = str(request.url)
+            request_body = _body_to_dict(request.content)
+            sse_events = parse_sse_events(raw_bytes)
+            response_body = build_stream_response_body(url, sse_events)
+            if response_body is None:
+                return
+            self._emit_events(url, request_body, response_body, latency_ms, status_code)
+        except Exception as exc:
+            logger.warning(
+                "patch_interceptor_stream_error",
                 error=str(exc),
                 url=str(request.url),
             )
