@@ -114,6 +114,19 @@ curl http://localhost:7843/intelligence/quality/tools
 
 ---
 
+## Dashboard
+
+![Overview](docs/screenshots/overview.png)
+*Platform-wide summary: tool health, LLM cost by model, MCP server status, top failure patterns, and drift alerts at a glance.*
+
+![Tool detail](docs/screenshots/tool-detail.png)
+*Per-tool drill-down: latency percentiles, schema drift history, and input/output payload inspector.*
+
+![Intelligence](docs/screenshots/intelligence.png)
+*Actionable intelligence: failure clusters with fix suggestions, token optimization candidates, and per-tool quality grades (A–F).*
+
+---
+
 ## Supported providers
 
 | Provider | SDK | Intercepted endpoint |
