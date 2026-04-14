@@ -12,7 +12,12 @@ from anjor.core.events.base import BaseEvent, EventType
 from anjor.core.events.llm_call import LLMCallEvent
 from anjor.core.events.tool_call import ToolCallEvent
 from anjor.core.pipeline.pipeline import EventPipeline
-from anjor.interceptors.patch import PatchInterceptor, ProxyInterceptor, _body_to_dict
+from anjor.interceptors.patch import (
+    PatchInterceptor,
+    ProxyInterceptor,
+    _body_to_dict,
+    _infer_agent_id,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -166,6 +171,39 @@ try:
     import respx
 except ImportError:
     pass
+
+
+class TestInferAgentId:
+    def test_returns_empty_for_no_system(self) -> None:
+        assert _infer_agent_id({}) == ""
+        assert _infer_agent_id({"model": "claude-3"}) == ""
+
+    def test_returns_prefix_and_hash_for_string_system(self) -> None:
+        result = _infer_agent_id({"system": "You are a web researcher."})
+        assert result.startswith("You are a web res")
+        assert "_" in result
+        # Hash portion is 8 hex chars
+        assert len(result.split("_")[-1]) == 8
+
+    def test_stable_for_same_system_prompt(self) -> None:
+        body = {"system": "You are an analyst."}
+        assert _infer_agent_id(body) == _infer_agent_id(body)
+
+    def test_different_prompts_produce_different_ids(self) -> None:
+        a = _infer_agent_id({"system": "You are agent A."})
+        b = _infer_agent_id({"system": "You are agent B."})
+        assert a != b
+
+    def test_handles_list_system_prompt(self) -> None:
+        # Anthropic accepts system as a list of content blocks
+        body = {"system": [{"type": "text", "text": "You are a helpful assistant."}]}
+        result = _infer_agent_id(body)
+        assert result != ""
+        assert "You are a helpful" in result
+
+    def test_empty_string_system_returns_empty(self) -> None:
+        assert _infer_agent_id({"system": ""}) == ""
+        assert _infer_agent_id({"system": "   "}) == ""
 
 
 class TestBodyToDict:

@@ -54,6 +54,7 @@ _pipeline: EventPipeline | None = None
 _interceptor: PatchInterceptor | None = None
 _bg_loop: asyncio.AbstractEventLoop | None = None
 _bg_thread: threading.Thread | None = None
+_session_trace_id: str | None = None  # auto-generated at patch() time
 
 
 def _ensure_background_loop() -> asyncio.AbstractEventLoop:
@@ -116,7 +117,7 @@ def patch(
     Returns:
         The installed PatchInterceptor (idempotent — safe to call multiple times).
     """
-    global _interceptor, _config
+    global _interceptor, _config, _session_trace_id
 
     if config is not None:
         _config = config
@@ -127,6 +128,7 @@ def patch(
 
     if _interceptor is None:
         from anjor.core.pipeline.handlers import CollectorHandler
+        from anjor.interceptors.traceparent import new_trace_id
 
         # Wire the CollectorHandler so events are forwarded to the collector REST API.
         collector_url = f"http://{_config.host}:{_config.collector_port}"
@@ -137,9 +139,14 @@ def patch(
         loop = _ensure_background_loop()
         asyncio.run_coroutine_threadsafe(resolved_pipeline.start(), loop).result(timeout=5)
 
+        # Generate a session-level trace_id so all calls in this process are grouped
+        # under one trace automatically — no anjor.span() required.
+        _session_trace_id = new_trace_id()
+
         _interceptor = PatchInterceptor(
             pipeline=resolved_pipeline,
             parser_registry=build_default_registry(),
+            default_trace_id=_session_trace_id,
         )
 
     if not _interceptor.is_installed:

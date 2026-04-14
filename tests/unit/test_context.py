@@ -177,16 +177,60 @@ class TestPatchInterceptorContextOverride:
         assert all(e.trace_id == "ctx-trace-001" for e in pipeline.captured)
         assert all(e.agent_id == "ctx_agent" for e in pipeline.captured)
 
-    def test_no_context_trace_id_unchanged(self) -> None:
+    def test_default_trace_id_used_when_no_span(self) -> None:
         from anjor.interceptors.patch import PatchInterceptor
 
         pipeline = CapturingPipeline()
-        interceptor = PatchInterceptor(pipeline=pipeline)
+        interceptor = PatchInterceptor(pipeline=pipeline, default_trace_id="session-abc")
 
-        # Outside any span — context vars are empty, events keep parser-assigned trace_id
+        # Outside any span — default_trace_id should be applied
         interceptor._process(self._make_request(), self._make_response(), 50.0)
 
         assert len(pipeline.captured) > 0
-        # trace_id should be whatever the parser set (not overridden)
+        assert all(e.trace_id == "session-abc" for e in pipeline.captured)
+
+    def test_span_overrides_default_trace_id(self) -> None:
+        from anjor.interceptors.patch import PatchInterceptor
+
+        pipeline = CapturingPipeline()
+        interceptor = PatchInterceptor(pipeline=pipeline, default_trace_id="session-abc")
+
+        with span("my_agent", trace_id="explicit-trace"):
+            interceptor._process(self._make_request(), self._make_response(), 50.0)
+
+        # span() wins over the default
+        assert all(e.trace_id == "explicit-trace" for e in pipeline.captured)
+        assert all(e.agent_id == "my_agent" for e in pipeline.captured)
+
+    def test_agent_id_inferred_from_system_prompt(self) -> None:
+        from anjor.interceptors.patch import PatchInterceptor
+
+        pipeline = CapturingPipeline()
+        interceptor = PatchInterceptor(pipeline=pipeline, default_trace_id="t")
+
+        body_with_system = {**self._REQUEST_BODY, "system": "You are a web researcher."}
+        request = httpx.Request(
+            "POST",
+            self._ANTHROPIC_URL,
+            content=json.dumps(body_with_system).encode(),
+            headers={"content-type": "application/json"},
+        )
+        interceptor._process(request, self._make_response(), 50.0)
+
+        assert len(pipeline.captured) > 0
+        # agent_id should contain part of the system prompt + a hash
         for event in pipeline.captured:
-            assert event.trace_id != "ctx-trace-001"
+            assert "You are a web res" in event.agent_id
+            assert len(event.agent_id) > 20  # prefix + _ + hash
+
+    def test_no_agent_id_inferred_without_system_prompt(self) -> None:
+        from anjor.interceptors.patch import PatchInterceptor
+
+        pipeline = CapturingPipeline()
+        interceptor = PatchInterceptor(pipeline=pipeline, default_trace_id="t")
+
+        # _REQUEST_BODY has no system field
+        interceptor._process(self._make_request(), self._make_response(), 50.0)
+
+        # agent_id falls back to whatever the parser set (model name or empty string)
+        assert len(pipeline.captured) > 0

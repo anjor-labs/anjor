@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import threading
 import time
 from collections.abc import Callable
@@ -39,6 +40,31 @@ def _body_to_dict(content: bytes) -> dict[str, Any]:
         return {}
 
 
+def _infer_agent_id(request_body: dict[str, Any]) -> str:
+    """Infer a stable agent identifier from the request body.
+
+    Uses the system prompt as a fingerprint — different agents typically have
+    different system prompts, so this gives each agent a consistent identity
+    without any user instrumentation.
+
+    Returns a short readable prefix + hash, e.g. "You are a web_a1b2c3d4".
+    Falls back to the model name if no system prompt is present.
+    """
+    system = request_body.get("system", "")
+    if not system:
+        return ""
+    # Normalise to string (Anthropic also accepts a list of content blocks)
+    if isinstance(system, list):
+        system = " ".join(block.get("text", "") for block in system if isinstance(block, dict))
+    system = system.strip()
+    if not system:
+        return ""
+    digest = hashlib.sha1(system.encode(), usedforsecurity=False).hexdigest()[:8]
+    # Take first few words as a readable prefix (max 24 chars)
+    prefix = system[:24].rstrip().replace("\n", " ")
+    return f"{prefix}_{digest}"
+
+
 class PatchInterceptor(BaseInterceptor):
     """Monkey-patches httpx.Client.send and httpx.AsyncClient.send.
 
@@ -52,9 +78,11 @@ class PatchInterceptor(BaseInterceptor):
         self,
         pipeline: EventPipeline | None = None,
         parser_registry: ParserRegistry | None = None,
+        default_trace_id: str = "",
     ) -> None:
         self._pipeline = pipeline or EventPipeline()
         self._registry = parser_registry or build_default_registry()
+        self._default_trace_id = default_trace_id
         self._installed = False
         self._original_sync_send: Callable[..., Any] | None = None
         self._original_async_send: Callable[..., Any] | None = None
@@ -149,19 +177,24 @@ class PatchInterceptor(BaseInterceptor):
                 status_code=response.status_code,
             )
 
-            # Override trace_id / agent_id with context-var values set by anjor.span().
-            # This is the primary mechanism for trace propagation — it doesn't rely on
-            # any provider-specific metadata fields (e.g. Anthropic only accepts user_id).
+            # Resolve trace_id and agent_id using a three-level priority:
+            #   1. anjor.span() context vars  — explicit user annotation (highest)
+            #   2. Inferred from request body — auto-detected, zero user changes
+            #   3. Parser-assigned default    — whatever the parser set (lowest)
             from anjor.context import get_agent_id, get_trace_id
 
             ctx_trace = get_trace_id()
             ctx_agent = get_agent_id()
-            if ctx_trace or ctx_agent:
-                overrides: dict[str, str] = {}
-                if ctx_trace:
-                    overrides["trace_id"] = ctx_trace
-                if ctx_agent:
-                    overrides["agent_id"] = ctx_agent
+
+            effective_trace = ctx_trace or self._default_trace_id
+            effective_agent = ctx_agent or _infer_agent_id(request_body)
+
+            overrides: dict[str, str] = {}
+            if effective_trace:
+                overrides["trace_id"] = effective_trace
+            if effective_agent:
+                overrides["agent_id"] = effective_agent
+            if overrides:
                 events = [e.model_copy(update=overrides) for e in events]
 
             for event in events:
