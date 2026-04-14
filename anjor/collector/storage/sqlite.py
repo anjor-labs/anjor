@@ -13,6 +13,8 @@ import aiosqlite
 from anjor.collector.storage.base import (
     LLMQueryFilters,
     LLMSummary,
+    MCPServerSummary,
+    MCPToolSummary,
     QueryFilters,
     SchemaSnapshot,
     StorageBackend,
@@ -311,11 +313,13 @@ class SQLiteBackend(StorageBackend):
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
-    async def list_llm_summaries(self) -> list[LLMSummary]:
+    async def list_llm_summaries(self, days: int | None = None) -> list[LLMSummary]:
         """Return aggregated stats per model from llm_calls table."""
         assert self._conn is not None
+        where = "WHERE timestamp >= datetime('now', ?)" if days is not None else ""
+        params: tuple[Any, ...] = (f"-{days} days",) if days is not None else ()
         cursor = await self._conn.execute(
-            """SELECT
+            f"""SELECT
                 model,
                 count(*)                    AS call_count,
                 avg(latency_ms)             AS avg_latency_ms,
@@ -327,7 +331,9 @@ class SQLiteBackend(StorageBackend):
                 sum(coalesce(token_cache_read,  0)) AS total_cache_read,
                 sum(coalesce(token_cache_write, 0)) AS total_cache_write
                FROM llm_calls
-               GROUP BY model"""
+               {where}
+               GROUP BY model""",  # noqa: S608
+            params,
         )
         rows = await cursor.fetchall()
         return [
@@ -366,6 +372,74 @@ class SQLiteBackend(StorageBackend):
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
+
+    async def list_mcp_server_summaries(self, days: int | None = None) -> list[MCPServerSummary]:
+        """Return per-server stats for all tools whose name starts with mcp__."""
+        assert self._conn is not None
+        where_parts = ["tool_name LIKE 'mcp__%'"]
+        params: list[Any] = []
+        if days is not None:
+            where_parts.append("timestamp >= datetime('now', ?)")
+            params.append(f"-{days} days")
+        where = "WHERE " + " AND ".join(where_parts)
+        cursor = await self._conn.execute(
+            f"""SELECT
+                substr(tool_name, 6, instr(substr(tool_name, 6), '__') - 1) AS server_name,
+                count(distinct tool_name)                                    AS tool_count,
+                count(*)                                                     AS call_count,
+                sum(CASE WHEN status = 'success' THEN 1 ELSE 0 END)         AS success_count,
+                avg(latency_ms)                                              AS avg_latency_ms
+               FROM tool_calls
+               {where}
+               GROUP BY server_name
+               ORDER BY call_count DESC""",  # noqa: S608
+            params,
+        )
+        rows = await cursor.fetchall()
+        return [
+            MCPServerSummary(
+                server_name=row["server_name"],
+                tool_count=row["tool_count"],
+                call_count=row["call_count"],
+                success_count=row["success_count"],
+                avg_latency_ms=row["avg_latency_ms"] or 0.0,
+            )
+            for row in rows
+        ]
+
+    async def list_mcp_tool_summaries(self, days: int | None = None) -> list[MCPToolSummary]:
+        """Return per-tool stats for all tools whose name starts with mcp__."""
+        assert self._conn is not None
+        where_parts = ["tool_name LIKE 'mcp__%'"]
+        params: list[Any] = []
+        if days is not None:
+            where_parts.append("timestamp >= datetime('now', ?)")
+            params.append(f"-{days} days")
+        where = "WHERE " + " AND ".join(where_parts)
+        cursor = await self._conn.execute(
+            f"""SELECT
+                tool_name,
+                substr(tool_name, 6, instr(substr(tool_name, 6), '__') - 1) AS server_name,
+                count(*)                                                     AS call_count,
+                sum(CASE WHEN status = 'success' THEN 1 ELSE 0 END)         AS success_count,
+                avg(latency_ms)                                              AS avg_latency_ms
+               FROM tool_calls
+               {where}
+               GROUP BY tool_name
+               ORDER BY call_count DESC""",  # noqa: S608
+            params,
+        )
+        rows = await cursor.fetchall()
+        return [
+            MCPToolSummary(
+                tool_name=row["tool_name"],
+                server_name=row["server_name"],
+                call_count=row["call_count"],
+                success_count=row["success_count"],
+                avg_latency_ms=row["avg_latency_ms"] or 0.0,
+            )
+            for row in rows
+        ]
 
     async def write_schema_snapshot(self, snap: SchemaSnapshot) -> None:
         assert self._conn is not None

@@ -17,9 +17,9 @@ def make_llm_router(service: CollectorService) -> APIRouter:
     llm_router = APIRouter()
 
     @llm_router.get("/llm", response_model=list[LLMSummaryItem])
-    async def list_llm_summaries() -> list[LLMSummaryItem]:
-        """List all LLM models seen, with aggregate stats."""
-        summaries = await service.storage.list_llm_summaries()
+    async def list_llm_summaries(days: int | None = None) -> list[LLMSummaryItem]:
+        """List all LLM models seen, with aggregate stats. Pass days to limit to last N days."""
+        summaries = await service.storage.list_llm_summaries(days=days)
         return [
             LLMSummaryItem(
                 model=s.model,

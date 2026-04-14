@@ -196,6 +196,36 @@ class AgentAttributionItem(BaseModel):
     failure_rate: float
 
 
+class MCPServerItem(BaseModel):
+    """Aggregate stats for one MCP server returned by GET /mcp."""
+
+    server_name: str
+    tool_count: int
+    call_count: int
+    success_count: int
+    success_rate: float
+    avg_latency_ms: float
+
+
+class MCPToolItem(BaseModel):
+    """Aggregate stats for one MCP tool returned by GET /mcp."""
+
+    tool_name: str  # full name, e.g. mcp__github__create_pr
+    server_name: str  # e.g. github
+    short_name: str  # e.g. create_pr
+    call_count: int
+    success_count: int
+    success_rate: float
+    avg_latency_ms: float
+
+
+class MCPResponse(BaseModel):
+    """Response for GET /mcp — server list + tool list."""
+
+    servers: list[MCPServerItem]
+    tools: list[MCPToolItem]
+
+
 class EventIngestRequest(BaseModel):
     """Incoming event payload. Validated before storage.
 

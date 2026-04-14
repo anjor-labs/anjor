@@ -74,6 +74,48 @@ class LLMSummary:
 
 
 @dataclass
+class MCPServerSummary:
+    """Aggregated stats for an MCP server (tools grouped by mcp__<server>__ prefix)."""
+
+    server_name: str
+    tool_count: int
+    call_count: int
+    success_count: int
+    avg_latency_ms: float
+
+    @property
+    def success_rate(self) -> float:
+        if self.call_count == 0:
+            return 0.0
+        return self.success_count / self.call_count
+
+
+@dataclass
+class MCPToolSummary:
+    """Aggregated stats for a single MCP tool."""
+
+    tool_name: str  # full name, e.g. mcp__github__create_pr
+    server_name: str  # extracted middle segment, e.g. github
+    call_count: int
+    success_count: int
+    avg_latency_ms: float
+
+    @property
+    def success_rate(self) -> float:
+        if self.call_count == 0:
+            return 0.0
+        return self.success_count / self.call_count
+
+    @property
+    def short_name(self) -> str:
+        """Tool name with mcp__<server>__ prefix stripped."""
+        prefix = f"mcp__{self.server_name}__"
+        return (
+            self.tool_name[len(prefix) :] if self.tool_name.startswith(prefix) else self.tool_name
+        )
+
+
+@dataclass
 class ToolSummary:
     """Aggregated stats for a single tool."""
 
@@ -112,8 +154,8 @@ class StorageBackend(ABC):
         ...
 
     @abstractmethod
-    async def list_llm_summaries(self) -> list[LLMSummary]:
-        """Return aggregated stats per model."""
+    async def list_llm_summaries(self, days: int | None = None) -> list[LLMSummary]:
+        """Return aggregated stats per model, optionally limited to the last N days."""
         ...
 
     @abstractmethod
@@ -134,6 +176,16 @@ class StorageBackend(ABC):
     @abstractmethod
     async def list_tool_summaries(self) -> list[ToolSummary]:
         """Return aggregated stats for all tools."""
+        ...
+
+    @abstractmethod
+    async def list_mcp_server_summaries(self, days: int | None = None) -> list[MCPServerSummary]:
+        """Return per-server aggregated stats for all MCP tools (mcp__<server>__ prefix)."""
+        ...
+
+    @abstractmethod
+    async def list_mcp_tool_summaries(self, days: int | None = None) -> list[MCPToolSummary]:
+        """Return per-tool aggregated stats for all MCP tools."""
         ...
 
     @abstractmethod
