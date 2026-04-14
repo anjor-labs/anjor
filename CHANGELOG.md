@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.0] — 2026-04-14
+
+### Added
+- **MCP analytics** — `GET /mcp` endpoint with per-server and per-tool aggregates; MCP tools auto-identified by `mcp__<server>__<tool>` naming convention; supports `?days=N` time filter
+- **MCP dashboard page** — server bar chart, server/tool tables with colour-coded server badges, success rates, latency, and day-range selector
+- **Day-range selector on Usage page** — pill buttons (1d / 7d / 14d / 30d / 90d / All time) filter both the model summary table and daily trend chart
+- **Redesigned Overview page** — 6 clickable hero cards (tool calls, LLM calls, est. cost, MCP calls, failure patterns, drift alerts); three side-by-side panels for top tools, LLM cost by model with 14-day sparkline, and MCP servers; intelligence highlights strip; compact drift events row
+- **Pagination on Intelligence page** — 5 cards/page for failure patterns and tool quality sections; 10 rows/page for optimization and run quality tables; per-section independent state preserved across auto-refresh
+- `list_llm_summaries(days=)` — optional time filter on the `/llm` summary endpoint
+- `list_mcp_server_summaries(days=)` and `list_mcp_tool_summaries(days=)` storage methods
+- Dashboard screenshots in `docs/screenshots/`
+
+### Changed
+- MCP link added to the dashboard nav bar between Tools and Calls
+
+---
+
 ## [0.5.0] — 2026-04-12
 
 ### Added
@@ -83,7 +100,8 @@ Initial release.
 - **AnjorConfig** — typed configuration via environment variables (`ANJOR_*`) and `.anjor.toml`
 - Payload sanitisation — keys matching `*api_key*`, `*secret*`, `*password*`, `*token*`, `*auth*`, `*bearer*` are redacted before any storage
 
-[Unreleased]: https://github.com/anjor-labs/anjor/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/anjor-labs/anjor/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/anjor-labs/anjor/releases/tag/v0.6.0
 [0.5.0]: https://github.com/anjor-labs/anjor/releases/tag/v0.5.0
 [0.4.0]: https://github.com/anjor-labs/anjor/releases/tag/v0.4.0
 [0.3.0]: https://github.com/anjor-labs/anjor/releases/tag/v0.3.0

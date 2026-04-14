@@ -8,9 +8,42 @@
 
 AI agents fail silently. A tool times out, a schema drifts, the context window fills up — and you find out from a user complaint, not a dashboard.
 
-Anjor fixes that. It intercepts your agent's HTTP traffic at the protocol layer and gives you full visibility into every LLM call and tool use — latency, token usage, context window growth, schema drift, prompt changes — without changing a single line of your agent code. Beyond passive logging, it surfaces actionable intelligence: failure pattern clustering, token optimization suggestions, and per-tool quality grades (A–F).
+Anjor fixes that. It intercepts your agent's HTTP traffic at the protocol layer and gives you full visibility into every LLM call, tool use, and MCP server interaction — latency, token usage, context window growth, schema drift, prompt changes — without changing a single line of your agent code. Beyond passive logging, it surfaces actionable intelligence: failure pattern clustering, token optimization suggestions, and per-tool quality grades (A–F).
 
 One-line install. No cloud. No account required.
+
+---
+
+## Dashboard
+
+![Overview](docs/screenshots/overview.png)
+
+*The overview gives a bulls-eye view across the whole platform — tool health, LLM cost, MCP server status, top failure patterns, and drift alerts at a glance.*
+
+<details>
+<summary>More screenshots</summary>
+
+**LLM Usage** — token consumption and cost by model with daily trend and cache savings
+
+![Usage](docs/screenshots/usage.png)
+
+**MCP Servers** — per-server call volume, success rates, and tool breakdown
+
+![MCP](docs/screenshots/mcp.png)
+
+**Intelligence** — failure clusters, token optimization opportunities, and quality scores
+
+![Intelligence](docs/screenshots/intelligence.png)
+
+**Tools** — latency percentiles, drift detection, and per-tool drill-down
+
+![Tools](docs/screenshots/tools.png)
+
+**Traces** — multi-agent span trees and cross-agent attribution
+
+![Traces](docs/screenshots/traces.png)
+
+</details>
 
 ---
 
@@ -50,6 +83,7 @@ Open `http://localhost:7843/ui/` to see the dashboard.
 ```bash
 curl http://localhost:7843/health
 curl http://localhost:7843/tools
+curl http://localhost:7843/mcp
 curl http://localhost:7843/intelligence/failures
 curl http://localhost:7843/intelligence/quality/tools
 ```
@@ -60,13 +94,14 @@ curl http://localhost:7843/intelligence/quality/tools
 
 | Signal | Details |
 |--------|---------|
-| Tool calls | Name, status (success/failure), failure type |
+| Tool calls | Name, status (success/failure), failure type, latency |
+| MCP servers | Per-server call volume, success rate, latency — parsed from `mcp__server__tool` naming |
 | Schema fingerprints | SHA-256 structural hash of tool input/output shape |
 | Schema drift | Field-level diff against the baseline for each tool |
-| Latency | Per-call and aggregated (p50/p95/p99) |
 | LLM calls | Model, latency, finish reason — Anthropic, OpenAI, and Gemini |
-| Token usage | Input + output + cache_read tokens per call |
+| Token usage | Input + output + cache_read + cache_write tokens per call |
 | Context window | Tokens used vs model limit, utilisation %, per-trace growth |
+| Cache savings | Prompt cache hit rate and estimated cost savings |
 | Context hogs | Per-tool average output size, % of context consumed |
 | System prompt drift | SHA-256 per agent — alerts when prompt changes between calls |
 | Failure patterns | Clustered failure analysis with descriptions and fix suggestions |
@@ -88,6 +123,42 @@ curl http://localhost:7843/intelligence/quality/tools
 | Google Gemini | `google-generativeai` | `generativelanguage.googleapis.com/.../generateContent` |
 
 All three providers are auto-detected — no configuration required.
+
+---
+
+## MCP tool analytics
+
+MCP tools are automatically identified by their naming convention — no extra configuration needed. Any tool whose name follows `mcp__<server>__<tool>` is grouped by server in the MCP dashboard:
+
+```
+mcp__github__create_pull_request   →  server: github,     tool: create_pull_request
+mcp__filesystem__read_file         →  server: filesystem, tool: read_file
+mcp__brave_search__web_search      →  server: brave_search, tool: web_search
+```
+
+The `/mcp` endpoint returns per-server and per-tool aggregates and supports a `?days=N` filter.
+
+---
+
+## API endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/events` | Ingest a tool/LLM/span event |
+| GET | `/tools` | All tools with summary stats |
+| GET | `/tools/{name}` | Tool detail (latency percentiles, drift) |
+| GET | `/mcp` | MCP server and tool aggregates (`?days=N`) |
+| GET | `/llm` | LLM call summary by model (`?days=N`) |
+| GET | `/llm/usage/daily` | Daily token usage by model (`?days=N`) |
+| GET | `/calls` | Paginated raw event log |
+| GET | `/traces` | Trace list (newest first) |
+| GET | `/traces/{id}/graph` | DAG graph for a single trace |
+| GET | `/health` | Uptime, queue depth, db path |
+| GET | `/intelligence/failures` | Failure clusters sorted by rate |
+| GET | `/intelligence/optimization` | Token hog tools + savings estimates |
+| GET | `/intelligence/quality/tools` | Per-tool quality scores + grade |
+| GET | `/intelligence/quality/runs` | Per-trace run quality scores + grade |
+| GET | `/intelligence/attribution` | Per-agent token and failure attribution |
 
 ---
 

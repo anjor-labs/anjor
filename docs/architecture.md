@@ -28,7 +28,7 @@
 │  SQLiteBackend (WAL mode, batch writer)                       │
 │  FastAPI REST API                                             │
 │  Routes: /events  /tools  /llm  /calls  /health              │
-│          /traces  /traces/{id}/graph                          │
+│          /mcp  /traces  /traces/{id}/graph                    │
 │          /intelligence/failures                               │
 │          /intelligence/optimization                           │
 │          /intelligence/quality/tools                          │
@@ -75,6 +75,7 @@
 | `interceptors/parsers/gemini.py` | Gemini `generateContent` → LLMCallEvent + ToolCallEvents |
 | `interceptors/parsers/registry.py` | URL-matched parser selection |
 | `collector/storage/` | StorageBackend ABC + SQLiteBackend (WAL, batch writer, spans) |
+| `collector/api/routes/mcp.py` | `GET /mcp` — per-server and per-tool MCP aggregates |
 | `collector/api/` | FastAPI app factory + all route modules |
 | `collector/service.py` | Wires storage + pipeline |
 | `analysis/drift/` | Fingerprinting + DriftDetector |
