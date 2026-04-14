@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+from unittest.mock import patch as mock_patch
+
 import pytest
 
 import anjor
@@ -88,6 +91,83 @@ class TestPublicAPI:
         assert "ContextWindowTracker" in anjor.__all__
         assert "ContextHogDetector" in anjor.__all__
         assert "PromptDriftDetector" in anjor.__all__
+
+
+class TestAutoStart:
+    def teardown_method(self) -> None:
+        anjor._config = None
+        anjor._pipeline = None
+        if anjor._interceptor is not None:
+            anjor._interceptor.uninstall()
+        anjor._interceptor = None
+        if anjor._bg_loop is not None and not anjor._bg_loop.is_running():
+            anjor._bg_loop = None
+            anjor._bg_thread = None
+
+    def test_auto_start_disabled_skips_health_check(self) -> None:
+        with mock_patch("anjor._collector_running") as mock_check:
+            anjor.patch(auto_start=False)
+            mock_check.assert_not_called()
+
+    def test_auto_start_already_running_no_subprocess(self) -> None:
+        with mock_patch("anjor._collector_running", return_value=True) as mock_check:
+            with mock_patch("anjor._start_collector_subprocess") as mock_start:
+                anjor.patch(auto_start=True)
+                mock_check.assert_called_once()
+                mock_start.assert_not_called()
+
+    def test_auto_start_not_running_starts_subprocess(self) -> None:
+        with mock_patch("anjor._collector_running", return_value=False):
+            with mock_patch("anjor._start_collector_subprocess") as mock_start:
+                anjor.patch(auto_start=True)
+                mock_start.assert_called_once()
+
+    def test_auto_start_idempotent_on_second_patch_call(self) -> None:
+        with mock_patch("anjor._collector_running", return_value=False):
+            with mock_patch("anjor._start_collector_subprocess") as mock_start:
+                anjor.patch(auto_start=True)
+                anjor.patch(auto_start=True)  # second call — interceptor already set
+                mock_start.assert_called_once()  # subprocess started only once
+
+    def test_collector_running_returns_true_on_200(self) -> None:
+        mock_resp = MagicMock()
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        mock_resp.status = 200
+        with mock_patch("urllib.request.urlopen", return_value=mock_resp):
+            with mock_patch("time.sleep"):
+                result = anjor._collector_running("127.0.0.1", 7843)
+        assert result is True
+
+    def test_collector_running_returns_false_on_connection_error(self) -> None:
+        with mock_patch("urllib.request.urlopen", side_effect=OSError("refused")):
+            with mock_patch("time.sleep"):
+                result = anjor._collector_running("127.0.0.1", 7843)
+        assert result is False
+
+    def test_start_collector_subprocess_prints_to_stderr(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        mock_popen = MagicMock()
+        with mock_patch("subprocess.Popen", return_value=mock_popen) as popen_mock:
+            anjor._start_collector_subprocess("127.0.0.1", 7843)
+        captured = capsys.readouterr()
+        assert "anjor: collector started on http://localhost:7843/ui/" in captured.err
+        popen_mock.assert_called_once()
+
+    def test_start_collector_subprocess_uses_start_new_session(self) -> None:
+        with mock_patch("subprocess.Popen") as popen_mock:
+            anjor._start_collector_subprocess("127.0.0.1", 7843)
+        _, kwargs = popen_mock.call_args
+        assert kwargs.get("start_new_session") is True
+
+    def test_start_collector_subprocess_custom_host(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        with mock_patch("subprocess.Popen"):
+            anjor._start_collector_subprocess("0.0.0.0", 9000)  # noqa: S104
+        captured = capsys.readouterr()
+        assert "http://0.0.0.0:9000/ui/" in captured.err
 
 
 class TestProxyInterceptor:

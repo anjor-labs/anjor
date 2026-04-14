@@ -18,7 +18,11 @@ Public API:
 from __future__ import annotations
 
 import asyncio
+import subprocess
+import sys
 import threading
+import time
+import urllib.request
 
 from anjor.analysis.context.hog_detector import ContextHogDetector
 from anjor.analysis.context.tracker import ContextWindowTracker
@@ -74,6 +78,41 @@ def _ensure_background_loop() -> asyncio.AbstractEventLoop:
     return loop
 
 
+def _collector_running(host: str, port: int) -> bool:
+    """Return True if the collector responds with HTTP 200 at /health.
+
+    Retries up to 3 times with 200 ms between attempts to tolerate slow startup.
+    Uses urllib (stdlib) intentionally — avoids routing through the patched httpx
+    client and keeps this function dependency-free.
+    """
+    url = f"http://{host}:{port}/health"
+    for _ in range(3):
+        try:
+            with urllib.request.urlopen(url, timeout=2) as resp:  # noqa: S310
+                if resp.status == 200:
+                    return True
+        except Exception:  # noqa: S110, BLE001
+            pass
+        time.sleep(0.2)
+    return False
+
+
+def _start_collector_subprocess(host: str, port: int) -> None:
+    """Spawn the collector as a background sidecar process.
+
+    Uses start_new_session=True so the child is detached from the parent's
+    process group and outlives the parent on exit (sidecar pattern).
+    """
+    subprocess.Popen(  # noqa: S603
+        [sys.executable, "-m", "anjor.cli", "start", "--host", host, "--port", str(port)],
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    display_host = "localhost" if host == "127.0.0.1" else host
+    print(f"anjor: collector started on http://{display_host}:{port}/ui/", file=sys.stderr)
+
+
 def configure(config: AnjorConfig | None = None, **kwargs: object) -> AnjorConfig:
     """Set global Anjor configuration.
 
@@ -105,6 +144,7 @@ def get_pipeline() -> EventPipeline:
 def patch(
     config: AnjorConfig | None = None,
     pipeline: EventPipeline | None = None,
+    auto_start: bool = True,
 ) -> PatchInterceptor:
     """Install the in-process httpx interceptor.
 
@@ -113,6 +153,9 @@ def patch(
     Args:
         config: Optional config override.
         pipeline: Optional pipeline override. Defaults to get_pipeline().
+        auto_start: If True (default), automatically start the collector as a
+            background subprocess when it is not already running.  Set to False
+            to disable this behaviour and manage the collector manually.
 
     Returns:
         The installed PatchInterceptor (idempotent — safe to call multiple times).
@@ -123,6 +166,10 @@ def patch(
         _config = config
     if _config is None:
         _config = AnjorConfig()
+
+    if auto_start and _interceptor is None:
+        if not _collector_running(_config.host, _config.collector_port):
+            _start_collector_subprocess(_config.host, _config.collector_port)
 
     resolved_pipeline = pipeline or get_pipeline()
 
