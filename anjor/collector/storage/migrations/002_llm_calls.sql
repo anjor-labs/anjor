@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS llm_calls (
     token_input           INTEGER,
     token_output          INTEGER,
     token_cache_read      INTEGER,
+    token_cache_write     INTEGER,
     context_window_used   INTEGER,
     context_window_limit  INTEGER,
     context_utilisation   REAL,

@@ -1,0 +1,5 @@
+-- Migration 004: token_cache_write column (no-op)
+-- The column is now included in the CREATE TABLE statement in migration 002.
+-- This file is kept as a placeholder so the version sequence stays intact.
+-- Existing file-based databases that already ran the original ALTER TABLE
+-- version of this migration are unaffected.
