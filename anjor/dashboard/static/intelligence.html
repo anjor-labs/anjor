@@ -15,6 +15,42 @@
   <script>
     document.getElementById('nav').innerHTML = buildNav('/ui/intelligence.html')
 
+    const CARDS_PER_PAGE = 5
+    const ROWS_PER_PAGE  = 10
+
+    // Per-section page state
+    const pages = { failure: 0, opt: 0, tool: 0, run: 0 }
+
+    // Cached data so re-renders don't refetch
+    let allData = null
+
+    // ── Pagination helpers ────────────────────────────────────────────────────
+    function paginate(items, page, size) {
+      const start = page * size
+      return items.slice(start, start + size)
+    }
+
+    function pageControls(section, page, total, size) {
+      const totalPages = Math.ceil(total / size)
+      if (totalPages <= 1) return ''
+      const start = page * size + 1
+      const end   = Math.min((page + 1) * size, total)
+      const prev  = page > 0
+      const next  = page < totalPages - 1
+      return `<div class="flex items-center justify-between mt-4 text-xs text-gray-500">
+        <span>${start}–${end} of ${total}</span>
+        <div class="flex items-center gap-1">
+          <button data-section="${section}" data-dir="-1"
+            class="px-2.5 py-1 rounded border border-gray-700 ${prev ? 'hover:border-gray-500 hover:text-gray-200 text-gray-400' : 'opacity-30 cursor-default'}"
+            ${prev ? '' : 'disabled'}>← Prev</button>
+          <span class="px-3 text-gray-400">${page + 1} / ${totalPages}</span>
+          <button data-section="${section}" data-dir="1"
+            class="px-2.5 py-1 rounded border border-gray-700 ${next ? 'hover:border-gray-500 hover:text-gray-200 text-gray-400' : 'opacity-30 cursor-default'}"
+            ${next ? '' : 'disabled'}>Next →</button>
+        </div>
+      </div>`
+    }
+
     async function load() {
       try {
         const [clusters, suggestions, toolScores, runScores] = await Promise.all([
@@ -23,7 +59,8 @@
           fetch(`${API}/intelligence/quality/tools`).then(r => r.json()),
           fetch(`${API}/intelligence/quality/runs`).then(r => r.json()),
         ])
-        render(clusters, suggestions, toolScores, runScores)
+        allData = { clusters, suggestions, toolScores, runScores }
+        render()
       } catch (e) {
         document.getElementById('app').innerHTML = `
           <div>
@@ -40,7 +77,8 @@
       if (clusters.length === 0)
         return '<p class="text-sm text-gray-500 italic">No failure patterns detected — all tools passing.</p>'
 
-      return clusters.map(c => `
+      const page  = paginate(clusters, pages.failure, CARDS_PER_PAGE)
+      const cards = page.map(c => `
         <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
           <div class="flex items-start justify-between gap-3 mb-2">
             <div>
@@ -60,13 +98,17 @@
             ? `<p class="text-xs text-gray-600 mt-2">Example traces: ${c.example_trace_ids.map(id => `<a href="/ui/traces.html?id=${encodeURIComponent(id)}" class="text-blue-500 hover:text-blue-400 font-mono">${id.slice(0, 12)}…</a>`).join(', ')}</p>`
             : ''}
         </div>`).join('')
+
+      return `<div class="space-y-3">${cards}</div>
+        ${pageControls('failure', pages.failure, clusters.length, CARDS_PER_PAGE)}`
     }
 
     function optimizationSection(suggestions) {
       if (suggestions.length === 0)
         return '<p class="text-sm text-gray-500 italic">No optimization opportunities found — all tool outputs are within context budget.</p>'
 
-      const rows = suggestions.map(s => `
+      const page = paginate(suggestions, pages.opt, ROWS_PER_PAGE)
+      const rows = page.map(s => `
         <tr class="hover:bg-gray-900/50">
           <td class="py-3 pr-4 font-mono text-white">${s.tool_name}</td>
           <td class="py-3 pr-4 text-gray-300">${s.avg_output_tokens.toLocaleString()}</td>
@@ -82,7 +124,7 @@
           <td class="py-3 pr-4 text-green-400">$${s.estimated_savings_usd_per_1k_calls.toFixed(4)}</td>
         </tr>`).join('')
 
-      const tips = suggestions.map(s => `
+      const tips = page.map(s => `
         <div class="text-xs text-gray-400 bg-gray-900 rounded px-3 py-2">
           <span class="text-blue-400 font-medium">${s.tool_name}:</span> ${s.suggestion_text}
         </div>`).join('')
@@ -99,14 +141,16 @@
           <tbody class="divide-y divide-gray-800">${rows}</tbody>
         </table>
         <div class="mt-4 space-y-2">${tips}</div>
-      </div>`
+      </div>
+      ${pageControls('opt', pages.opt, suggestions.length, ROWS_PER_PAGE)}`
     }
 
     function toolQualitySection(scores) {
       if (scores.length === 0)
         return '<p class="text-sm text-gray-500 italic">No tool data yet.</p>'
 
-      return scores.map(s => `
+      const page  = paginate(scores, pages.tool, CARDS_PER_PAGE)
+      const cards = page.map(s => `
         <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
           <div class="flex items-center justify-between mb-3">
             <div class="flex items-center gap-2">
@@ -125,13 +169,17 @@
             ${scoreBar(s.latency_consistency_score, 'Latency consistency')}
           </div>
         </div>`).join('')
+
+      return `<div class="space-y-3">${cards}</div>
+        ${pageControls('tool', pages.tool, scores.length, CARDS_PER_PAGE)}`
     }
 
     function runQualitySection(scores) {
       if (scores.length === 0)
         return '<p class="text-sm text-gray-500 italic">No run data yet.</p>'
 
-      const rows = scores.map(s => `
+      const page = paginate(scores, pages.run, ROWS_PER_PAGE)
+      const rows = page.map(s => `
         <tr class="hover:bg-gray-900/50">
           <td class="py-3 pr-4 font-mono text-xs text-gray-300"><a href="/ui/traces.html?id=${encodeURIComponent(s.trace_id)}" class="text-blue-500 hover:text-blue-400">${s.trace_id.slice(0, 16)}…</a></td>
           <td class="py-3 pr-4">${gradeBadge(s.grade)}</td>
@@ -157,7 +205,8 @@
           </tr></thead>
           <tbody class="divide-y divide-gray-800">${rows}</tbody>
         </table>
-      </div>`
+      </div>
+      ${pageControls('run', pages.run, scores.length, ROWS_PER_PAGE)}`
     }
 
     function sectionHeader(title, count, sub) {
@@ -168,7 +217,8 @@
       </div>`
     }
 
-    function render(clusters, suggestions, toolScores, runScores) {
+    function render() {
+      const { clusters, suggestions, toolScores, runScores } = allData
       document.getElementById('app').innerHTML = `
         <div>
           <h1 class="text-xl font-bold text-white">Intelligence</h1>
@@ -196,7 +246,7 @@
 
         <section>
           ${sectionHeader('Failure Patterns', clusters.length, 'Sorted by failure rate — worst first')}
-          <div class="space-y-3">${failureSection(clusters)}</div>
+          ${failureSection(clusters)}
         </section>
 
         <section>
@@ -206,14 +256,26 @@
 
         <section>
           ${sectionHeader('Tool Quality Scores', toolScores.length, 'Sorted by overall score — lowest first')}
-          <div class="space-y-3">${toolQualitySection(toolScores)}</div>
+          ${toolQualitySection(toolScores)}
         </section>
 
         <section>
           ${sectionHeader('Agent Run Quality', runScores.length, 'Per trace_id — sorted by overall score ascending')}
           ${runQualitySection(runScores)}
         </section>`
+
     }
+
+    // Single delegated listener attached once — survives innerHTML re-renders
+    // because it lives on #app which is never replaced, only its contents are.
+    document.getElementById('app').addEventListener('click', e => {
+      const btn = e.target.closest('[data-section][data-dir]')
+      if (!btn || btn.disabled) return
+      const section = btn.getAttribute('data-section')
+      const dir     = parseInt(btn.getAttribute('data-dir'), 10)
+      pages[section] = Math.max(0, pages[section] + dir)
+      render()
+    })
 
     load()
   </script>
