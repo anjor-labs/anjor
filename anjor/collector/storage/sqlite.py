@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -87,7 +88,16 @@ class SQLiteBackend(StorageBackend):
             if await cursor.fetchone() is not None:
                 continue  # already applied
             sql = path.read_text()
-            await self._conn.executescript(sql)
+            # DECISION: execute statements individually rather than executescript()
+            # because executescript() issues an implicit COMMIT before running, which
+            # in Python 3.11 causes ALTER TABLE statements to be silently ignored when
+            # the connection is in autocommit mode. Splitting on ";" and executing each
+            # statement separately is reliable across all Python 3.11+ versions.
+            statements = [
+                s.strip() for s in re.split(r";", re.sub(r"--[^\n]*", "", sql)) if s.strip()
+            ]
+            for stmt in statements:
+                await self._conn.execute(stmt)
             await self._conn.execute(
                 "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
                 (version, _now_iso()),
