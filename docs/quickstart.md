@@ -123,7 +123,15 @@ response = model.generate_content("Search for the latest AI news")
 
 ## Step 4 — Query the Data
 
-As soon as the call completes, events are in SQLite and queryable.
+Events land in the batch writer and are flushed every 500 ms.  In development,
+call `/flush` to write pending events immediately instead of waiting:
+
+```bash
+curl -X POST http://localhost:7843/flush
+# {"flushed": 3}
+```
+
+Then query as normal:
 
 ```bash
 # All tools seen
@@ -242,7 +250,16 @@ log_level = "DEBUG"
 
 **No events appearing in `/tools`**
 
-The batch writer flushes every 500ms or 100 events. If you only made one call and queried immediately, wait 600ms or set `ANJOR_BATCH_SIZE=1`.
+The batch writer flushes every 500 ms or 100 events.  If you only made one call
+and queried immediately, call `POST /flush` first:
+
+```bash
+curl -X POST http://localhost:7843/flush   # force-write pending events
+curl http://localhost:7843/tools           # now shows data
+```
+
+Alternatively, set `ANJOR_BATCH_SIZE=1` to bypass the batch writer entirely —
+every tool call is written synchronously on arrival with no buffering.
 
 **`curl` returns empty list `[]`**
 

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, HTTPException, Request
 
-from anjor.collector.api.schemas import EventIngestRequest, EventIngestResponse
+from anjor.collector.api.schemas import EventIngestRequest, EventIngestResponse, FlushResponse
 
 if TYPE_CHECKING:
     from anjor.collector.service import CollectorService
@@ -31,5 +31,16 @@ def make_events_router(service: CollectorService) -> APIRouter:
         event_dict = body.model_dump()
         await service.storage.write_event(event_dict)
         return EventIngestResponse()
+
+    @events_router.post("/flush", response_model=FlushResponse)
+    async def flush_batch() -> FlushResponse:
+        """Force-flush all pending batch writes to storage.
+
+        Returns the count of tool_call events written in this flush.  Use this
+        in development or tests immediately after posting events to make them
+        queryable without waiting for the 500 ms batch interval.
+        """
+        flushed = await service.storage.flush()
+        return FlushResponse(flushed=flushed)
 
     return events_router

@@ -30,8 +30,8 @@ _TOOL_RESPONSE = {
 
 @pytest.fixture
 def collector_client() -> TestClient:
-    cfg = AnjorConfig(db_path=":memory:", batch_size=1, batch_interval_ms=9999)  # type: ignore[call-arg]
-    storage = SQLiteBackend(db_path=":memory:", batch_size=1)
+    cfg = AnjorConfig(db_path=":memory:", batch_interval_ms=9999)  # type: ignore[call-arg]
+    storage = SQLiteBackend(db_path=":memory:", batch_interval_ms=9999)
     pipeline = EventPipeline()
     svc = CollectorService(config=cfg, storage=storage, pipeline=pipeline)
     app = create_app(service=svc)
@@ -66,6 +66,11 @@ class TestFullToolCallFlow:
         # Ingest
         resp = collector_client.post("/events", json=event_payload)
         assert resp.status_code == 202
+
+        # Flush pending batch so events are immediately queryable
+        flush_resp = collector_client.post("/flush")
+        assert flush_resp.status_code == 200
+        assert flush_resp.json()["flushed"] == 1
 
         # Query tools list
         resp = collector_client.get("/tools")
@@ -102,6 +107,8 @@ class TestFullToolCallFlow:
         post_event("success", 100.0)
         post_event("success", 200.0)
         post_event("failure", 50.0)
+
+        collector_client.post("/flush")
 
         detail = collector_client.get("/tools/search").json()
         assert detail["call_count"] == 3

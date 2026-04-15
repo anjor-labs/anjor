@@ -57,7 +57,7 @@ class StorageWritingHandler:
 
 @pytest.fixture
 async def storage() -> SQLiteBackend:  # type: ignore[misc]
-    s = SQLiteBackend(db_path=":memory:", batch_size=1, batch_interval_ms=9999)
+    s = SQLiteBackend(db_path=":memory:", batch_interval_ms=9999)
     await s.connect()
     yield s
     await s.close()
@@ -82,6 +82,7 @@ class TestGeminiFlow:
             finally:
                 interceptor.uninstall()
 
+        await storage.flush()
         tool_calls = await storage.query_tool_calls(QueryFilters(limit=10))
         llm_calls = await storage.query_llm_calls(LLMQueryFilters(limit=10))
 
@@ -123,6 +124,7 @@ class TestGeminiFlow:
             finally:
                 interceptor.uninstall()
 
+        await storage.flush()
         tool_calls = await storage.query_tool_calls(QueryFilters(limit=10))
         llm_calls = await storage.query_llm_calls(LLMQueryFilters(limit=10))
 

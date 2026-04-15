@@ -51,7 +51,7 @@ class StorageWritingHandler:
 
 @pytest.fixture
 async def storage() -> SQLiteBackend:
-    s = SQLiteBackend(db_path=":memory:", batch_size=1, batch_interval_ms=9999)
+    s = SQLiteBackend(db_path=":memory:", batch_interval_ms=9999)
     await s.connect()
     yield s
     await s.close()
@@ -79,7 +79,8 @@ class TestPatchToStorage:
                         )
             finally:
                 interceptor.uninstall()
-        # Pipeline stopped (drained) — handler was called
+        # Pipeline stopped (drained) — handler was called; flush the batch writer.
+        await storage.flush()
 
         results = await storage.query_tool_calls(QueryFilters())
         assert len(results) == 1
@@ -107,6 +108,7 @@ class TestPatchToStorage:
             finally:
                 interceptor.uninstall()
 
+        await storage.flush()
         results = await storage.query_tool_calls(QueryFilters())
         assert len(results) == 1
         assert results[0]["tool_name"] == "web_search"
@@ -129,6 +131,7 @@ class TestPatchToStorage:
             finally:
                 interceptor.uninstall()
 
+        await storage.flush()
         results = await storage.query_tool_calls(QueryFilters())
         assert results == []
 
@@ -157,6 +160,7 @@ class TestPatchToStorage:
             finally:
                 interceptor.uninstall()
 
+        await storage.flush()
         results = await storage.query_tool_calls(QueryFilters())
         assert len(results) == 1
         assert results[0]["status"] == "failure"

@@ -114,12 +114,13 @@ class SQLiteBackend(StorageBackend):
         interval = self._batch_interval_ms / 1000.0
         while True:
             await asyncio.sleep(interval)
-            await self._flush()
+            await self._flush()  # return value intentionally discarded
 
-    async def _flush(self) -> None:
+    async def _flush(self) -> int:
+        """Drain the pending batch to SQLite. Returns the number of rows written."""
         async with self._lock:
             if not self._batch:
-                return
+                return 0
             batch = self._batch[:]
             self._batch.clear()
 
@@ -135,6 +136,16 @@ class SQLiteBackend(StorageBackend):
             [self._row_from_event(e) for e in batch],
         )
         await self._conn.commit()
+        return len(batch)
+
+    async def flush(self) -> int:
+        """Force-flush all pending batch writes immediately.
+
+        Returns the number of tool_call events written in this flush.  LLM and
+        span events are written synchronously (unbatched) so they are always
+        immediately queryable — only tool_call events go through the batch writer.
+        """
+        return await self._flush()
 
     @staticmethod
     def _row_from_event(event: dict[str, Any]) -> tuple[Any, ...]:

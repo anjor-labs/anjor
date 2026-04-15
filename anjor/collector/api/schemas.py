@@ -41,6 +41,10 @@ class EventIngestResponse(BaseModel):
     message: str = "Event accepted"
 
 
+class FlushResponse(BaseModel):
+    flushed: int
+
+
 class LLMSummaryItem(BaseModel):
     """Aggregate stats for a single model."""
 

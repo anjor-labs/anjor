@@ -158,6 +158,7 @@ The `/mcp` endpoint returns per-server and per-tool aggregates and supports a `?
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/events` | Ingest a tool/LLM/span event |
+| POST | `/flush` | Force-flush pending batch writes; returns `{"flushed": N}` |
 | GET | `/tools` | All tools with summary stats |
 | GET | `/tools/{name}` | Tool detail (latency percentiles, drift) |
 | GET | `/mcp` | MCP server and tool aggregates (`?days=N`) |

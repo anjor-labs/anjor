@@ -234,6 +234,16 @@ class StorageBackend(ABC):
         ...
 
     @abstractmethod
+    async def flush(self) -> int:
+        """Force-flush all pending batch writes immediately.
+
+        Returns the number of events written in this flush.  Useful in
+        development and tests to make just-written events immediately queryable
+        without waiting for the periodic batch interval.
+        """
+        ...
+
+    @abstractmethod
     async def connect(self) -> None:
         """Open the connection / run migrations."""
         ...

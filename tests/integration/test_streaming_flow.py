@@ -85,7 +85,7 @@ class StorageWritingHandler:
 
 @pytest.fixture
 async def storage() -> SQLiteBackend:  # type: ignore[misc]
-    s = SQLiteBackend(db_path=":memory:", batch_size=1, batch_interval_ms=9999)
+    s = SQLiteBackend(db_path=":memory:", batch_interval_ms=9999)
     await s.connect()
     yield s
     await s.close()
@@ -356,6 +356,7 @@ class TestAnthropicStreamingFlow:
             finally:
                 interceptor.uninstall()
 
+        await storage.flush()
         tool_calls = await storage.query_tool_calls(QueryFilters())
         assert tool_calls == []
 
@@ -374,6 +375,7 @@ class TestAnthropicStreamingFlow:
             finally:
                 interceptor.uninstall()
 
+        await storage.flush()
         llm_calls = await storage.query_llm_calls(LLMQueryFilters())
         tool_calls = await storage.query_tool_calls(QueryFilters())
 
@@ -401,6 +403,7 @@ class TestAnthropicStreamingFlow:
             finally:
                 interceptor.uninstall()
 
+        await storage.flush()
         tool_calls = await storage.query_tool_calls(QueryFilters())
         payload = json.loads(tool_calls[0]["input_payload"])
         assert payload == {"query": "AI research"}
@@ -462,6 +465,7 @@ class TestOpenAIStreamingFlow:
             finally:
                 interceptor.uninstall()
 
+        await storage.flush()
         tool_calls = await storage.query_tool_calls(QueryFilters())
         assert len(tool_calls) == 1
         assert tool_calls[0]["tool_name"] == "search"
@@ -503,6 +507,7 @@ class TestGeminiStreamingFlow:
             finally:
                 interceptor.uninstall()
 
+        await storage.flush()
         tool_calls = await storage.query_tool_calls(QueryFilters())
         assert len(tool_calls) == 1
         assert tool_calls[0]["tool_name"] == "web_search"

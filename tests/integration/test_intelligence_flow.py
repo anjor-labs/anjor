@@ -91,8 +91,8 @@ def seeded_client() -> TestClient:  # type: ignore[misc]
     - Two LLM calls with different trace_ids and context utilisation values
     """
     svc = CollectorService(
-        config=AnjorConfig(db_path=":memory:", batch_size=1, batch_interval_ms=9999),  # type: ignore[call-arg]
-        storage=SQLiteBackend(db_path=":memory:", batch_size=1),
+        config=AnjorConfig(db_path=":memory:", batch_interval_ms=9999),  # type: ignore[call-arg]
+        storage=SQLiteBackend(db_path=":memory:", batch_interval_ms=9999),
         pipeline=EventPipeline(),
     )
     app = create_app(service=svc)
@@ -125,6 +125,8 @@ def seeded_client() -> TestClient:  # type: ignore[misc]
         # Seed LLM calls
         client.post("/events", json=_llm_event("trace-1", context_utilisation=0.3))
         client.post("/events", json=_llm_event("trace-2", context_utilisation=0.85))
+        # Flush pending tool_call batch so all seeded events are immediately queryable
+        client.post("/flush")
         yield client
 
 
