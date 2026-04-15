@@ -5,9 +5,7 @@ from anjor.watchers.codex import CodexTranscriptWatcher
 from anjor.watchers.gemini import GeminiTranscriptWatcher
 
 
-@pytest.mark.parametrize(
-    "cls", [GeminiTranscriptWatcher, CodexTranscriptWatcher, AntiGravityTranscriptWatcher]
-)
+@pytest.mark.parametrize("cls", [CodexTranscriptWatcher, AntiGravityTranscriptWatcher])
 def test_provider_stubs(cls):
     w = cls()
     assert bool(w.provider_name)
@@ -18,3 +16,14 @@ def test_provider_stubs(cls):
 
     assert w.parse_line('{"some": "json"}') is None
     assert w.parse_line("not json at all") is None
+
+
+def test_gemini_basics():
+    """GeminiTranscriptWatcher is implemented; parse_line() returns None (uses _tail override)."""
+    w = GeminiTranscriptWatcher()
+    assert bool(w.provider_name)
+    assert bool(w.source_tag)
+    assert " " not in w.source_tag
+    assert bool(w.default_paths())
+    # parse_line() is intentionally a no-op — _tail() handles full JSON parsing
+    assert w.parse_line('{"some": "json"}') is None

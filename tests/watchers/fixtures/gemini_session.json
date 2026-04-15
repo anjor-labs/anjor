@@ -1,0 +1,104 @@
+{
+  "sessionId": "sess-gemini-1",
+  "projectHash": "abc123",
+  "startTime": "2026-04-15T10:00:00.000Z",
+  "lastUpdated": "2026-04-15T10:05:00.000Z",
+  "messages": [
+    {
+      "id": "msg-user-1",
+      "timestamp": "2026-04-15T10:00:00.000Z",
+      "type": "user",
+      "content": [
+        {
+          "text": "List files please"
+        }
+      ]
+    },
+    {
+      "id": "msg-gemini-1",
+      "timestamp": "2026-04-15T10:00:01.000Z",
+      "type": "gemini",
+      "content": "",
+      "model": "gemini-2.0-flash",
+      "tokens": {
+        "input": 1000,
+        "output": 50,
+        "cached": 200,
+        "thoughts": 10,
+        "tool": 0,
+        "total": 1260
+      },
+      "toolCalls": [
+        {
+          "id": "tc-1",
+          "name": "list_directory",
+          "args": {
+            "path": "."
+          },
+          "result": [
+            {
+              "functionResponse": {
+                "id": "tc-1",
+                "name": "list_directory",
+                "response": {
+                  "output": "file1.py\nfile2.py"
+                }
+              }
+            }
+          ],
+          "status": "success",
+          "timestamp": "2026-04-15T10:00:01.500Z"
+        }
+      ]
+    },
+    {
+      "id": "msg-gemini-2",
+      "timestamp": "2026-04-15T10:00:03.000Z",
+      "type": "gemini",
+      "content": "Here are the files.",
+      "model": "gemini-2.0-flash",
+      "tokens": {
+        "input": 1300,
+        "output": 30,
+        "cached": 200,
+        "thoughts": 0,
+        "tool": 0,
+        "total": 1530
+      },
+      "toolCalls": []
+    },
+    {
+      "id": "msg-info-1",
+      "timestamp": "2026-04-15T10:00:04.000Z",
+      "type": "info",
+      "content": "Session ended."
+    },
+    {
+      "id": "msg-gemini-3-error",
+      "timestamp": "2026-04-15T10:00:05.000Z",
+      "type": "gemini",
+      "content": "",
+      "model": "gemini-2.0-flash",
+      "tokens": {
+        "input": 800,
+        "output": 5,
+        "cached": 0,
+        "thoughts": 0,
+        "tool": 0,
+        "total": 805
+      },
+      "toolCalls": [
+        {
+          "id": "tc-2",
+          "name": "run_command",
+          "args": {
+            "command": "rm -rf /"
+          },
+          "result": [],
+          "status": "error",
+          "timestamp": "2026-04-15T10:00:05.200Z"
+        }
+      ]
+    }
+  ]
+}
