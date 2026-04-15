@@ -32,6 +32,7 @@ _SENSITIVE_PATTERNS = [
 _GEMINI_URL = "generativelanguage.googleapis.com"
 
 _MODEL_CONTEXT_LIMITS: dict[str, int] = {
+    "gemini-2.5-pro": 1_048_576,
     "gemini-2.0-flash": 1_048_576,
     "gemini-2.0-flash-8b": 1_048_576,
     "gemini-1.5-pro": 2_097_152,
@@ -105,11 +106,16 @@ class GeminiParser(BaseParser):
         usage = response_body.get("usageMetadata", {})
         token_input = usage.get("promptTokenCount", 0)
         token_output = usage.get("candidatesTokenCount", 0)
+        # cachedContentTokenCount is a subset of promptTokenCount — the portion
+        # of the prompt served from Gemini's implicit context cache (cache_read).
+        cache_read = usage.get("cachedContentTokenCount", 0)
         token_usage: TokenUsage | None = None
         llm_token_usage: LLMTokenUsage | None = None
         if usage:
             token_usage = TokenUsage(input=token_input, output=token_output)
-            llm_token_usage = LLMTokenUsage(input=token_input, output=token_output)
+            llm_token_usage = LLMTokenUsage(
+                input=token_input, output=token_output, cache_read=cache_read
+            )
 
         # ── IDs ───────────────────────────────────────────────────────────────
         trace_id_val = str(uuid4())

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from hypothesis import given, settings
+from hypothesis import strategies as st
+
 from anjor.core.events.llm_call import LLMCallEvent
 from anjor.core.events.tool_call import FailureType, ToolCallEvent, ToolCallStatus
 from anjor.interceptors.parsers.gemini import GeminiParser
@@ -249,3 +252,209 @@ class TestSanitisation:
         assert isinstance(tool, ToolCallEvent)
         assert tool.input_payload["api_key"] == "[REDACTED]"
         assert tool.input_payload["query"] == "hello"
+
+
+class TestCachedContentTokens:
+    """cachedContentTokenCount → LLMTokenUsage.cache_read."""
+
+    def _parse_with_cache(self, cached: int) -> LLMCallEvent:
+        response = {
+            "modelVersion": "gemini-2.0-flash",
+            "candidates": [
+                {
+                    "content": {"role": "model", "parts": [{"text": "Answer."}]},
+                    "finishReason": "STOP",
+                }
+            ],
+            "usageMetadata": {
+                "promptTokenCount": 200,
+                "candidatesTokenCount": 50,
+                "totalTokenCount": 250,
+                "cachedContentTokenCount": cached,
+            },
+        }
+        events = GeminiParser().parse(_URL, _REQUEST, response, 100.0, 200)
+        llm = events[0]
+        assert isinstance(llm, LLMCallEvent)
+        return llm
+
+    def test_cache_read_extracted(self) -> None:
+        llm = self._parse_with_cache(80)
+        assert llm.token_usage is not None
+        assert llm.token_usage.cache_read == 80
+
+    def test_cache_read_zero_when_absent(self) -> None:
+        """No cachedContentTokenCount key → cache_read defaults to 0."""
+        response = {
+            "modelVersion": "gemini-2.0-flash",
+            "candidates": [
+                {
+                    "content": {"role": "model", "parts": [{"text": "Answer."}]},
+                    "finishReason": "STOP",
+                }
+            ],
+            "usageMetadata": {"promptTokenCount": 100, "candidatesTokenCount": 30},
+        }
+        events = GeminiParser().parse(_URL, _REQUEST, response, 100.0, 200)
+        llm = events[0]
+        assert isinstance(llm, LLMCallEvent)
+        assert llm.token_usage is not None
+        assert llm.token_usage.cache_read == 0
+
+    def test_input_maps_to_prompt_token_count(self) -> None:
+        llm = self._parse_with_cache(80)
+        assert llm.token_usage is not None
+        assert llm.token_usage.input == 200
+
+    def test_output_maps_to_candidates_token_count(self) -> None:
+        llm = self._parse_with_cache(80)
+        assert llm.token_usage is not None
+        assert llm.token_usage.output == 50
+
+    def test_cache_creation_is_zero(self) -> None:
+        """Gemini has no cache_creation concept — field stays at default 0."""
+        llm = self._parse_with_cache(80)
+        assert llm.token_usage is not None
+        assert llm.token_usage.cache_creation == 0
+
+    def test_cache_read_at_zero_explicit(self) -> None:
+        """Explicit cachedContentTokenCount=0 is handled correctly."""
+        llm = self._parse_with_cache(0)
+        assert llm.token_usage is not None
+        assert llm.token_usage.cache_read == 0
+
+
+class TestContextWindowLimitsExtended:
+    """Context limit lookup for all documented current models."""
+
+    def _limit(self, model: str) -> int:
+        resp = {
+            "modelVersion": model,
+            "candidates": [
+                {
+                    "content": {"role": "model", "parts": [{"text": "ok"}]},
+                    "finishReason": "STOP",
+                }
+            ],
+            "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 5},
+        }
+        events = GeminiParser().parse(_URL, _REQUEST, resp, 10.0, 200)
+        llm = events[0]
+        assert isinstance(llm, LLMCallEvent)
+        return llm.context_window_limit
+
+    def test_gemini_2_5_pro(self) -> None:
+        assert self._limit("gemini-2.5-pro") == 1_048_576
+
+    def test_gemini_2_0_flash(self) -> None:
+        assert self._limit("gemini-2.0-flash") == 1_048_576
+
+    def test_gemini_1_5_pro(self) -> None:
+        assert self._limit("gemini-1.5-pro") == 2_097_152
+
+    def test_gemini_1_5_flash(self) -> None:
+        assert self._limit("gemini-1.5-flash") == 1_048_576
+
+    def test_unknown_gemini_model_fallback(self) -> None:
+        """Any unrecognised gemini-* model gets the default 1M fallback."""
+        assert self._limit("gemini-99-ultra") == 1_048_576
+
+
+# ---------------------------------------------------------------------------
+# Property-based tests (Hypothesis)
+# ---------------------------------------------------------------------------
+
+
+def _response_with_usage(
+    prompt_tokens: int,
+    candidates_tokens: int,
+    total_tokens: int,
+    cached_tokens: int,
+) -> dict:
+    return {
+        "modelVersion": "gemini-2.0-flash",
+        "candidates": [
+            {
+                "content": {"role": "model", "parts": [{"text": "answer"}]},
+                "finishReason": "STOP",
+            }
+        ],
+        "usageMetadata": {
+            "promptTokenCount": prompt_tokens,
+            "candidatesTokenCount": candidates_tokens,
+            "totalTokenCount": total_tokens,
+            "cachedContentTokenCount": cached_tokens,
+        },
+    }
+
+
+class TestTokenMathProperties:
+    """Hypothesis property tests verifying token arithmetic invariants."""
+
+    @settings(max_examples=200)
+    @given(
+        prompt=st.integers(min_value=0, max_value=2_000_000),
+        candidates=st.integers(min_value=0, max_value=100_000),
+    )
+    def test_input_plus_output_equals_total(self, prompt: int, candidates: int) -> None:
+        """input + output == totalTokenCount when total == prompt + candidates."""
+        total = prompt + candidates
+        response = _response_with_usage(prompt, candidates, total, 0)
+        events = GeminiParser().parse(_URL, _REQUEST, response, 10.0, 200)
+        llm = events[0]
+        assert isinstance(llm, LLMCallEvent)
+        assert llm.token_usage is not None
+        assert llm.token_usage.input + llm.token_usage.output == total
+
+    @settings(max_examples=200)
+    @given(
+        prompt=st.integers(min_value=1, max_value=2_000_000),
+        candidates=st.integers(min_value=0, max_value=100_000),
+        cached_fraction=st.floats(min_value=0.0, max_value=1.0),
+    )
+    def test_cache_read_does_not_exceed_input(
+        self, prompt: int, candidates: int, cached_fraction: float
+    ) -> None:
+        """cachedContentTokenCount is always <= promptTokenCount (subset relationship)."""
+        cached = int(prompt * cached_fraction)
+        total = prompt + candidates
+        response = _response_with_usage(prompt, candidates, total, cached)
+        events = GeminiParser().parse(_URL, _REQUEST, response, 10.0, 200)
+        llm = events[0]
+        assert isinstance(llm, LLMCallEvent)
+        assert llm.token_usage is not None
+        assert llm.token_usage.cache_read <= llm.token_usage.input
+
+    @settings(max_examples=200)
+    @given(
+        prompt=st.integers(min_value=0, max_value=2_000_000),
+        candidates=st.integers(min_value=0, max_value=100_000),
+        cached=st.integers(min_value=0, max_value=2_000_000),
+    )
+    def test_all_token_fields_non_negative(self, prompt: int, candidates: int, cached: int) -> None:
+        """All extracted token counts are always non-negative integers."""
+        total = prompt + candidates
+        response = _response_with_usage(prompt, candidates, total, cached)
+        events = GeminiParser().parse(_URL, _REQUEST, response, 10.0, 200)
+        llm = events[0]
+        assert isinstance(llm, LLMCallEvent)
+        assert llm.token_usage is not None
+        assert llm.token_usage.input >= 0
+        assert llm.token_usage.output >= 0
+        assert llm.token_usage.cache_read >= 0
+        assert llm.token_usage.cache_creation == 0
+
+    @settings(max_examples=100)
+    @given(
+        prompt=st.integers(min_value=0, max_value=500_000),
+        candidates=st.integers(min_value=0, max_value=50_000),
+    )
+    def test_context_window_used_equals_prompt_plus_candidates(
+        self, prompt: int, candidates: int
+    ) -> None:
+        """context_window_used is always promptTokenCount + candidatesTokenCount."""
+        response = _response_with_usage(prompt, candidates, prompt + candidates, 0)
+        events = GeminiParser().parse(_URL, _REQUEST, response, 10.0, 200)
+        llm = events[0]
+        assert isinstance(llm, LLMCallEvent)
+        assert llm.context_window_used == prompt + candidates
