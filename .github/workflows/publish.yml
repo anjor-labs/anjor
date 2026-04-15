@@ -20,10 +20,12 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: |
+          pip install -e ".[dev]"
+          pip install pytest-timeout
 
       - name: Run tests
-        run: pytest --cov=anjor --cov-fail-under=95 -q
+        run: pytest --cov=anjor --cov-fail-under=95 -vv --capture=no --timeout=60
 
       - name: ruff check
         run: ruff check anjor/ tests/
