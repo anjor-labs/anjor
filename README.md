@@ -57,36 +57,51 @@ pip install anjor
 
 ## Quickstart
 
-**1. Start the collector and dashboard** (one command, one port):
+There are two ways to use Anjor depending on whether you are building your own agent or using an existing AI coding tool.
 
+### Path A: Monitor your own Agent (Live Patching)
+
+Best for developers building custom AI agents who want real-time telemetry.
+
+**1. Start the collector and dashboard:**
 ```bash
 anjor start
-# Anjor collector  http://localhost:7843/health
-# Anjor dashboard  http://localhost:7843/ui/
 ```
 
-**2. Add one line to your agent:**
-
+**2. Patch your agent (one line):**
 ```python
 import anjor
-anjor.patch()   # that's it — httpx is now instrumented
+anjor.patch()  # instrument httpx automatically
 
 import anthropic
 client = anthropic.Anthropic()
-# make calls as normal — they're captured automatically
+# All calls are now captured — no other changes needed.
 ```
 
-Open `http://localhost:7843/ui/` to see the dashboard.
+---
 
-**3. Query the API directly:**
+### Path B: Monitor AI Coding Agents (Transcripts)
 
+Best for users of Claude Code or Gemini CLI who want a visual dashboard of their sessions.
+
+**1. For Claude Code (via MCP):**
 ```bash
-curl http://localhost:7843/health
-curl http://localhost:7843/tools
-curl http://localhost:7843/mcp
-curl http://localhost:7843/intelligence/failures
-curl http://localhost:7843/intelligence/quality/tools
+# This starts the collector & watches transcripts in one command
+anjor mcp --watch-transcripts
 ```
+*In Claude Code, add Anjor as an MCP server using the command above.*
+
+**2. For existing sessions (Claude, Gemini CLI, etc.):**
+```bash
+# Start the collector
+anjor start
+
+# In a separate terminal, start the watcher to ingest logs
+anjor watch-transcripts --providers claude,gemini
+```
+*Anjor auto-discovers session logs from `~/.claude/` and `~/.gemini/`.*
+
+---
 
 ---
 
@@ -139,7 +154,27 @@ All three providers are auto-detected — no configuration required.
 
 ---
 
-## MCP tool analytics
+## AI Coding Agents (Transcript Watchers)
+
+Anjor can ingest and visualize history from agents that write local session transcripts. It acts as a post-hoc observatory even for agents you didn't build.
+
+| Agent | Source | Discovery Path |
+|-------|--------|----------------|
+| **Claude Code** | `claude_code` | `~/.claude/projects/**/*.jsonl` |
+| **Gemini CLI** | `gemini_cli` | `~/.gemini/tmp/**/*.json` |
+
+### One-shot ingestion
+To populate your dashboard with all previous logs from today:
+```bash
+anjor watch-transcripts --providers claude,gemini
+```
+
+### Real-time watching
+To keep the dashboard updated as you chat with your agent, keep the watcher running in the background. It polls sessions every 1s and uses minimal resources.
+
+---
+
+## MCP Server Support
 
 MCP tools are automatically identified by their naming convention — no extra configuration needed. Any tool whose name follows `mcp__<server>__<tool>` is grouped by server in the MCP dashboard:
 
