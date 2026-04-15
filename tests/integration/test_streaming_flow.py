@@ -34,8 +34,7 @@ from anjor.interceptors.patch import PatchInterceptor
 _ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 _OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 _GEMINI_URL = (
-    "https://generativelanguage.googleapis.com"
-    "/v1beta/models/gemini-2.0-flash:streamGenerateContent"
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent"
 )
 
 _REQUEST_BODY = {

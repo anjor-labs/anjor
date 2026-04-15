@@ -21,10 +21,10 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,mcp]"
 
       - name: Run tests
-        run: pytest --cov=anjor --cov-report=xml --cov-fail-under=95
+        run: pytest --cov=anjor --cov-report=xml --cov-fail-under=95 -v --tb=short
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
