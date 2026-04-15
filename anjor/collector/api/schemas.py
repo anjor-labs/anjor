@@ -58,6 +58,7 @@ class LLMSummaryItem(BaseModel):
     total_token_output: int = 0
     total_cache_read: int = 0
     total_cache_write: int = 0
+    source: str = ""
 
 
 class DailyUsageItem(BaseModel):

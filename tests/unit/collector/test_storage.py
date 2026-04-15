@@ -37,9 +37,8 @@ def make_event(
         "failure_type": None,
         "latency_ms": latency_ms,
         "input_payload": {"query": "hello"},
-        "output_payload": {"results": []},
-        "input_schema_hash": "abc",
         "output_schema_hash": "def",
+        "source": "",
         **kwargs,
     }
 
@@ -51,6 +50,14 @@ class TestSQLiteBackend:
         results = await storage.query_tool_calls(QueryFilters())
         assert len(results) == 1
         assert results[0]["tool_name"] == "search"
+        assert results[0]["source"] == ""
+
+    async def test_write_and_query_event_with_source(self, storage: SQLiteBackend) -> None:
+        event = make_event(source="claude_code")
+        await storage.write_event(event)
+        results = await storage.query_tool_calls(QueryFilters())
+        assert len(results) == 1
+        assert results[0]["source"] == "claude_code"
 
     async def test_filter_by_tool_name(self, storage: SQLiteBackend) -> None:
         await storage.write_event(make_event(tool_name="search"))
@@ -204,12 +211,14 @@ class TestSQLiteBackendLLM:
             "system_prompt_hash": None,
             "messages_count": 2,
             "finish_reason": "end_turn",
+            "source": "mcp",
         }
         await storage.write_event(event)
         results = await storage.query_llm_calls(LLMQueryFilters())
         assert len(results) == 1
         assert results[0]["model"] == "claude-3-5-sonnet-20241022"
         assert results[0]["latency_ms"] == pytest.approx(500.0)
+        assert results[0]["source"] == "mcp"
 
     async def test_write_llm_event_direct(self, storage: SQLiteBackend) -> None:
         event = {

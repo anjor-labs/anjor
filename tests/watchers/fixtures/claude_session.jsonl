@@ -1,0 +1,10 @@
+{"type":"queue-operation","uuid":"q1"}
+{"type":"user","message":{"role":"user","content":"Hello"},"uuid":"u1","timestamp":"2026-04-15T10:00:00Z","sessionId":"sess-1"}
+{"type":"assistant","uuid":"a1","timestamp":"2026-04-15T10:00:01Z","sessionId":"sess-1","message":{"model":"claude-sonnet-4-6","stop_reason":"end_turn","usage":{"input_tokens":3,"cache_creation_input_tokens":4000,"cache_read_input_tokens":8000,"output_tokens":120},"content":[{"type":"text","text":"Hi"}]}}
+{"type":"assistant","uuid":"a2","timestamp":"2026-04-15T10:00:02Z","sessionId":"sess-1","message":{"model":"claude-sonnet-4-6","stop_reason":"tool_use","usage":{"input_tokens":3,"cache_creation_input_tokens":4000,"cache_read_input_tokens":8000,"output_tokens":120},"content":[{"type":"tool_use","id":"toolu_01","name":"Read","input":{"file":"x"}}]}}
+{"type":"user","uuid":"u2","timestamp":"2026-04-15T10:00:03Z","sessionId":"sess-1","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01","content":"data","is_error":false}]}}
+{"type":"assistant","uuid":"a3","timestamp":"2026-04-15T10:00:04Z","sessionId":"sess-1","message":{"model":"claude-sonnet-4-6","stop_reason":"tool_use","usage":{"input_tokens":3,"cache_creation_input_tokens":4000,"cache_read_input_tokens":8000,"output_tokens":120},"content":[{"type":"tool_use","id":"toolu_02","name":"Write","input":{}},{"type":"tool_use","id":"toolu_03","name":"Delete","input":{}}]}}
+{"type":"user","uuid":"u3","timestamp":"2026-04-15T10:00:05Z","sessionId":"sess-1","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_02","content":"done","is_error":false}]}}
+{"type":"user","uuid":"u4","timestamp":"2026-04-15T10:00:06Z","sessionId":"sess-1","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_03","content":"failed","is_error":true}]}}
+{"type":"assistant","uuid":"a2-chunk","timestamp":"2026-04-15T10:00:07Z","sessionId":"sess-1","message":{"model":"claude-sonnet-4-6","stop_reason":null,"usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0},"content":[]}}
+{"type":"file-history-snapshot","uuid":"f1"}

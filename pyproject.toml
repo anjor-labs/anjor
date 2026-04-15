@@ -75,9 +75,12 @@ select = ["E", "W", "F", "I", "B", "C4", "UP", "S", "N"]
 ignore = ["S101", "S603"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]
+"tests/**" = ["S101", "E501", "S108", "I001"]
+"tests/**/test_cli_runner.py" = ["S104"]
+"scripts/demo_data.py" = ["S311", "E501", "B904"]
 # E402 fires on imports that follow pytest.importorskip() — this is intentional.
 "tests/**/test_requests_patch.py" = ["E402"]
+"scripts/start_collector.py" = ["E402", "I001"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -92,11 +95,6 @@ ignore_missing_imports = true
 source = ["anjor"]
 omit = [
     "tests/*",
-    # Tests for these modules are pending (Gemini v0.8.0 task).
-    # Remove these omissions once tests/watchers/ and tests/unit/test_mcp_server.py land.
-    "anjor/watchers/*",
-    "anjor/mcp_server.py",
-    "anjor/cli_runner.py",
 ]
 
 [tool.coverage.report]

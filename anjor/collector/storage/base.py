@@ -71,6 +71,7 @@ class LLMSummary:
     total_token_output: int = 0
     total_cache_read: int = 0
     total_cache_write: int = 0
+    source: str = ""
 
 
 @dataclass
@@ -161,6 +162,11 @@ class StorageBackend(ABC):
     @abstractmethod
     async def list_daily_usage(self, days: int = 14) -> list[dict[str, Any]]:
         """Return token usage grouped by date and model for the last N days."""
+        ...
+
+    @abstractmethod
+    async def query_llm_sources(self) -> list[str]:
+        """Return a list of unique source tags from the llm_calls table."""
         ...
 
     @abstractmethod

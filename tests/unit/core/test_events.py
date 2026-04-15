@@ -68,6 +68,14 @@ class TestBaseEvent:
         assert event.agent_id == "my-agent"
         assert event.sequence_no == 5
 
+    def test_source_default(self) -> None:
+        event = BaseEvent(event_type=EventType.TOOL_CALL)
+        assert event.source == ""
+
+    def test_source_explicit(self) -> None:
+        event = BaseEvent(event_type=EventType.TOOL_CALL, source="claude_code")
+        assert event.source == "claude_code"
+
 
 # ---------------------------------------------------------------------------
 # ToolCallEvent tests

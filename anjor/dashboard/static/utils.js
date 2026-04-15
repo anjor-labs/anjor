@@ -100,6 +100,18 @@ function errorBanner(msg) {
   return `<p class="text-red-400 text-sm">${msg}</p>`
 }
 
+function sourceBadge(source) {
+  const labels = {
+    '':            ['live',                 'bg-gray-800 text-gray-400 border border-gray-700'],
+    'mcp':         ['MCP',                  'bg-purple-900/50 text-purple-300 border border-purple-800'],
+    'claude_code': ['transcript · Claude',  'bg-blue-900/50 text-blue-300 border border-blue-800'],
+    'gemini_cli':  ['transcript · Gemini',  'bg-teal-900/50 text-teal-300 border border-teal-800'],
+    'openai_codex':['transcript · Codex',   'bg-green-900/50 text-green-300 border border-green-800'],
+  }
+  const [label, cls] = labels[source] || ['unknown', 'bg-gray-800 text-gray-400']
+  return `<span class="inline-flex items-center px-2 py-0.5 rounded border text-xs font-mono ${cls}">${label}</span>`
+}
+
 function lastUpdatedBadge(t) {
   return t ? `<p class="text-xs text-gray-600">Updated ${t}</p>` : ''
 }

@@ -354,7 +354,8 @@ class SQLiteBackend(StorageBackend):
                 sum(coalesce(token_input,  0)) AS total_token_input,
                 sum(coalesce(token_output, 0)) AS total_token_output,
                 sum(coalesce(token_cache_read,  0)) AS total_cache_read,
-                sum(coalesce(token_cache_write, 0)) AS total_cache_write
+                sum(coalesce(token_cache_write, 0)) AS total_cache_write,
+                max(source)                 AS source
                FROM llm_calls
                {where}
                GROUP BY model""",  # noqa: S608
@@ -373,6 +374,7 @@ class SQLiteBackend(StorageBackend):
                 total_token_output=row["total_token_output"] or 0,
                 total_cache_read=row["total_cache_read"] or 0,
                 total_cache_write=row["total_cache_write"] or 0,
+                source=row["source"] or "",
             )
             for row in rows
         ]
@@ -397,6 +399,14 @@ class SQLiteBackend(StorageBackend):
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
+
+    async def query_llm_sources(self) -> list[str]:
+        assert self._conn is not None
+        cursor = await self._conn.execute(
+            "SELECT DISTINCT source FROM llm_calls WHERE source != ''"
+        )
+        rows = await cursor.fetchall()
+        return [row[0] for row in rows]
 
     async def list_mcp_server_summaries(self, days: int | None = None) -> list[MCPServerSummary]:
         """Return per-server stats for all tools whose name starts with mcp__."""

@@ -8,6 +8,8 @@ Usage:
 
 from __future__ import annotations
 
+from typing import Any
+
 import argparse
 
 import uvicorn
@@ -24,7 +26,8 @@ def main() -> None:
     parser.add_argument("--log-level", default=None, help="Log level")
     args = parser.parse_args()
 
-    kwargs: dict = {}
+
+    kwargs: dict[str, Any] = {}
     if args.host:
         kwargs["host"] = args.host
     if args.port:
@@ -34,7 +37,7 @@ def main() -> None:
     if args.log_level:
         kwargs["log_level"] = args.log_level.upper()
 
-    config = AnjorConfig(**kwargs)  # type: ignore[arg-type]
+    config = AnjorConfig(**kwargs)
     app = create_app(config=config)
 
     print(f"Starting Anjor Collector on port {config.collector_port}")

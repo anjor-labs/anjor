@@ -59,7 +59,7 @@
     async function load() {
       clearTimeout(refreshTimer)
       try {
-        const [health, tools, llmSummaries, mcpData, failures, toolScores, driftCalls, dailyUsage] = await Promise.all([
+        const [health, tools, llmSummaries, mcpData, failures, toolScores, driftCalls, dailyUsage, sourcesData] = await Promise.all([
           fetch(`${API}/health`).then(r => r.json()),
           fetch(`${API}/tools`).then(r => r.json()),
           fetch(`${API}/llm`).then(r => r.json()),
@@ -68,9 +68,10 @@
           fetch(`${API}/intelligence/quality/tools`).then(r => r.json()),
           fetch(`${API}/calls?drift_only=true&limit=5`).then(r => r.json()),
           fetch(`${API}/llm/usage/daily?days=14`).then(r => r.json()),
+          fetch(`${API}/llm/sources`).then(r => r.json()),
         ])
         lastUpdated = new Date().toLocaleTimeString()
-        const isEmpty = render(health, tools, llmSummaries, mcpData, failures, toolScores, driftCalls, dailyUsage)
+        const isEmpty = render(health, tools, llmSummaries, mcpData, failures, toolScores, driftCalls, dailyUsage, sourcesData.sources || [])
         // Poll faster while waiting for the first event, normal cadence once data arrives
         refreshTimer = setTimeout(load, isEmpty ? 3000 : 10000)
       } catch {
@@ -305,7 +306,7 @@
 
     // ── Main render ───────────────────────────────────────────────────────────
     // Returns true when empty state was shown (so load() can adjust refresh rate).
-    function render(health, tools, llmSummaries, mcpData, failures, toolScores, driftCalls, dailyUsage) {
+    function render(health, tools, llmSummaries, mcpData, failures, toolScores, driftCalls, dailyUsage, sources) {
       // Fleet totals
       const totalToolCalls = tools.reduce((s, t) => s + t.call_count, 0)
       const toolSuccessRate = totalToolCalls
@@ -334,7 +335,18 @@
               : Math.floor(health.uptime_seconds) + 's'}`
         : ''
 
+      const hasTranscript = sources && sources.some(s => s !== '' && s !== 'mcp');
+      const showBanner = hasTranscript && !sessionStorage.getItem('transcript-banner-dismissed');
+
+      const bannerHtml = showBanner ? `
+<div id="transcript-banner" class="bg-amber-950 border border-amber-800 rounded-lg p-3 mb-4 text-sm text-amber-300 flex items-center justify-between">
+  <span>Some LLM call data sourced from AI coding agent transcripts — may lag a few seconds.</span>
+  <button onclick="document.getElementById('transcript-banner').remove(); sessionStorage.setItem('transcript-banner-dismissed','1')"
+          class="text-amber-400 hover:text-amber-200 ml-4">✕</button>
+</div>` : '';
+
       document.getElementById('app').innerHTML = `
+        ${bannerHtml}
         <!-- Header -->
         <div class="flex items-center justify-between flex-wrap gap-3">
           <div>

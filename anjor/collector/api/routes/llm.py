@@ -32,6 +32,7 @@ def make_llm_router(service: CollectorService) -> APIRouter:
                 total_token_output=s.total_token_output,
                 total_cache_read=s.total_cache_read,
                 total_cache_write=s.total_cache_write,
+                source=s.source,
             )
             for s in summaries
         ]
@@ -54,5 +55,10 @@ def make_llm_router(service: CollectorService) -> APIRouter:
                 detail=f"No LLM calls found for trace {trace_id!r}",
             )
         return results
+
+    @llm_router.get("/llm/sources")
+    async def get_llm_sources() -> dict[str, list[str]]:
+        sources = await service.storage.query_llm_sources()
+        return {"sources": sources}
 
     return llm_router

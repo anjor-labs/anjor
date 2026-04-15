@@ -307,3 +307,66 @@ class TestCheckPortAnjor:
 
         assert len(captured_urls) == 1
         assert "0.0.0.0" in captured_urls[0]  # noqa: S104
+
+
+class TestMCPAndWatchTranscriptsCommand:
+    def test_mcp_command(self):
+        with patch("anjor.cli._run_mcp") as mock_mcp:
+            with patch.object(
+                sys, "argv", ["anjor", "mcp", "--watch-transcripts", "--providers", "claude"]
+            ):
+                main()
+            mock_mcp.assert_called_once()
+            args = mock_mcp.call_args[0][0]
+            assert args.watch_transcripts is True
+            assert args.providers == "claude"
+
+    def test_run_mcp_cmd(self):
+        import argparse
+        from anjor.cli import _run_mcp
+
+        args = argparse.Namespace(watch_transcripts=True, providers="claude,gemini", port=9000)
+        with patch("anjor.mcp_server.run_mcp_server") as mock_run:
+            _run_mcp(args)
+            mock_run.assert_called_once_with(
+                watch_transcripts=True, providers=["claude", "gemini"], collector_port=9000
+            )
+
+    def test_run_watch_transcripts_list(self, capsys):
+        import argparse
+        from anjor.cli import _run_watch_transcripts
+
+        args = argparse.Namespace(list_providers=True)
+        _run_watch_transcripts(args)
+        out = capsys.readouterr().out
+        assert "claude" in out
+
+    def test_run_watch_transcripts_start(self):
+        import argparse
+        from anjor.cli import _run_watch_transcripts
+
+        args = argparse.Namespace(list_providers=False, providers="claude", port=7843)
+        with (
+            patch("anjor.watchers.manager.WatcherManager.start") as mock_start,
+            patch(
+                "anjor.watchers.manager.WatcherManager.active_providers", return_value=["claude"]
+            ),
+            patch("threading.Event.wait") as mock_wait,
+            patch("anjor.watchers.manager.WatcherManager.stop") as mock_stop,
+        ):
+            _run_watch_transcripts(args)
+            mock_start.assert_called_once_with(["claude"])
+            mock_wait.assert_called_once()
+            mock_stop.assert_called_once()
+
+    def test_run_watch_transcripts_no_providers(self):
+        import argparse
+        from anjor.cli import _run_watch_transcripts
+
+        args = argparse.Namespace(list_providers=False, providers="claude", port=7843)
+        with (
+            patch("anjor.watchers.manager.WatcherManager.start") as mock_start,
+            patch("anjor.watchers.manager.WatcherManager.active_providers", return_value=[]),
+        ):
+            _run_watch_transcripts(args)
+            mock_start.assert_called_once()

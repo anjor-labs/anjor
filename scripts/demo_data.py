@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import random
-import time
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import httpx
 
@@ -28,7 +28,7 @@ def ts(offset_minutes: int = 0) -> str:
     return (datetime.now(UTC) - timedelta(minutes=offset_minutes)).isoformat()
 
 
-def post(path: str, body: dict) -> None:
+def post(path: str, body: dict[str, Any]) -> None:
     try:
         httpx.post(f"{COLLECTOR}{path}", json=body, timeout=5)
     except Exception as e:
@@ -46,7 +46,7 @@ def seed_tool_calls() -> None:
         success = random.random() > (0.3 if tool in ("fetch_url", "run_code") else 0.08)
         latency = random.gauss(280 if tool == "fetch_url" else 95, 40)
 
-        body: dict = {
+        body: dict[str, Any] = {
             "event_type": "tool_call",
             "tool_name": tool,
             "trace_id": trace_id,
@@ -111,6 +111,7 @@ def seed_llm_calls() -> None:
                 "prompt_hash": f"prompt_{trace_id[:8]}",
                 "failure_type": None,
                 "status": "success",
+                "source": "claude_code" if turn % 2 == 0 else "mcp",
             }
             post("/events", body)
             seq += 1
@@ -222,7 +223,7 @@ def seed_mcp_calls() -> None:
         success = random.random() > failure_rate
         latency = random.gauss(latency_means[server], latency_means[server] * 0.25)
 
-        body: dict = {
+        body: dict[str, Any] = {
             "event_type": "tool_call",
             "tool_name": tool_name,
             "trace_id": trace_id,
@@ -237,6 +238,7 @@ def seed_mcp_calls() -> None:
             "output_payload": {"result": "x" * random.randint(20, 400)} if success else {},
             "input_schema_hash": f"mcp_{server}_{tool_short}_v1",
             "output_schema_hash": f"mcp_{server}_{tool_short}_out",
+            "source": "mcp",
         }
         post("/events", body)
         seq += 1
