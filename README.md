@@ -49,13 +49,21 @@ One-line install. No cloud. No account required.
 
 ## Install
 
+**Recommended (macOS / Homebrew Python):**
 ```bash
-pip install anjor          # collector + dashboard + CLI
-pip install anjor[mcp]     # add MCP server support (Claude Code / Gemini CLI)
+brew install pipx && pipx ensurepath
+pipx install anjor           # collector + dashboard + CLI
+pipx install "anjor[mcp]"    # add MCP server support (Claude Code / Gemini CLI)
+```
+Then open a new terminal tab so `$PATH` picks up the new command.
+
+**Or with pip (inside a virtualenv):**
+```bash
+pip install anjor
+pip install "anjor[mcp]"
 ```
 
 > **Note:** `anjor watch-transcripts` and `anjor mcp` require v0.8.0+.
-> If a command is not found after install, run `pip install --upgrade anjor`.
 
 ---
 
