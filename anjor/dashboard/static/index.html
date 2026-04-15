@@ -54,8 +54,10 @@
     }
 
     let lastUpdated = ''
+    let refreshTimer = null
 
     async function load() {
+      clearTimeout(refreshTimer)
       try {
         const [health, tools, llmSummaries, mcpData, failures, toolScores, driftCalls, dailyUsage] = await Promise.all([
           fetch(`${API}/health`).then(r => r.json()),
@@ -68,7 +70,9 @@
           fetch(`${API}/llm/usage/daily?days=14`).then(r => r.json()),
         ])
         lastUpdated = new Date().toLocaleTimeString()
-        render(health, tools, llmSummaries, mcpData, failures, toolScores, driftCalls, dailyUsage)
+        const isEmpty = render(health, tools, llmSummaries, mcpData, failures, toolScores, driftCalls, dailyUsage)
+        // Poll faster while waiting for the first event, normal cadence once data arrives
+        refreshTimer = setTimeout(load, isEmpty ? 3000 : 10000)
       } catch {
         document.getElementById('app').innerHTML = `
           <div class="flex flex-col items-center justify-center min-h-64 gap-4 text-center">
@@ -76,6 +80,7 @@
             <p class="text-gray-300 text-lg">Collector not reachable</p>
             <p class="text-gray-500 text-sm">Start it with: <code class="bg-gray-900 px-2 py-1 rounded text-gray-200">anjor start</code></p>
           </div>`
+        refreshTimer = setTimeout(load, 5000)
       }
     }
 
@@ -261,7 +266,45 @@
       </section>`
     }
 
+    // ── Empty state ───────────────────────────────────────────────────────────
+    function renderEmptyState(health) {
+      const collectorBadge = health ? `
+        <div class="flex items-center gap-2 text-xs text-gray-500 bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse shrink-0"></span>
+          Collector running · queue ${health.queue_depth}
+        </div>` : ''
+
+      document.getElementById('app').innerHTML = `
+        <div class="flex flex-col items-center justify-center py-20 gap-10 text-center">
+          ${collectorBadge}
+
+          <div class="space-y-2">
+            <h2 class="text-2xl font-bold text-white">No data yet</h2>
+            <p class="text-gray-400 text-sm">Run your agent to see results here</p>
+          </div>
+
+          <div class="bg-gray-900 border border-gray-700 rounded-xl p-6 text-left w-full max-w-xs">
+            <p class="text-xs text-gray-500 uppercase tracking-wider mb-4 font-semibold">Add to your agent</p>
+            <div class="font-mono text-sm space-y-1.5">
+              <p><span class="text-blue-400">import</span> <span class="text-green-300">anjor</span></p>
+              <p><span class="text-green-300">anjor</span><span class="text-gray-400">.</span><span class="text-yellow-300">patch</span><span class="text-gray-400">()</span></p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2.5 text-gray-500 text-sm">
+            <span class="inline-flex items-end gap-0.5 h-3">
+              <span class="w-1 rounded-full bg-blue-500 animate-bounce" style="height:4px;animation-delay:0ms"></span>
+              <span class="w-1 rounded-full bg-blue-500 animate-bounce" style="height:4px;animation-delay:150ms"></span>
+              <span class="w-1 rounded-full bg-blue-500 animate-bounce" style="height:4px;animation-delay:300ms"></span>
+            </span>
+            Waiting for events…
+            <span class="text-gray-600 text-xs">(checking every 3s)</span>
+          </div>
+        </div>`
+    }
+
     // ── Main render ───────────────────────────────────────────────────────────
+    // Returns true when empty state was shown (so load() can adjust refresh rate).
     function render(health, tools, llmSummaries, mcpData, failures, toolScores, driftCalls, dailyUsage) {
       // Fleet totals
       const totalToolCalls = tools.reduce((s, t) => s + t.call_count, 0)
@@ -269,6 +312,12 @@
         ? tools.reduce((s, t) => s + t.success_rate * t.call_count, 0) / totalToolCalls : 0
 
       const totalLLMCalls = llmSummaries.reduce((s, m) => s + m.call_count, 0)
+
+      // ── Empty state: show onboarding screen and poll faster ───────────────
+      if (totalToolCalls === 0 && totalLLMCalls === 0) {
+        renderEmptyState(health)
+        return true
+      }
       const totalCost = llmSummaries.reduce((s, m) => s + modelCost(m.model, m.total_token_input || 0, m.total_cache_write || 0, m.total_cache_read || 0, m.total_token_output || 0), 0)
 
       const totalMCPCalls   = mcpData.servers.reduce((s, sv) => s + sv.call_count, 0)
@@ -355,10 +404,11 @@
 
         <!-- Drift strip -->
         ${driftStrip(driftCalls)}`
+
+      return false
     }
 
     load()
-    setInterval(load, 10000)
   </script>
 </body>
 </html>
