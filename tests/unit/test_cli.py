@@ -351,15 +351,12 @@ class TestMCPAndWatchTranscriptsCommand:
             patch(
                 "anjor.watchers.manager.WatcherManager.active_providers", return_value=["claude"]
             ),
-            patch("threading.Event") as mock_event_cls,
+            patch("threading.Event.wait") as mock_wait,
             patch("anjor.watchers.manager.WatcherManager.stop") as mock_stop,
-            patch("signal.signal"),
-            patch("builtins.print"),
         ):
-            mock_event = mock_event_cls.return_value
             _run_watch_transcripts(args)
             mock_start.assert_called_once_with(["claude"])
-            mock_event.wait.assert_called_once()
+            mock_wait.assert_called_once()
             mock_stop.assert_called_once()
 
     def test_run_watch_transcripts_no_providers(self):
@@ -370,7 +367,6 @@ class TestMCPAndWatchTranscriptsCommand:
         with (
             patch("anjor.watchers.manager.WatcherManager.start") as mock_start,
             patch("anjor.watchers.manager.WatcherManager.active_providers", return_value=[]),
-            patch("builtins.print"),
         ):
             _run_watch_transcripts(args)
             mock_start.assert_called_once()

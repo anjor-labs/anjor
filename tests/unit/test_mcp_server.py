@@ -73,7 +73,6 @@ def test_run_mcp_server_watch_transcripts_success():
         patch("mcp.server.Server"),
         patch("mcp.server.stdio.stdio_server"),
         patch("asyncio.run"),
-        patch("builtins.print"),
     ):
         run_mcp_server(watch_transcripts=True, providers=["claude"])
         mock_start.assert_called_once_with(["claude"])
@@ -86,7 +85,6 @@ def test_run_mcp_server_watch_transcripts_exception():
         patch("mcp.server.Server"),
         patch("mcp.server.stdio.stdio_server"),
         patch("asyncio.run"),
-        patch("builtins.print"),
     ):
         run_mcp_server(watch_transcripts=True, providers=["claude"])
 
@@ -118,10 +116,7 @@ async def test_run_mcp_server_tools():
 
                 return decorator
 
-        with (
-            patch("mcp.server.Server", FakeServer),
-            patch("builtins.print"),
-        ):
+        with patch("mcp.server.Server", FakeServer):
             run_mcp_server(collector_port=7843)
 
         assert "list_tools" in tools_registered
