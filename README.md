@@ -50,8 +50,12 @@ One-line install. No cloud. No account required.
 ## Install
 
 ```bash
-pip install anjor
+pip install anjor          # collector + dashboard + CLI
+pip install anjor[mcp]     # add MCP server support (Claude Code / Gemini CLI)
 ```
+
+> **Note:** `anjor watch-transcripts` and `anjor mcp` require v0.8.0+.
+> If a command is not found after install, run `pip install --upgrade anjor`.
 
 ---
 

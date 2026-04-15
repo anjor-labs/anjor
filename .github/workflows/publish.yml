@@ -20,7 +20,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,mcp]"
 
       - name: Run tests
         run: pytest --cov=anjor --cov-fail-under=95 -q
