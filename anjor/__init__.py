@@ -8,6 +8,7 @@ Public API:
     get_pipeline()         — access the global event pipeline
     is_mcp_tool()          — check if a tool name follows mcp__<server>__<tool>
     parse_mcp_tool_name()  — parse mcp__<server>__<tool> into (server, tool)
+    Client                 — programmatic read-only query client (no collector needed)
     ContextWindowTracker   — track context usage across turns per trace
     ContextHogDetector     — identify tools with oversized outputs
     PromptDriftDetector    — detect system prompt changes per agent
@@ -32,6 +33,7 @@ from anjor.analysis.intelligence.failure_clustering import FailureClusterer
 from anjor.analysis.intelligence.quality_scorer import QualityScorer
 from anjor.analysis.intelligence.token_optimizer import CostEstimator, TokenOptimizer
 from anjor.analysis.prompt.detector import PromptDriftDetector
+from anjor.client import Client
 from anjor.context import span
 from anjor.core.config import AnjorConfig
 from anjor.core.pipeline.pipeline import EventPipeline
@@ -48,6 +50,7 @@ __all__ = [
     "get_pipeline",
     "is_mcp_tool",
     "parse_mcp_tool_name",
+    "Client",
     "ContextWindowTracker",
     "ContextHogDetector",
     "PromptDriftDetector",

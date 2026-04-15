@@ -206,6 +206,52 @@ anjor.patch(config=AnjorConfig(db_path="my_project.db", batch_size=1))
 
 ---
 
+## Programmatic Access
+
+Query your agent's history directly from Python — no running collector required:
+
+```python
+import anjor
+from anjor.models import ToolSummary, FailurePattern, ToolQualityScore
+
+with anjor.Client("anjor.db") as client:
+    # Per-tool summary stats
+    for tool in client.tools():
+        print(f"{tool.tool_name:30s}  calls={tool.call_count}  ok={tool.success_rate:.0%}")
+
+    # Single tool detail (latency percentiles)
+    t = client.tool("web_search")
+    if t:
+        print(f"p95={t.p95_latency_ms:.0f}ms  p99={t.p99_latency_ms:.0f}ms")
+
+    # Raw call records (filterable)
+    failures = client.calls(status="failure", limit=20)
+
+    # Intelligence layer
+    patterns  = client.intelligence.failures()      # list[FailurePattern]
+    quality   = client.intelligence.quality()       # list[ToolQualityScore]
+    runs      = client.intelligence.run_quality()   # list[RunQualityScore]
+    opts      = client.intelligence.optimization()  # list[OptimizationSuggestion]
+```
+
+All return types are frozen Pydantic models importable from `anjor.models`:
+
+```python
+from anjor.models import (
+    ToolSummary,
+    ToolCallRecord,
+    FailurePattern,
+    OptimizationSuggestion,
+    ToolQualityScore,
+    RunQualityScore,
+)
+```
+
+The `Client` reads SQLite directly — no HTTP calls, no collector process needed.
+It opens the connection lazily on first query and is safe to use as a context manager.
+
+---
+
 ## Limitations
 
 - No cloud sync, authentication, or team features
