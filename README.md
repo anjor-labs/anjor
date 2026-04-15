@@ -84,22 +84,48 @@ client = anthropic.Anthropic()
 
 Best for users of Claude Code or Gemini CLI who want a visual dashboard of their sessions.
 
-**1. For Claude Code (via MCP):**
-```bash
-# This starts the collector & watches transcripts in one command
-anjor mcp --watch-transcripts
-```
-*In Claude Code, add Anjor as an MCP server using the command above.*
+#### Claude Code (via MCP)
 
-**2. For existing sessions (Claude, Gemini CLI, etc.):**
-```bash
-# Start the collector
-anjor start
+Add to `.mcp.json` in your project root (or `~/.claude/.mcp.json` for global):
 
-# In a separate terminal, start the watcher to ingest logs
-anjor watch-transcripts --providers claude,gemini
+```json
+{
+  "mcpServers": {
+    "anjor": {
+      "command": "anjor",
+      "args": ["mcp", "--watch-transcripts"]
+    }
+  }
+}
 ```
-*Anjor auto-discovers session logs from `~/.claude/` and `~/.gemini/`.*
+
+Anjor auto-starts the collector, ingests your Claude Code session transcripts, and exposes `anjor_status` as a tool Claude Code can call to check session health.
+
+#### Gemini CLI (via MCP)
+
+Add to `.gemini/settings.json` in your project root (or `~/.gemini/settings.json`):
+
+```json
+{
+  "mcpServers": {
+    "anjor": {
+      "command": "anjor",
+      "args": ["mcp", "--watch-transcripts", "--providers", "gemini"]
+    }
+  }
+}
+```
+
+Anjor ingests your Gemini CLI session files from `~/.gemini/tmp/` and exposes `anjor_status` as a Gemini tool.
+
+#### Without MCP (transcript-only, any agent)
+
+```bash
+anjor start                                         # start collector + dashboard
+anjor watch-transcripts --providers claude,gemini   # watch in background
+```
+
+Run `anjor watch-transcripts --list-providers` to see which agents are detected on your machine.
 
 ---
 
@@ -158,19 +184,30 @@ All three providers are auto-detected — no configuration required.
 
 Anjor can ingest and visualize history from agents that write local session transcripts. It acts as a post-hoc observatory even for agents you didn't build.
 
-| Agent | Source | Discovery Path |
-|-------|--------|----------------|
-| **Claude Code** | `claude_code` | `~/.claude/projects/**/*.jsonl` |
-| **Gemini CLI** | `gemini_cli` | `~/.gemini/tmp/**/*.json` |
+| Agent | Source tag | Discovery path | MCP support |
+|-------|-----------|----------------|-------------|
+| **Claude Code** | `claude_code` | `~/.claude/projects/**/*.jsonl` | Yes — `.mcp.json` |
+| **Gemini CLI** | `gemini_cli` | `~/.gemini/tmp/**/*.json` | Yes — `.gemini/settings.json` |
+| **OpenAI Codex** | `openai_codex` | `~/.codex/sessions/**/*.jsonl` | Coming soon |
+| **AntiGravity** | `antigravity` | `~/.antigravity/**/*.jsonl` | Coming soon |
 
 ### One-shot ingestion
-To populate your dashboard with all previous logs from today:
 ```bash
-anjor watch-transcripts --providers claude,gemini
+anjor watch-transcripts --providers claude,gemini   # specific agents
+anjor watch-transcripts                             # auto-detect all
 ```
 
 ### Real-time watching
-To keep the dashboard updated as you chat with your agent, keep the watcher running in the background. It polls sessions every 1s and uses minimal resources.
+Keep the watcher running in the background — it polls every 1 second and uses minimal resources:
+```bash
+anjor watch-transcripts --providers gemini          # Gemini CLI sessions
+anjor watch-transcripts --providers claude,gemini   # both
+```
+
+### List detected agents
+```bash
+anjor watch-transcripts --list-providers
+```
 
 ---
 
