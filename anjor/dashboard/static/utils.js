@@ -58,6 +58,18 @@ function spanKindIcon(kind) {
   return { root: '◆', orchestrator: '⬡', subagent: '○', tool: '▸' }[kind] || '·'
 }
 
+function durationBar(durationMs, maxMs) {
+  if (!maxMs || maxMs <= 0) return ''
+  const pct = Math.min(100, Math.round((durationMs / maxMs) * 100))
+  const color = pct >= 90 ? 'bg-red-500' : pct >= 60 ? 'bg-yellow-500' : 'bg-blue-500'
+  return `<div class="flex items-center gap-2">
+    <div class="flex-1 bg-gray-800 rounded-full h-1.5">
+      <div class="\${color} h-1.5 rounded-full" style="width:\${pct}%"></div>
+    </div>
+    <span class="text-xs text-gray-400 w-14 text-right">\${fmt.ms(durationMs)}</span>
+  </div>`
+}
+
 function statusDot(status) {
   return status === 'error'
     ? '<span class="inline-block w-2 h-2 rounded-full bg-red-500 mr-1.5"></span>'

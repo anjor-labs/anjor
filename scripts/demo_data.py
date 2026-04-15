@@ -158,6 +158,51 @@ def seed_openai_llm_calls() -> None:
     print(f"  {seq - 400} OpenAI LLM calls seeded across {len(trace_ids)} traces.")
 
 
+def seed_gemini_llm_calls() -> None:
+    print("Seeding Gemini LLM calls...")
+    trace_ids = [str(uuid.uuid4()) for _ in range(4)]
+    gemini_models = ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-2.0-flash", "gemini-1.5-flash"]
+    seq = 500
+    context_limit_map = {
+        "gemini-2.0-flash": 1_048_576,
+        "gemini-1.5-pro": 2_097_152,
+        "gemini-1.5-flash": 1_048_576,
+    }
+
+    for trace_id in trace_ids:
+        turns = random.randint(2, 6)
+        context_used = random.randint(1000, 8000)
+        model = random.choice(gemini_models)
+        context_limit = context_limit_map[model]
+        for turn in range(turns):
+            context_used += random.randint(1000, 5000)
+            body = {
+                "event_type": "llm_call",
+                "model": model,
+                "trace_id": trace_id,
+                "session_id": "demo-session",
+                "agent_id": "demo-agent",
+                "timestamp": ts(90 - turn * 4),
+                "sequence_no": seq,
+                "latency_ms": random.gauss(900, 200),
+                "finish_reason": "STOP" if turn < turns - 1 else "MAX_TOKENS",
+                "token_usage": {
+                    "input": random.randint(500, 4000),
+                    "output": random.randint(100, 800),
+                },
+                "context_window_used": context_used,
+                "context_window_limit": context_limit,
+                "context_utilisation": context_used / context_limit,
+                "prompt_hash": f"gem_prompt_{trace_id[:8]}",
+                "failure_type": None,
+                "status": "success",
+            }
+            post("/events", body)
+            seq += 1
+
+    print(f"  {seq - 500} Gemini LLM calls seeded across {len(trace_ids)} traces.")
+
+
 def seed_mcp_calls() -> None:
     print("Seeding MCP tool calls...")
     # Build flat list of (server, tool) pairs with realistic failure rates per server
@@ -270,5 +315,6 @@ if __name__ == "__main__":
     seed_mcp_calls()
     seed_llm_calls()
     seed_openai_llm_calls()
+    seed_gemini_llm_calls()
     seed_agent_spans()
     print("\nDone. Open http://localhost:7843/ui/ to see the dashboard.")

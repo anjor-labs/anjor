@@ -40,6 +40,8 @@ _MODEL_CONTEXT_LIMITS: dict[str, int] = {
     "claude-3-opus-20240229": 200_000,
     "claude-3-sonnet-20240229": 200_000,
     "claude-3-haiku-20240307": 200_000,
+    # Claude 3.7
+    "claude-3-7-sonnet-20250219": 200_000,
     "claude-opus-4-5": 200_000,
     "claude-sonnet-4-5": 200_000,
     "claude-haiku-4-5": 200_000,

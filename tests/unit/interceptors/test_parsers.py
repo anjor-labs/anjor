@@ -374,6 +374,34 @@ class TestAnthropicContextLimits:
     def test_existing_claude_3_5_sonnet(self) -> None:
         assert self._parse("claude-3-5-sonnet-20241022").context_window_limit == 200_000
 
+    def test_claude_3_7_sonnet_context_limit(self) -> None:
+        """claude-3-7-sonnet-20250219 must resolve to 200_000 via explicit map entry."""
+        from anjor.interceptors.parsers.anthropic import _MODEL_CONTEXT_LIMITS
+
+        assert _MODEL_CONTEXT_LIMITS["claude-3-7-sonnet-20250219"] == 200_000
+
+    def test_unknown_claude_model_uses_prefix_fallback(self) -> None:
+        """Any unrecognised claude-* model falls back to 200_000, never 0."""
+        parser = AnthropicParser()
+        # Build a minimal parse call with an unknown model name
+        response = {
+            "content": [{"type": "text", "text": "ok"}],
+            "usage": {"input_tokens": 10, "output_tokens": 5},
+            "stop_reason": "end_turn",
+            "model": "claude-future-99",
+        }
+        events = parser.parse(
+            "https://api.anthropic.com/v1/messages",
+            {"model": "claude-future-99", "messages": [], "max_tokens": 10},
+            response,
+            10.0,
+            200,
+        )
+        from anjor.core.events.llm_call import LLMCallEvent
+
+        llm = next(e for e in events if isinstance(e, LLMCallEvent))
+        assert llm.context_window_limit == 200_000
+
 
 # ---------------------------------------------------------------------------
 # OpenAIParser stub
