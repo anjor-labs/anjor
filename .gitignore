@@ -43,6 +43,9 @@ anjor.db
 # Claude Code
 .claude/
 
+# Gemini Code
+.gemini/
+
 # Build artifacts
 dist/
 build/
