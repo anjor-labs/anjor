@@ -134,3 +134,69 @@ class TestMCPToolSummaries:
             await storage.write_event(mcp_event("mcp__github__create_pr"))
         result = await storage.list_mcp_tool_summaries()
         assert result[0].tool_name == "mcp__github__create_pr"
+
+
+# ---------------------------------------------------------------------------
+# Edge-case / malformed tool names
+# ---------------------------------------------------------------------------
+
+
+class TestMalformedMCPNames:
+    """Tools that start with mcp__ but don't follow the full convention must
+    be silently excluded from /mcp aggregates — no exceptions, no blank rows."""
+
+    async def test_no_second_separator_excluded_from_servers(self, storage: SQLiteBackend) -> None:
+        """mcp__notvalid has no second __ → server_name would be empty → excluded."""
+        await storage.write_event(mcp_event("mcp__notvalid"))
+        await storage.write_event(mcp_event("mcp__github__create_pr"))
+        result = await storage.list_mcp_server_summaries()
+        server_names = {s.server_name for s in result}
+        assert "" not in server_names
+        assert server_names == {"github"}
+
+    async def test_no_second_separator_excluded_from_tools(self, storage: SQLiteBackend) -> None:
+        await storage.write_event(mcp_event("mcp__notvalid"))
+        await storage.write_event(mcp_event("mcp__github__create_pr"))
+        result = await storage.list_mcp_tool_summaries()
+        tool_names = {t.tool_name for t in result}
+        assert "mcp__notvalid" not in tool_names
+        assert "mcp__github__create_pr" in tool_names
+
+    async def test_empty_server_segment_excluded_from_servers(self, storage: SQLiteBackend) -> None:
+        """mcp____tool has an empty server segment → excluded."""
+        await storage.write_event(mcp_event("mcp____tool"))
+        result = await storage.list_mcp_server_summaries()
+        assert result == []
+
+    async def test_empty_tool_segment_excluded_from_tools(self, storage: SQLiteBackend) -> None:
+        """mcp__server__ has an empty tool segment → excluded."""
+        await storage.write_event(mcp_event("mcp__server__"))
+        result = await storage.list_mcp_tool_summaries()
+        assert result == []
+
+    async def test_malformed_names_do_not_raise(self, storage: SQLiteBackend) -> None:
+        """Writing and querying any malformed name must never raise an exception."""
+        for name in ["mcp__notvalid", "mcp____tool", "mcp__server__", "mcp__"]:
+            await storage.write_event(mcp_event(name))
+        # Both queries must complete without error
+        servers = await storage.list_mcp_server_summaries()
+        tools = await storage.list_mcp_tool_summaries()
+        assert servers == []
+        assert tools == []
+
+    async def test_tool_with_double_underscores_in_name_included(
+        self, storage: SQLiteBackend
+    ) -> None:
+        """Tool names containing __ are valid — only the first __ is the separator."""
+        await storage.write_event(mcp_event("mcp__server__tool__with__extras"))
+        result = await storage.list_mcp_tool_summaries()
+        assert len(result) == 1
+        assert result[0].server_name == "server"
+        assert result[0].short_name == "tool__with__extras"
+
+    async def test_server_with_underscores_included(self, storage: SQLiteBackend) -> None:
+        """Server names with single underscores (e.g. brave_search) are valid."""
+        await storage.write_event(mcp_event("mcp__brave_search__web_search"))
+        result = await storage.list_mcp_server_summaries()
+        assert len(result) == 1
+        assert result[0].server_name == "brave_search"

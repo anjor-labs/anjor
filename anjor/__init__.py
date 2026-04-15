@@ -6,6 +6,8 @@ Public API:
                              auto-emit AgentSpanEvent on exit
     configure()            — set config programmatically
     get_pipeline()         — access the global event pipeline
+    is_mcp_tool()          — check if a tool name follows mcp__<server>__<tool>
+    parse_mcp_tool_name()  — parse mcp__<server>__<tool> into (server, tool)
     ContextWindowTracker   — track context usage across turns per trace
     ContextHogDetector     — identify tools with oversized outputs
     PromptDriftDetector    — detect system prompt changes per agent
@@ -36,6 +38,7 @@ from anjor.core.pipeline.pipeline import EventPipeline
 from anjor.interceptors.parsers.registry import build_default_registry
 from anjor.interceptors.patch import PatchInterceptor
 from anjor.interceptors.requests_patch import RequestsInterceptor as _RequestsInterceptor
+from anjor.mcp import is_mcp_tool, parse_mcp_tool_name
 
 __version__ = "0.5.1"
 __all__ = [
@@ -43,6 +46,8 @@ __all__ = [
     "span",
     "configure",
     "get_pipeline",
+    "is_mcp_tool",
+    "parse_mcp_tool_name",
     "ContextWindowTracker",
     "ContextHogDetector",
     "PromptDriftDetector",

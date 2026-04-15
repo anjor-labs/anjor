@@ -397,7 +397,10 @@ class SQLiteBackend(StorageBackend):
     async def list_mcp_server_summaries(self, days: int | None = None) -> list[MCPServerSummary]:
         """Return per-server stats for all tools whose name starts with mcp__."""
         assert self._conn is not None
-        where_parts = ["tool_name LIKE 'mcp__%'"]
+        # GLOB 'mcp__?*__?*' requires at least one char in both server and tool
+        # segments — this correctly excludes mcp__notvalid, mcp____tool, and
+        # mcp__server__ without needing a post-filter HAVING clause.
+        where_parts = ["tool_name GLOB 'mcp__?*__?*'"]
         params: list[Any] = []
         if days is not None:
             where_parts.append("timestamp >= datetime('now', ?)")
@@ -431,7 +434,10 @@ class SQLiteBackend(StorageBackend):
     async def list_mcp_tool_summaries(self, days: int | None = None) -> list[MCPToolSummary]:
         """Return per-tool stats for all tools whose name starts with mcp__."""
         assert self._conn is not None
-        where_parts = ["tool_name LIKE 'mcp__%'"]
+        # GLOB 'mcp__?*__?*' requires at least one char in both server and tool
+        # segments — this correctly excludes mcp__notvalid, mcp____tool, and
+        # mcp__server__ without needing a post-filter HAVING clause.
+        where_parts = ["tool_name GLOB 'mcp__?*__?*'"]
         params: list[Any] = []
         if days is not None:
             where_parts.append("timestamp >= datetime('now', ?)")
