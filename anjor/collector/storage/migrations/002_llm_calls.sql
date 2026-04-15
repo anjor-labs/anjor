@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS llm_calls (
     prompt_hash           TEXT,
     system_prompt_hash    TEXT,
     messages_count        INTEGER,
-    finish_reason         TEXT
+    finish_reason         TEXT,
+    source                TEXT    NOT NULL DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS idx_llm_calls_trace_id    ON llm_calls (trace_id);

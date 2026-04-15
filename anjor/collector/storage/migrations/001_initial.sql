@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS tool_calls (
     drift_detected      INTEGER,
     drift_missing       TEXT,
     drift_unexpected    TEXT,
-    drift_expected_hash TEXT
+    drift_expected_hash TEXT,
+    source              TEXT    NOT NULL DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS idx_tool_calls_tool_name  ON tool_calls (tool_name);

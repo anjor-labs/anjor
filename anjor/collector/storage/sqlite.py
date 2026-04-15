@@ -90,13 +90,30 @@ class SQLiteBackend(StorageBackend):
             sql = path.read_text()
             # DECISION: execute statements individually rather than executescript()
             # because executescript() issues an implicit COMMIT before running, which
-            # in Python 3.11 causes ALTER TABLE statements to be silently ignored when
-            # the connection is in autocommit mode. Splitting on ";" and executing each
-            # statement separately is reliable across all Python 3.11+ versions.
+            # interferes with ALTER TABLE on Python 3.11.
             statements = [
                 s.strip() for s in re.split(r";", re.sub(r"--[^\n]*", "", sql)) if s.strip()
             ]
             for stmt in statements:
+                upper = stmt.upper().lstrip()
+                # For ALTER TABLE ADD COLUMN: check if the column already exists so
+                # migration 005 is idempotent on databases created from the updated
+                # 001/002 schemas (which include the column from the start).
+                if upper.startswith("ALTER TABLE") and "ADD COLUMN" in upper:
+                    m = re.match(
+                        r"ALTER\s+TABLE\s+(\w+)\s+ADD\s+COLUMN\s+(\w+)",
+                        stmt.strip(),
+                        re.IGNORECASE,
+                    )
+                    if m:
+                        tbl, col = m.group(1), m.group(2).lower()
+                        pi = await self._conn.execute(f"PRAGMA table_info({tbl})")  # noqa: S608
+                        existing = {row[1].lower() for row in await pi.fetchall()}
+                        if col in existing:
+                            continue  # already present — skip
+                    # Commit any open implicit transaction before DDL so the ALTER
+                    # takes effect reliably on Python 3.11 (isolation_level='').
+                    await self._conn.commit()
                 await self._conn.execute(stmt)
             await self._conn.execute(
                 "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",

@@ -1,12 +1,20 @@
-"""anjor MCP server — gives Claude Code and Gemini CLI a live status tool.
+"""anjor MCP server — entry point for Claude Code subscription users.
 
 Exposes one tool: anjor_status.
 Auto-starts the HTTP collector in the background on startup.
 Optionally starts WatcherManager when watch_transcripts=True.
 
-─── Claude Code ────────────────────────────────────────────────────────────────
-Add to .mcp.json in your project root (or ~/.claude/.mcp.json for global):
+.mcp.json configuration (place in project root):
+    {
+      "mcpServers": {
+        "anjor": {
+          "command": "anjor",
+          "args": ["mcp"]
+        }
+      }
+    }
 
+With transcript watching:
     {
       "mcpServers": {
         "anjor": {
@@ -15,25 +23,6 @@ Add to .mcp.json in your project root (or ~/.claude/.mcp.json for global):
         }
       }
     }
-
-─── Gemini CLI ─────────────────────────────────────────────────────────────────
-Add to .gemini/settings.json in your project root (or ~/.gemini/settings.json):
-
-    {
-      "mcpServers": {
-        "anjor": {
-          "command": "anjor",
-          "args": ["mcp", "--watch-transcripts", "--providers", "gemini"]
-        }
-      }
-    }
-
-─── Without MCP (transcript-only) ─────────────────────────────────────────────
-For agents that don't support MCP, use the standalone watcher:
-
-    anjor watch-transcripts --providers gemini     # Gemini CLI
-    anjor watch-transcripts --providers claude     # Claude Code
-    anjor watch-transcripts                        # auto-detect all
 """
 
 from __future__ import annotations
