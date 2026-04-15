@@ -131,8 +131,9 @@ class SQLiteBackend(StorageBackend):
                 tool_name, status, failure_type, latency_ms,
                 input_payload, output_payload, input_schema_hash, output_schema_hash,
                 token_usage_input, token_usage_output,
-                drift_detected, drift_missing, drift_unexpected, drift_expected_hash
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                drift_detected, drift_missing, drift_unexpected, drift_expected_hash,
+                source
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [self._row_from_event(e) for e in batch],
         )
         await self._conn.commit()
@@ -172,6 +173,7 @@ class SQLiteBackend(StorageBackend):
             json.dumps(drift.get("missing_fields", [])) if drift else None,
             json.dumps(drift.get("unexpected_fields", [])) if drift else None,
             drift.get("expected_hash"),
+            event.get("source", ""),
         )
 
     # ------------------------------------------------------------------
@@ -202,8 +204,9 @@ class SQLiteBackend(StorageBackend):
                 model, latency_ms,
                 token_input, token_output, token_cache_read, token_cache_write,
                 context_window_used, context_window_limit, context_utilisation,
-                prompt_hash, system_prompt_hash, messages_count, finish_reason
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                prompt_hash, system_prompt_hash, messages_count, finish_reason,
+                source
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 event_data.get("trace_id", ""),
                 event_data.get("session_id", ""),
@@ -223,6 +226,7 @@ class SQLiteBackend(StorageBackend):
                 event_data.get("system_prompt_hash"),
                 event_data.get("messages_count"),
                 event_data.get("finish_reason"),
+                event_data.get("source", ""),
             ),
         )
         await self._conn.commit()

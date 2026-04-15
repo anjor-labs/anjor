@@ -29,6 +29,40 @@ def main() -> None:
     start.add_argument("--db", default=None, help="SQLite DB path (default: anjor.db)")
     start.add_argument("--log-level", default=None, help="Log level (default: INFO)")
 
+    mcp_cmd = sub.add_parser("mcp", help="Start anjor as an MCP server (for Claude Code)")
+    mcp_cmd.add_argument(
+        "--watch-transcripts",
+        action="store_true",
+        default=False,
+        help="Also watch AI coding agent transcript files for LLM token data",
+    )
+    mcp_cmd.add_argument(
+        "--providers",
+        default=None,
+        help=(
+            "Comma-separated provider keys to watch (default: auto-detect). "
+            "Options: claude, gemini, codex, antigravity"
+        ),
+    )
+    mcp_cmd.add_argument("--port", type=int, default=7843, help="Collector port (default: 7843)")
+
+    wt_cmd = sub.add_parser(
+        "watch-transcripts",
+        help="Watch AI coding agent transcript files (standalone)",
+    )
+    wt_cmd.add_argument(
+        "--providers",
+        default=None,
+        help="Comma-separated provider keys (default: auto-detect)",
+    )
+    wt_cmd.add_argument(
+        "--list-providers",
+        action="store_true",
+        default=False,
+        help="Print all registered providers and whether their paths exist, then exit",
+    )
+    wt_cmd.add_argument("--port", type=int, default=7843, help="Collector port (default: 7843)")
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -37,6 +71,10 @@ def main() -> None:
 
     if args.command == "start":
         _start(args)
+    elif args.command == "mcp":
+        _run_mcp(args)
+    elif args.command == "watch-transcripts":
+        _run_watch_transcripts(args)
 
 
 def _check_port(host: str, port: int) -> str:
@@ -121,6 +159,64 @@ def _start(args: argparse.Namespace) -> None:
         port=config.collector_port,
         log_level=config.log_level.lower(),
     )
+
+
+def _run_mcp(args: argparse.Namespace) -> None:
+    from anjor.mcp_server import run_mcp_server
+
+    providers = (
+        [p.strip() for p in args.providers.split(",") if p.strip()] if args.providers else None
+    )
+    run_mcp_server(
+        watch_transcripts=args.watch_transcripts,
+        providers=providers,
+        collector_port=args.port,
+    )
+
+
+def _run_watch_transcripts(args: argparse.Namespace) -> None:
+    import glob as _glob
+    import signal
+    import threading
+
+    from anjor.watchers.registry import WATCHER_REGISTRY
+
+    if args.list_providers:
+        home = str(__import__("pathlib").Path.home())
+        for key, cls in WATCHER_REGISTRY.items():
+            w = cls()
+            paths = w.default_paths()
+            found = any(_glob.glob(p, recursive=True) for p in paths)
+            short = paths[0].replace(home, "~").split("**")[0].rstrip("/")
+            mark = "✓" if found else "✗"
+            status = "found" if found else "not found"
+            print(f"  {key:<14} {mark} {short} ({status})")
+        return
+
+    providers = (
+        [p.strip() for p in args.providers.split(",") if p.strip()] if args.providers else None
+    )
+    collector_url = f"http://localhost:{args.port}"
+
+    from anjor.watchers.manager import WatcherManager
+
+    manager = WatcherManager(collector_url=collector_url)
+    manager.start(providers)
+
+    if not manager.active_providers():
+        return  # message already printed by WatcherManager.start()
+
+    stop = threading.Event()
+
+    def _handle_signal(sig: int, frame: object) -> None:
+        stop.set()
+
+    signal.signal(signal.SIGINT, _handle_signal)
+    signal.signal(signal.SIGTERM, _handle_signal)
+
+    print("anjor: watching transcripts — Ctrl+C to stop")
+    stop.wait()
+    manager.stop()
 
 
 if __name__ == "__main__":

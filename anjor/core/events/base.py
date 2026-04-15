@@ -36,3 +36,9 @@ class BaseEvent(BaseModel):
     # DECISION: UTC-aware datetime so timestamps are unambiguous across timezones.
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     sequence_no: int = Field(default=0, ge=0)
+    # Source identifies how anjor learned about this event.
+    # ""             = httpx interceptor (anjor.patch() — default)
+    # "mcp"          = captured via anjor MCP server
+    # "claude_code"  = extracted from Claude Code transcript watcher
+    # "gemini_cli"   = extracted from Gemini CLI transcript watcher
+    source: str = ""
