@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anjor — Projects</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="utils.js"></script>
+</head>
+<body class="min-h-screen bg-gray-950 text-gray-100 font-mono">
+  <div id="nav"></div>
+  <main class="px-6 py-8 max-w-7xl mx-auto space-y-6" id="app">
+    <p class="text-gray-600 text-sm">Loading…</p>
+  </main>
+  <script>
+    document.getElementById('nav').innerHTML = buildNav('/ui/projects.html')
+
+    let lastUpdated = ''
+
+    async function load() {
+      try {
+        const projects = await fetch(`${API}/projects`).then(r => r.json())
+        lastUpdated = new Date().toLocaleTimeString()
+        render(projects)
+      } catch {
+        document.getElementById('app').innerHTML = errorBanner('Cannot reach collector at :' + (window.location.port || 80))
+      }
+    }
+
+    function fmtDate(iso) {
+      if (!iso) return '—'
+      const d = new Date(iso)
+      return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }
+
+    function render(projects) {
+      if (projects.length === 0) {
+        document.getElementById('app').innerHTML = `
+          <div class="flex items-center justify-between">
+            <h1 class="text-xl font-bold text-white">Projects</h1>
+          </div>
+          <div class="bg-gray-900 border border-gray-800 rounded-lg p-8 text-center space-y-3">
+            <p class="text-gray-300">No projects detected yet.</p>
+            <p class="text-gray-500 text-sm">Projects are auto-detected from Claude Code session paths, or set explicitly with <code class="bg-gray-800 px-1.5 rounded">--project</code>.</p>
+            <p class="text-gray-600 text-xs mt-2">Start the watcher: <code class="bg-gray-800 px-1.5 rounded">anjor start --watch-transcripts</code></p>
+          </div>`
+        return
+      }
+
+      const sorted = [...projects].sort((a, b) => new Date(b.last_seen) - new Date(a.last_seen))
+
+      const rows = sorted.map(p => {
+        const enc = encodeURIComponent(p.project)
+        return `
+          <tr class="border-b border-gray-900 hover:bg-gray-900/50">
+            <td class="py-3 pr-4">
+              <span class="text-white font-medium">${p.project}</span>
+            </td>
+            <td class="py-3 pr-4 text-right text-gray-300">${fmt.num(p.tool_call_count)}</td>
+            <td class="py-3 pr-4 text-right text-blue-300">${fmt.num(p.llm_call_count)}</td>
+            <td class="py-3 pr-4 text-right text-gray-400 text-xs">${fmt.num(p.total_token_input + p.total_token_output)}</td>
+            <td class="py-3 pr-4 text-right text-gray-500 text-xs">${fmtDate(p.last_seen)}</td>
+            <td class="py-3 text-right">
+              <div class="flex items-center justify-end gap-2">
+                <a href="/ui/tools.html?project=${enc}" class="text-xs text-blue-400 hover:text-blue-300 bg-blue-950/50 border border-blue-900/50 rounded px-2 py-0.5">tools →</a>
+                <a href="/ui/llm.html?project=${enc}" class="text-xs text-purple-400 hover:text-purple-300 bg-purple-950/50 border border-purple-900/50 rounded px-2 py-0.5">usage →</a>
+                <a href="/ui/calls.html?project=${enc}" class="text-xs text-gray-400 hover:text-gray-300 bg-gray-800 border border-gray-700 rounded px-2 py-0.5">calls →</a>
+              </div>
+            </td>
+          </tr>`
+      }).join('')
+
+      const totalTools = projects.reduce((s, p) => s + p.tool_call_count, 0)
+      const totalLLM   = projects.reduce((s, p) => s + p.llm_call_count, 0)
+
+      document.getElementById('app').innerHTML = `
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-xl font-bold text-white">Projects</h1>
+            <p class="text-xs text-gray-500 mt-0.5">${projects.length} project${projects.length !== 1 ? 's' : ''} · ${fmt.num(totalTools)} tool calls · ${fmt.num(totalLLM)} LLM calls</p>
+          </div>
+          ${lastUpdated ? `<p class="text-xs text-gray-600">Updated ${lastUpdated}</p>` : ''}
+        </div>
+
+        <div class="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+          <table class="w-full text-sm">
+            <thead><tr class="border-b border-gray-800 bg-gray-900/80">
+              <th class="text-left text-xs text-gray-500 uppercase px-4 py-3">Project</th>
+              <th class="text-right text-xs text-gray-500 uppercase px-4 py-3">Tool calls</th>
+              <th class="text-right text-xs text-gray-500 uppercase px-4 py-3">LLM calls</th>
+              <th class="text-right text-xs text-gray-500 uppercase px-4 py-3">Tokens</th>
+              <th class="text-right text-xs text-gray-500 uppercase px-4 py-3">Last seen</th>
+              <th class="text-right text-xs text-gray-500 uppercase px-4 py-3">Explore</th>
+            </tr></thead>
+            <tbody class="divide-y divide-gray-900">${rows}</tbody>
+          </table>
+        </div>
+
+        <p class="text-xs text-gray-600">Projects are auto-detected from Claude Code session paths. Use <code class="bg-gray-800 px-1 rounded">--project &lt;name&gt;</code> to override.</p>`
+    }
+
+    load()
+    setInterval(load, 10000)
+  </script>
+</body>
+</html>

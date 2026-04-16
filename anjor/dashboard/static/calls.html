@@ -12,7 +12,8 @@
   <main class="px-6 py-8 max-w-7xl mx-auto space-y-6">
     <div class="flex items-center justify-between flex-wrap gap-3">
       <h1 class="text-xl font-bold text-white">Call Inspector</h1>
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-3 flex-wrap">
+        <div id="projectFilterContainer"></div>
         <input id="filter" type="text" placeholder="Filter by tool name…"
           class="bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 w-52" />
         <span id="updated" class="text-xs text-gray-600"></span>
@@ -27,8 +28,31 @@
     const PAGE_SIZE = 25
     let page = 0
     let toolFilter = ''
+    let projectFilter = new URLSearchParams(window.location.search).get('project') || ''
     let expanded = null
     let lastCalls = []
+    let projects = []
+
+    async function loadProjects() {
+      try { projects = await fetch(`${API}/projects`).then(r => r.json()) } catch { projects = [] }
+      renderProjectFilter()
+    }
+
+    function renderProjectFilter() {
+      const container = document.getElementById('projectFilterContainer')
+      if (!container || !projects.length) return
+      const options = [`<option value="">All projects</option>`]
+        .concat(projects.map(p => `<option value="${p.project}" ${p.project === projectFilter ? 'selected' : ''}>${p.project}</option>`))
+        .join('')
+      container.innerHTML = `<select id="projectSel" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-200 font-mono">
+        ${options}
+      </select>`
+      document.getElementById('projectSel').addEventListener('change', e => {
+        projectFilter = e.target.value
+        page = 0
+        load()
+      })
+    }
 
     document.getElementById('filter').addEventListener('input', e => {
       toolFilter = e.target.value
@@ -55,6 +79,7 @@
       try {
         const params = new URLSearchParams({ limit: PAGE_SIZE, offset: page * PAGE_SIZE })
         if (toolFilter) params.set('tool_name', toolFilter)
+        if (projectFilter) params.set('project', projectFilter)
         lastCalls = await fetch(`${API}/calls?${params}`).then(r => r.json())
         document.getElementById('updated').textContent = 'Updated ' + new Date().toLocaleTimeString()
         render(lastCalls)
@@ -150,6 +175,7 @@
     function prevPage() { if (page > 0) { page--; load() } }
     function nextPage() { page++; load() }
 
+    loadProjects()
     load()
     setInterval(load, 5000)
   </script>

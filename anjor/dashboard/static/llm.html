@@ -84,8 +84,10 @@
 
     let selectedModel = 'all'
     let selectedDays = 30
+    let selectedProject = new URLSearchParams(window.location.search).get('project') || ''
     let summaries = []
     let dailyRows = []
+    let projects = []
 
     const DAY_OPTIONS = [
       { value: 1,    label: '1d' },
@@ -96,10 +98,20 @@
       { value: null, label: 'All time' },
     ]
 
+    async function loadProjects() {
+      try { projects = await fetch(`${API}/projects`).then(r => r.json()) } catch { projects = [] }
+    }
+
     async function load() {
       try {
-        const llmUrl = selectedDays !== null ? `${API}/llm?days=${selectedDays}` : `${API}/llm`
-        const dailyUrl = selectedDays !== null ? `${API}/llm/usage/daily?days=${selectedDays}` : `${API}/llm/usage/daily?days=3650`
+        const params = new URLSearchParams()
+        if (selectedDays !== null) params.set('days', selectedDays)
+        if (selectedProject) params.set('project', selectedProject)
+        const qs = params.toString()
+        const llmUrl   = `${API}/llm${qs ? '?' + qs : ''}`
+        const dailyUrl = selectedDays !== null
+          ? `${API}/llm/usage/daily?days=${selectedDays}${selectedProject ? '&project=' + encodeURIComponent(selectedProject) : ''}`
+          : `${API}/llm/usage/daily?days=3650${selectedProject ? '&project=' + encodeURIComponent(selectedProject) : ''}`
         ;[summaries, dailyRows] = await Promise.all([
           fetch(llmUrl).then(r => r.json()),
           fetch(dailyUrl).then(r => r.json()),
@@ -142,6 +154,7 @@
           <div>
             <h1 class="text-xl font-bold text-white">Usage</h1>
             <p class="text-xs text-gray-500 mt-1">Token consumption and cost across all LLM calls</p>
+            ${selectedProject ? `<p class="text-xs text-blue-400 mt-0.5">Project: ${selectedProject} · <a href="/ui/llm.html" class="text-gray-500 hover:text-gray-300">clear</a></p>` : ''}
           </div>
           <div class="flex items-center gap-3 flex-wrap">
             <div class="flex items-center gap-1 bg-gray-900 border border-gray-700 rounded overflow-hidden">
@@ -151,6 +164,13 @@
                 return `<button data-days="${val}" class="px-2.5 py-1 text-xs font-mono transition-colors ${active ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}">${opt.label}</button>`
               }).join('')}
             </div>
+            ${projects.length ? `<div class="flex items-center gap-2">
+              <label class="text-xs text-gray-500">Project</label>
+              <select id="projectFilter" class="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 font-mono">
+                <option value="">All projects</option>
+                ${projects.map(p => `<option value="${p.project}" ${p.project === selectedProject ? 'selected' : ''}>${p.project}</option>`).join('')}
+              </select>
+            </div>` : ''}
             <div class="flex items-center gap-2">
               <label class="text-xs text-gray-500">Model</label>
               <select id="modelFilter" class="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 font-mono">
@@ -169,6 +189,11 @@
       document.getElementById('modelFilter').addEventListener('change', e => {
         selectedModel = e.target.value
         render()
+      })
+      const pf = document.getElementById('projectFilter')
+      if (pf) pf.addEventListener('change', e => {
+        selectedProject = e.target.value
+        load()
       })
       document.querySelectorAll('[data-days]').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -353,7 +378,7 @@
         </section>`
     }
 
-    load()
+    loadProjects().then(load)
     setInterval(load, 10000)
   </script>
 </body>

@@ -16,15 +16,34 @@
     document.getElementById('nav').innerHTML = buildNav('/ui/tools.html')
 
     let lastUpdated = ''
+    let selectedProject = new URLSearchParams(window.location.search).get('project') || ''
+    let projects = []
+
+    async function loadProjects() {
+      try {
+        projects = await fetch(`${API}/projects`).then(r => r.json())
+      } catch { projects = [] }
+    }
 
     async function load() {
       try {
-        const tools = await fetch(`${API}/tools`).then(r => r.json())
+        const url = selectedProject ? `${API}/tools?project=${encodeURIComponent(selectedProject)}` : `${API}/tools`
+        const tools = await fetch(url).then(r => r.json())
         lastUpdated = new Date().toLocaleTimeString()
         render(tools)
       } catch {
         document.getElementById('app').innerHTML = errorBanner('Cannot reach collector at :' + (window.location.port || 80))
       }
+    }
+
+    function projectFilter() {
+      if (!projects.length) return ''
+      const options = [`<option value="">All projects</option>`]
+        .concat(projects.map(p => `<option value="${p.project}" ${p.project === selectedProject ? 'selected' : ''}>${p.project}</option>`))
+        .join('')
+      return `<select id="projectFilter" class="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 font-mono">
+        ${options}
+      </select>`
     }
 
     function render(tools) {
@@ -54,14 +73,26 @@
           </table>`
 
       document.getElementById('app').innerHTML = `
-        <div class="flex items-center justify-between">
-          <h1 class="text-xl font-bold text-white">Tool Explorer</h1>
-          ${lastUpdatedBadge(lastUpdated)}
+        <div class="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h1 class="text-xl font-bold text-white">Tool Explorer</h1>
+            ${selectedProject ? `<p class="text-xs text-gray-500 mt-0.5">Filtered: <span class="text-blue-400">${selectedProject}</span> · <a href="/ui/tools.html" class="text-gray-500 hover:text-gray-300">clear</a></p>` : ''}
+          </div>
+          <div class="flex items-center gap-3">
+            ${projectFilter()}
+            ${lastUpdatedBadge(lastUpdated)}
+          </div>
         </div>
         ${body}`
+
+      const sel = document.getElementById('projectFilter')
+      if (sel) sel.addEventListener('change', e => {
+        selectedProject = e.target.value
+        load()
+      })
     }
 
-    load()
+    loadProjects().then(load)
     setInterval(load, 5000)
   </script>
 </body>
