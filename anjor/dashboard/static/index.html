@@ -59,7 +59,7 @@
     async function load() {
       clearTimeout(refreshTimer)
       try {
-        const [health, tools, llmSummaries, mcpData, failures, toolScores, driftCalls, dailyUsage, sourcesData] = await Promise.all([
+        const [health, tools, llmSummaries, mcpData, failures, toolScores, driftCalls, dailyUsage, sourcesData, projectsData] = await Promise.all([
           fetch(`${API}/health`).then(r => r.json()),
           fetch(`${API}/tools`).then(r => r.json()),
           fetch(`${API}/llm`).then(r => r.json()),
@@ -69,9 +69,10 @@
           fetch(`${API}/calls?drift_only=true&limit=5`).then(r => r.json()),
           fetch(`${API}/llm/usage/daily?days=14`).then(r => r.json()),
           fetch(`${API}/llm/sources`).then(r => r.json()),
+          fetch(`${API}/projects`).then(r => r.json()),
         ])
         lastUpdated = new Date().toLocaleTimeString()
-        const isEmpty = render(health, tools, llmSummaries, mcpData, failures, toolScores, driftCalls, dailyUsage, sourcesData.sources || [])
+        const isEmpty = render(health, tools, llmSummaries, mcpData, failures, toolScores, driftCalls, dailyUsage, sourcesData.sources || [], projectsData.length)
         // Poll faster while waiting for the first event, normal cadence once data arrives
         refreshTimer = setTimeout(load, isEmpty ? 3000 : 10000)
       } catch {
@@ -306,7 +307,7 @@
 
     // ── Main render ───────────────────────────────────────────────────────────
     // Returns true when empty state was shown (so load() can adjust refresh rate).
-    function render(health, tools, llmSummaries, mcpData, failures, toolScores, driftCalls, dailyUsage, sources) {
+    function render(health, tools, llmSummaries, mcpData, failures, toolScores, driftCalls, dailyUsage, sources, projectCount = 0) {
       // Fleet totals
       const totalToolCalls = tools.reduce((s, t) => s + t.call_count, 0)
       const toolSuccessRate = totalToolCalls
@@ -360,10 +361,11 @@
         </div>
 
         <!-- Hero metrics -->
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
           ${metricCard('Tool calls', fmt.num(totalToolCalls), 'text-white', `${fmt.pct(toolSuccessRate)} success`, '/ui/tools.html')}
           ${metricCard('LLM calls', fmt.num(totalLLMCalls), 'text-blue-400', `${llmSummaries.length} model${llmSummaries.length !== 1 ? 's' : ''}`, '/ui/llm.html')}
           ${metricCard('Est. cost', fmtCost(totalCost), 'text-yellow-400', 'all time', '/ui/llm.html')}
+          ${metricCard('Projects', String(projectCount), projectCount > 0 ? 'text-cyan-400' : 'text-gray-500', projectCount > 0 ? `${projectCount} tracked` : 'none tagged', '/ui/projects.html')}
           ${metricCard('MCP calls', fmt.num(totalMCPCalls), 'text-purple-400', `${activeMCPServers} server${activeMCPServers !== 1 ? 's' : ''}`, '/ui/mcp.html')}
           ${metricCard('Failure patterns', String(failurePatterns), failurePatterns > 0 ? 'text-red-400' : 'text-green-400', failurePatterns > 0 ? 'needs attention' : 'all clear', '/ui/intelligence.html')}
           ${metricCard('Drift alerts', String(driftCount), driftCount > 0 ? 'text-yellow-400' : 'text-green-400', driftCount > 0 ? 'last 5 shown' : 'none detected', '/ui/alerts.html')}
