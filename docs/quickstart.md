@@ -1,158 +1,156 @@
 # Anjor — Quickstart
 
-This walks you through running Anjor locally, capturing tool calls and LLM events, and querying the results. No cloud. No account. Everything runs on your machine.
+No cloud. No account. Everything runs on your machine.
 
 ---
 
-## Prerequisites
-
-Python 3.11+ and pip.
+## Install
 
 ```bash
-pip install anjor
+pipx install "anjor[mcp]"   # recommended — includes MCP server support
+# or
+pip install "anjor[mcp]"
 ```
 
 ---
 
-## Step 1 — Start the Collector
+## Option A — Observe Claude Code or Gemini CLI Sessions
+
+Best if you use Claude Code or Gemini CLI and want a dashboard of your own sessions without changing anything.
+
+### Via MCP (auto-starts with Claude Code)
+
+Add to `.mcp.json` in your project root:
+
+```json
+{
+  "mcpServers": {
+    "anjor": {
+      "command": "anjor",
+      "args": ["mcp", "--watch-transcripts"]
+    }
+  }
+}
+```
+
+Anjor starts automatically when Claude Code opens. It ingests your session transcripts, exposes `anjor_status` as a tool Claude can call to check session health, and serves the dashboard at `http://localhost:7843/ui/`.
+
+For Gemini CLI, add to `.gemini/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "anjor": {
+      "command": "anjor",
+      "args": ["mcp", "--watch-transcripts", "--providers", "gemini"]
+    }
+  }
+}
+```
+
+### Standalone (no MCP required)
+
+```bash
+anjor start --watch-transcripts
+```
+
+Opens `http://localhost:7843/ui/` immediately. Polls for new transcript entries every 2 seconds.
+
+```bash
+# Watch specific providers or adjust poll interval
+anjor start --watch-transcripts --providers claude,gemini --poll-interval 5.0
+
+# List detected agents on this machine
+anjor watch-transcripts --list-providers
+```
+
+---
+
+## Option B — Instrument Your Own Agent
+
+Best for developers building custom AI agents who want real-time telemetry.
+
+### Step 1 — Start the collector
 
 ```bash
 anjor start
 ```
 
-You should see:
 ```
 Anjor collector  http://localhost:7843/health
 Anjor dashboard  http://localhost:7843/ui/
-Database         anjor.db
+Database         ~/.anjor/anjor.db
 ```
 
-Verify it's running:
-```bash
-curl http://localhost:7843/health
-# {"status":"ok","uptime_seconds":1.2,"queue_depth":0,"db_path":"anjor.db"}
-```
-
-Leave this running in a terminal tab.
-
----
-
-## Step 2 — Instrument Your Agent
-
-Add one line at the top of your agent file:
+### Step 2 — One line in your agent
 
 ```python
 import anjor
-anjor.patch()   # that's it
+anjor.patch()   # that's it — instrument httpx automatically
 ```
 
-Every httpx call your process makes is now captured. The Anthropic, OpenAI, and Google Gemini SDKs all use httpx internally, so no other changes are required.
+Every httpx call in the process is now captured. The Anthropic, OpenAI, and Gemini SDKs all use httpx internally.
 
----
+### Step 3 — Make calls normally
 
-## Step 3 — Make Tool Calls
-
-### Anthropic
-
+**Anthropic:**
 ```python
-import anjor
+import anjor, anthropic
 anjor.patch()
 
-import anthropic
-
-client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from env
-
+client = anthropic.Anthropic()
 response = client.messages.create(
     model="claude-sonnet-4-6",
     max_tokens=1024,
     tools=[{
         "name": "web_search",
         "description": "Search the web",
-        "input_schema": {
-            "type": "object",
-            "properties": {"query": {"type": "string"}},
-            "required": ["query"]
-        }
+        "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}
     }],
-    messages=[{"role": "user", "content": "Search for the latest AI news"}]
+    messages=[{"role": "user", "content": "Search for AI news"}]
 )
 ```
 
-### OpenAI
-
+**OpenAI:**
 ```python
 import anjor
+from openai import OpenAI
 anjor.patch()
 
-from openai import OpenAI
-
-client = OpenAI()  # reads OPENAI_API_KEY from env
-
+client = OpenAI()
 response = client.chat.completions.create(
     model="gpt-4o",
-    tools=[{
-        "type": "function",
-        "function": {
-            "name": "web_search",
-            "description": "Search the web",
-            "parameters": {
-                "type": "object",
-                "properties": {"query": {"type": "string"}},
-                "required": ["query"]
-            }
-        }
-    }],
-    messages=[{"role": "user", "content": "Search for the latest AI news"}]
+    tools=[{"type": "function", "function": {"name": "web_search", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}}}}],
+    messages=[{"role": "user", "content": "Search for AI news"}]
 )
 ```
 
-### Google Gemini
-
+**Gemini:**
 ```python
-import anjor
+import anjor, google.generativeai as genai
 anjor.patch()
-
-import google.generativeai as genai
 
 genai.configure(api_key="YOUR_GEMINI_API_KEY")
 model = genai.GenerativeModel("gemini-2.0-flash")
-response = model.generate_content("Search for the latest AI news")
+response = model.generate_content("Search for AI news")
 ```
 
----
-
-## Step 4 — Query the Data
-
-Events land in the batch writer and are flushed every 500 ms.  In development,
-call `/flush` to write pending events immediately instead of waiting:
+### Step 4 — Query the data
 
 ```bash
+# Force-flush the batch writer (useful in development)
 curl -X POST http://localhost:7843/flush
-# {"flushed": 3}
-```
 
-Then query as normal:
-
-```bash
-# All tools seen
+# Tool summaries with latency percentiles
 curl http://localhost:7843/tools
 
-# Tool detail with latency percentiles
-curl http://localhost:7843/tools/web_search
-
-# LLM call summaries by model
+# LLM usage by model
 curl http://localhost:7843/llm
 
-# Paginated event log
-curl http://localhost:7843/calls
-
-# Failure patterns with suggestions
+# Failure patterns with fix suggestions
 curl http://localhost:7843/intelligence/failures
 
-# Token optimization opportunities
-curl http://localhost:7843/intelligence/optimization
-
-# Per-tool quality scores (A–F)
+# Per-tool quality grades (A–F)
 curl http://localhost:7843/intelligence/quality/tools
 ```
 
@@ -160,57 +158,32 @@ Or open the dashboard at `http://localhost:7843/ui/`.
 
 ---
 
-## Without a Real API Key (Using respx)
-
-You don't need a real API key to see the full flow. Use `respx` to mock the response:
+## Programmatic Access (no running collector needed)
 
 ```python
 import anjor
-anjor.patch()
 
-import httpx
-import respx
+with anjor.Client("~/.anjor/anjor.db") as client:
+    for tool in client.tools():
+        print(f"{tool.tool_name:30s}  calls={tool.call_count}  ok={tool.success_rate:.0%}")
 
-ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
-
-FAKE_RESPONSE = {
-    "content": [{
-        "type": "tool_use",
-        "id": "toolu_01",
-        "name": "web_search",
-        "input": {"query": "AI news"},
-    }],
-    "model": "claude-sonnet-4-6",
-    "usage": {"input_tokens": 150, "output_tokens": 60},
-}
-
-with respx.mock:
-    respx.post(ANTHROPIC_URL).mock(return_value=httpx.Response(200, json=FAKE_RESPONSE))
-    with httpx.Client() as client:
-        client.post(
-            ANTHROPIC_URL,
-            json={"model": "claude-sonnet-4-6", "messages": [{"role": "user", "content": "Search"}]},
-            headers={"x-api-key": "fake-key"},
-        )
-
-# Now query
-import requests
-print(requests.get("http://localhost:7843/tools/web_search").json())
+    patterns  = client.intelligence.failures()
+    quality   = client.intelligence.quality()
 ```
 
 ---
 
 ## Multi-Agent Tracing
 
-Anjor automatically injects W3C `traceparent` headers into outbound httpx requests. If your orchestrator calls sub-agents over HTTP, the trace context propagates automatically — no code changes needed.
+Anjor automatically injects W3C `traceparent` headers into outbound httpx requests. If your orchestrator calls sub-agents over HTTP, the trace context propagates with no code changes.
 
-You can also pass a `trace_id` explicitly in Anthropic request metadata to correlate events across calls:
+You can also set a `trace_id` explicitly in Anthropic request metadata:
 
 ```python
 response = client.messages.create(
     model="claude-sonnet-4-6",
     messages=[...],
-    metadata={"trace_id": "my-session-001"},  # shared across all events in this trace
+    metadata={"trace_id": "my-session-001"},
 )
 ```
 
@@ -225,13 +198,8 @@ curl http://localhost:7843/traces/{trace_id}/graph
 ## Configuration
 
 ```bash
-# Use a specific DB path
 ANJOR_DB_PATH=./my_project.db python my_agent.py
-
-# Flush after every event (useful in development)
-ANJOR_BATCH_SIZE=1 ANJOR_BATCH_INTERVAL_MS=100 python my_agent.py
-
-# Debug logging
+ANJOR_BATCH_SIZE=1 python my_agent.py          # flush after every event
 ANJOR_LOG_LEVEL=DEBUG python my_agent.py
 ```
 
@@ -246,29 +214,52 @@ log_level = "DEBUG"
 
 ---
 
-## Common Issues
+## Testing Without a Real API Key
 
-**No events appearing in `/tools`**
+```python
+import anjor, httpx, respx
+anjor.patch()
 
-The batch writer flushes every 500 ms or 100 events.  If you only made one call
-and queried immediately, call `POST /flush` first:
+FAKE_RESPONSE = {
+    "content": [{"type": "tool_use", "id": "t1", "name": "web_search", "input": {"query": "AI"}}],
+    "model": "claude-sonnet-4-6",
+    "usage": {"input_tokens": 150, "output_tokens": 60},
+}
 
-```bash
-curl -X POST http://localhost:7843/flush   # force-write pending events
-curl http://localhost:7843/tools           # now shows data
+with respx.mock:
+    respx.post("https://api.anthropic.com/v1/messages").mock(
+        return_value=httpx.Response(200, json=FAKE_RESPONSE)
+    )
+    with httpx.Client() as c:
+        c.post("https://api.anthropic.com/v1/messages",
+               json={"model": "claude-sonnet-4-6", "messages": [{"role": "user", "content": "go"}]},
+               headers={"x-api-key": "fake"})
 ```
 
-Alternatively, set `ANJOR_BATCH_SIZE=1` to bypass the batch writer entirely —
-every tool call is written synchronously on arrival with no buffering.
+---
 
-**`curl` returns empty list `[]`**
+## Common Issues
 
-Confirm your agent completed a tool-using call (not just a text response). Text-only responses produce an `LLMCallEvent` visible at `/llm`, not `/tools`.
+**No events in `/tools` after a call**
 
-**`anjor.patch()` installs but nothing is intercepted**
+The batch writer flushes every 500 ms. Force-flush for immediate results:
+```bash
+curl -X POST http://localhost:7843/flush
+```
+Or set `ANJOR_BATCH_SIZE=1` to bypass batching entirely.
 
-Your agent may be using `requests` instead of `httpx`. Anjor patches httpx only. All three major provider SDKs (Anthropic, OpenAI, Gemini) use httpx by default.
+**Empty list `[]` from `/tools`**
 
-**Collector exits immediately**
+Text-only responses produce an `LLMCallEvent` visible at `/llm`, not `/tools`. Tool calls only appear when the model used a tool.
 
-Check the port isn't already in use: `lsof -i :7843`. Change with `ANJOR_COLLECTOR_PORT=7844`.
+**Nothing intercepted by `anjor.patch()`**
+
+Check that your agent uses httpx (directly or via Anthropic/OpenAI/Gemini SDK). Anjor does not patch the `requests` library.
+
+**Transcript watcher finds no sessions**
+
+Run `anjor watch-transcripts --list-providers` to see which agents are detected. Claude Code transcripts require at least one completed session in `~/.claude/projects/`.
+
+**Watcher posts events before collector is ready**
+
+Expected — the collector may not be bound yet when the watcher first polls. Events dropped on the first poll are picked up on the next 2-second cycle.

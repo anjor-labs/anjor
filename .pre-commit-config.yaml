@@ -21,6 +21,13 @@ repos:
 
   - repo: local
     hooks:
+      - id: no-internal-files
+        name: block internal/sensitive files from public repo
+        entry: scripts/check_no_internal_files.sh
+        language: script
+        pass_filenames: false
+        always_run: true
+
       - id: mypy
         name: mypy
         entry: .venv/bin/mypy
