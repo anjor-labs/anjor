@@ -132,7 +132,7 @@ def run_mcp_server(
 
     server: Server = Server("anjor")
 
-    @server.list_tools()  # type: ignore[untyped-decorator]
+    @server.list_tools()  # type: ignore
     async def list_tools() -> list[mcp_types.Tool]:
         return [
             mcp_types.Tool(
@@ -228,6 +228,14 @@ def run_mcp_server(
         file=sys.stderr,
     )
 
-    import asyncio
+    import anyio
 
-    asyncio.run(mcp.server.stdio.stdio_server(server))
+    async def _run() -> None:
+        async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+            await server.run(
+                read_stream,
+                write_stream,
+                server.create_initialization_options(),
+            )
+
+    anyio.run(_run)

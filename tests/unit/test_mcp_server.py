@@ -72,7 +72,7 @@ def test_run_mcp_server_watch_transcripts_success():
         patch("anjor.watchers.manager.WatcherManager.active_providers", return_value=["claude"]),
         patch("mcp.server.Server"),
         patch("mcp.server.stdio.stdio_server"),
-        patch("asyncio.run"),
+        patch("anyio.run"),
     ):
         run_mcp_server(watch_transcripts=True, providers=["claude"])
         mock_start.assert_called_once_with(["claude"])
@@ -84,7 +84,7 @@ def test_run_mcp_server_watch_transcripts_exception():
         patch("anjor.watchers.manager.WatcherManager.start", side_effect=Exception("watch error")),
         patch("mcp.server.Server"),
         patch("mcp.server.stdio.stdio_server"),
-        patch("asyncio.run"),
+        patch("anyio.run"),
     ):
         run_mcp_server(watch_transcripts=True, providers=["claude"])
 
@@ -94,7 +94,7 @@ async def test_run_mcp_server_tools():
     with (
         patch("anjor.mcp_server._start_collector_background"),
         patch("mcp.server.stdio.stdio_server"),
-        patch("asyncio.run"),
+        patch("anyio.run"),
     ):
         tools_registered: dict = {}
 
