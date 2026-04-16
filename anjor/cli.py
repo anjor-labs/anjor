@@ -33,6 +33,27 @@ def main() -> None:
     )
     start.add_argument("--db", default=None, help="SQLite DB path (default: anjor.db)")
     start.add_argument("--log-level", default=None, help="Log level (default: INFO)")
+    start.add_argument(
+        "--watch-transcripts",
+        action="store_true",
+        default=False,
+        help="Also watch AI coding agent transcript files (Claude Code, Gemini CLI, etc.)",
+    )
+    start.add_argument(
+        "--providers",
+        default=None,
+        help=(
+            "Comma-separated provider keys to watch (default: auto-detect). "
+            "Options: claude, gemini, codex, antigravity. "
+            "Only used with --watch-transcripts."
+        ),
+    )
+    start.add_argument(
+        "--poll-interval",
+        type=float,
+        default=2.0,
+        help="Transcript polling interval in seconds (default: 2.0). Only used with --watch-transcripts.",  # noqa: E501
+    )
 
     mcp_cmd = sub.add_parser("mcp", help="Start anjor as an MCP server (for Claude Code)")
     mcp_cmd.add_argument(
@@ -175,6 +196,21 @@ def _start(args: argparse.Namespace) -> None:
     print(f"Anjor collector  {url}/health")
     print(f"Anjor dashboard  {url}/ui/")
     print(f"Database         {config.db_path}")
+
+    if args.watch_transcripts:
+        from anjor.watchers.manager import WatcherManager
+
+        providers = (
+            [p.strip() for p in args.providers.split(",") if p.strip()] if args.providers else None
+        )
+        manager = WatcherManager(
+            collector_url=f"http://localhost:{config.collector_port}",
+            poll_interval=args.poll_interval,
+        )
+        manager.start(providers)
+        active = manager.active_providers()
+        if active:
+            print(f"Watching          {', '.join(active)}")
 
     uvicorn.run(
         app,

@@ -66,6 +66,39 @@ class TestCLI:
         assert "7843" in out
         assert "dashboard" in out.lower() or "/ui/" in out
 
+    def test_start_watch_transcripts_starts_watcher(self) -> None:
+        mock_run = MagicMock()
+        mock_manager_start = MagicMock()
+        with (
+            patch.object(
+                sys, "argv", ["anjor", "start", "--watch-transcripts", "--providers", "claude"]
+            ),
+            patch("anjor.cli._check_port", return_value="free"),
+            patch("uvicorn.run", mock_run),
+            patch("anjor.watchers.manager.WatcherManager.start", mock_manager_start),
+            patch(
+                "anjor.watchers.manager.WatcherManager.active_providers",
+                return_value=["claude_code"],
+            ),
+            patch("builtins.print"),
+        ):
+            main()
+        mock_manager_start.assert_called_once_with(["claude"])
+        mock_run.assert_called_once()
+
+    def test_start_no_watch_transcripts_skips_watcher(self) -> None:
+        mock_run = MagicMock()
+        mock_manager_cls = MagicMock()
+        with (
+            patch.object(sys, "argv", ["anjor", "start"]),
+            patch("anjor.cli._check_port", return_value="free"),
+            patch("uvicorn.run", mock_run),
+            patch("anjor.watchers.manager.WatcherManager", mock_manager_cls),
+            patch("builtins.print"),
+        ):
+            main()
+        mock_manager_cls.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # Port-collision handling
