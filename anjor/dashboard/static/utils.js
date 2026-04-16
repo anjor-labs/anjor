@@ -77,7 +77,50 @@ function statusDot(status) {
     : '<span class="inline-block w-2 h-2 rounded-full bg-green-500 mr-1.5"></span>'
 }
 
+// ── Auto-refresh ──────────────────────────────────────────────────────────────
+const REFRESH_OPTIONS = [
+  { label: '5s',  ms: 5_000 },
+  { label: '30s', ms: 30_000 },
+  { label: '1m',  ms: 60_000 },
+  { label: '5m',  ms: 300_000 },
+  { label: 'Off', ms: 0 },
+]
+const REFRESH_KEY = 'anjor-refresh'
+
+function getRefreshMs() {
+  const v = localStorage.getItem(REFRESH_KEY)
+  return v !== null ? Number(v) : 30_000  // default 30s
+}
+
+// Call once per page after nav is rendered. Starts the interval and wires
+// the nav selector to restart it when changed.
+function initAutoRefresh(loadFn) {
+  window._anjorLoadFn = loadFn
+  _applyRefresh()
+}
+
+function _applyRefresh() {
+  clearInterval(window._anjorTimer)
+  const ms = getRefreshMs()
+  if (ms > 0 && window._anjorLoadFn) {
+    window._anjorTimer = setInterval(window._anjorLoadFn, ms)
+  }
+}
+
+// Called inline from the nav select's onchange.
+function _anjorSetRefresh(val) {
+  localStorage.setItem(REFRESH_KEY, val)
+  _applyRefresh()
+  // Update the badge next to the select
+  const badge = document.getElementById('refreshBadge')
+  if (badge) badge.textContent = Number(val) > 0 ? '' : 'paused'
+}
+
 function buildNav(current) {
+  const ms = getRefreshMs()
+  const options = REFRESH_OPTIONS.map(o =>
+    `<option value="${o.ms}" ${o.ms === ms ? 'selected' : ''}>${o.label}</option>`
+  ).join('')
   const links = NAV_LINKS.map(([href, label]) => {
     const active = window.location.pathname === href || (href === '/' && window.location.pathname === '/ui/index.html')
     return `<a href="${href}" class="text-sm ${active ? 'text-white' : 'text-gray-400 hover:text-white'} transition-colors">${label}</a>`
@@ -85,7 +128,17 @@ function buildNav(current) {
   return `<nav class="sticky top-0 z-10 border-b border-gray-800 bg-gray-950/90 backdrop-blur px-6 py-3 flex items-center gap-8">
     <span class="font-bold text-white tracking-tight">Anjor</span>
     <div class="flex items-center gap-6">${links}</div>
-    <span class="ml-auto text-xs text-gray-600">:${window.location.port || 80}</span>
+    <div class="ml-auto flex items-center gap-3">
+      <div class="flex items-center gap-1.5">
+        <span class="text-xs text-gray-600">Refresh</span>
+        <select onchange="_anjorSetRefresh(this.value)"
+                class="bg-gray-900 border border-gray-700 rounded px-2 py-0.5 text-xs text-gray-400 font-mono focus:outline-none focus:border-blue-500">
+          ${options}
+        </select>
+        <span id="refreshBadge" class="text-xs text-yellow-500">${ms === 0 ? 'paused' : ''}</span>
+      </div>
+      <span class="text-xs text-gray-600">:${window.location.port || 80}</span>
+    </div>
   </nav>`
 }
 

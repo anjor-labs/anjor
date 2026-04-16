@@ -54,10 +54,8 @@
     }
 
     let lastUpdated = ''
-    let refreshTimer = null
 
     async function load() {
-      clearTimeout(refreshTimer)
       try {
         const [health, tools, llmSummaries, mcpData, failures, toolScores, driftCalls, dailyUsage, sourcesData, projectsData] = await Promise.all([
           fetch(`${API}/health`).then(r => r.json()),
@@ -72,9 +70,7 @@
           fetch(`${API}/projects`).then(r => r.json()),
         ])
         lastUpdated = new Date().toLocaleTimeString()
-        const isEmpty = render(health, tools, llmSummaries, mcpData, failures, toolScores, driftCalls, dailyUsage, sourcesData.sources || [], projectsData.length)
-        // Poll faster while waiting for the first event, normal cadence once data arrives
-        refreshTimer = setTimeout(load, isEmpty ? 3000 : 10000)
+        render(health, tools, llmSummaries, mcpData, failures, toolScores, driftCalls, dailyUsage, sourcesData.sources || [], projectsData.length)
       } catch {
         document.getElementById('app').innerHTML = `
           <div class="flex flex-col items-center justify-center min-h-64 gap-4 text-center">
@@ -82,7 +78,6 @@
             <p class="text-gray-300 text-lg">Collector not reachable</p>
             <p class="text-gray-500 text-sm">Start it with: <code class="bg-gray-900 px-2 py-1 rounded text-gray-200">anjor start</code></p>
           </div>`
-        refreshTimer = setTimeout(load, 5000)
       }
     }
 
@@ -423,6 +418,7 @@
     }
 
     load()
+    initAutoRefresh(load)
   </script>
 </body>
 </html>
