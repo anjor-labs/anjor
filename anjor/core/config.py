@@ -88,7 +88,7 @@ class AnjorConfig(BaseSettings):
     # Storage
     storage_backend: str = Field(default="sqlite", pattern="^(sqlite|postgres|clickhouse)$")
     storage_url: str | None = None  # required for postgres/clickhouse; unused by sqlite
-    db_path: str = "anjor.db"  # sqlite only
+    db_path: str = str(Path.home() / ".anjor" / "anjor.db")  # sqlite only
 
     # Logging
     log_level: str = Field(default="INFO", pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")

@@ -14,7 +14,9 @@ class TestAnjorConfig:
         assert cfg.mode == "patch"
         assert cfg.proxy_port == 7842
         assert cfg.collector_port == 7843
-        assert cfg.db_path == "anjor.db"
+        from pathlib import Path
+
+        assert cfg.db_path == str(Path.home() / ".anjor" / "anjor.db")
         assert cfg.log_level == "INFO"
         assert cfg.max_payload_size_kb == 512
         assert cfg.batch_size == 100
