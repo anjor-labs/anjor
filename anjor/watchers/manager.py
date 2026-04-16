@@ -25,13 +25,18 @@ class WatcherManager:
         manager.stop()
     """
 
-    def __init__(self, collector_url: str = "http://localhost:7843") -> None:
+    def __init__(
+        self,
+        collector_url: str = "http://localhost:7843",
+        poll_interval: float = 2.0,
+    ) -> None:
         self._collector_url = collector_url
+        self._poll_interval = poll_interval
         self._watchers: list[BaseTranscriptWatcher] = []
 
     def start(self, providers: list[str] | None = None) -> None:
         """Build and start watchers. Auto-detects providers when providers=None."""
-        self._watchers = build_active_watchers(providers, self._collector_url)
+        self._watchers = build_active_watchers(providers, self._collector_url, self._poll_interval)
         if not self._watchers:
             logger.info("anjor_no_transcript_paths_found")
             print("anjor: no AI coding agent transcript paths found on this machine")

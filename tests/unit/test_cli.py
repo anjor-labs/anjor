@@ -325,11 +325,16 @@ class TestMCPAndWatchTranscriptsCommand:
         import argparse
         from anjor.cli import _run_mcp
 
-        args = argparse.Namespace(watch_transcripts=True, providers="claude,gemini", port=9000)
+        args = argparse.Namespace(
+            watch_transcripts=True, providers="claude,gemini", port=9000, poll_interval=2.0
+        )
         with patch("anjor.mcp_server.run_mcp_server") as mock_run:
             _run_mcp(args)
             mock_run.assert_called_once_with(
-                watch_transcripts=True, providers=["claude", "gemini"], collector_port=9000
+                watch_transcripts=True,
+                providers=["claude", "gemini"],
+                collector_port=9000,
+                poll_interval_s=2.0,
             )
 
     def test_run_watch_transcripts_list(self, capsys):
@@ -345,7 +350,9 @@ class TestMCPAndWatchTranscriptsCommand:
         import argparse
         from anjor.cli import _run_watch_transcripts
 
-        args = argparse.Namespace(list_providers=False, providers="claude", port=7843)
+        args = argparse.Namespace(
+            list_providers=False, providers="claude", port=7843, poll_interval=2.0
+        )
         with (
             patch("anjor.watchers.manager.WatcherManager.start") as mock_start,
             patch(
@@ -363,7 +370,9 @@ class TestMCPAndWatchTranscriptsCommand:
         import argparse
         from anjor.cli import _run_watch_transcripts
 
-        args = argparse.Namespace(list_providers=False, providers="claude", port=7843)
+        args = argparse.Namespace(
+            list_providers=False, providers="claude", port=7843, poll_interval=2.0
+        )
         with (
             patch("anjor.watchers.manager.WatcherManager.start") as mock_start,
             patch("anjor.watchers.manager.WatcherManager.active_providers", return_value=[]),

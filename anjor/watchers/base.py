@@ -53,7 +53,7 @@ class BaseTranscriptWatcher(ABC):
     def __init__(
         self,
         collector_url: str = "http://localhost:7843",
-        poll_interval: float = 1.0,
+        poll_interval: float = 2.0,
     ) -> None:
         self._collector_url = collector_url.rstrip("/")
         self._poll_interval = poll_interval

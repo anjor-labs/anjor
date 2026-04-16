@@ -88,6 +88,7 @@ def run_mcp_server(
     watch_transcripts: bool = False,
     providers: list[str] | None = None,
     collector_port: int = 7843,
+    poll_interval_s: float = 2.0,
 ) -> None:
     """Start the anjor MCP server. Exits 1 if mcp SDK is not installed."""
     try:
@@ -108,7 +109,7 @@ def run_mcp_server(
         try:
             from anjor.watchers.manager import WatcherManager
 
-            manager = WatcherManager(collector_url=collector_url)
+            manager = WatcherManager(collector_url=collector_url, poll_interval=poll_interval_s)
             manager.start(providers)
             active = manager.active_providers()
             if active:

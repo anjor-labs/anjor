@@ -50,6 +50,12 @@ def main() -> None:
         ),
     )
     mcp_cmd.add_argument("--port", type=int, default=7843, help="Collector port (default: 7843)")
+    mcp_cmd.add_argument(
+        "--poll-interval",
+        type=float,
+        default=2.0,
+        help="Transcript polling interval in seconds (default: 2.0)",
+    )
 
     wt_cmd = sub.add_parser(
         "watch-transcripts",
@@ -67,6 +73,12 @@ def main() -> None:
         help="Print all registered providers and whether their paths exist, then exit",
     )
     wt_cmd.add_argument("--port", type=int, default=7843, help="Collector port (default: 7843)")
+    wt_cmd.add_argument(
+        "--poll-interval",
+        type=float,
+        default=2.0,
+        help="Transcript polling interval in seconds (default: 2.0)",
+    )
 
     args = parser.parse_args()
 
@@ -182,6 +194,7 @@ def _run_mcp(args: argparse.Namespace) -> None:
         watch_transcripts=args.watch_transcripts,
         providers=providers,
         collector_port=args.port,
+        poll_interval_s=args.poll_interval,
     )
 
 
@@ -211,7 +224,7 @@ def _run_watch_transcripts(args: argparse.Namespace) -> None:
 
     from anjor.watchers.manager import WatcherManager
 
-    manager = WatcherManager(collector_url=collector_url)
+    manager = WatcherManager(collector_url=collector_url, poll_interval=args.poll_interval)
     manager.start(providers)
 
     if not manager.active_providers():
