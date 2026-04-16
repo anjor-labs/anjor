@@ -42,3 +42,6 @@ class BaseEvent(BaseModel):
     # "claude_code"  = extracted from Claude Code transcript watcher
     # "gemini_cli"   = extracted from Gemini CLI transcript watcher
     source: str = ""
+    # Project tag — groups events across sessions from the same working directory.
+    # Auto-populated by transcript watchers; overridable via --project CLI flag.
+    project: str = ""

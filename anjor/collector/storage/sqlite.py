@@ -16,6 +16,7 @@ from anjor.collector.storage.base import (
     LLMSummary,
     MCPServerSummary,
     MCPToolSummary,
+    ProjectSummary,
     QueryFilters,
     SchemaSnapshot,
     StorageBackend,
@@ -133,6 +134,8 @@ class SQLiteBackend(StorageBackend):
         needed: list[tuple[str, str, str]] = [
             ("tool_calls", "source", "TEXT NOT NULL DEFAULT ''"),
             ("llm_calls", "source", "TEXT NOT NULL DEFAULT ''"),
+            ("tool_calls", "project", "TEXT NOT NULL DEFAULT ''"),
+            ("llm_calls", "project", "TEXT NOT NULL DEFAULT ''"),
         ]
         altered = False
         for table, col, typedef in needed:
@@ -174,8 +177,8 @@ class SQLiteBackend(StorageBackend):
                 input_payload, output_payload, input_schema_hash, output_schema_hash,
                 token_usage_input, token_usage_output,
                 drift_detected, drift_missing, drift_unexpected, drift_expected_hash,
-                source
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                source, project
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [self._row_from_event(e) for e in batch],
         )
         await self._conn.commit()
@@ -216,6 +219,7 @@ class SQLiteBackend(StorageBackend):
             json.dumps(drift.get("unexpected_fields", [])) if drift else None,
             drift.get("expected_hash"),
             event.get("source", ""),
+            event.get("project", ""),
         )
 
     # ------------------------------------------------------------------
@@ -247,8 +251,8 @@ class SQLiteBackend(StorageBackend):
                 token_input, token_output, token_cache_read, token_cache_write,
                 context_window_used, context_window_limit, context_utilisation,
                 prompt_hash, system_prompt_hash, messages_count, finish_reason,
-                source
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                source, project
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 event_data.get("trace_id", ""),
                 event_data.get("session_id", ""),
@@ -269,6 +273,7 @@ class SQLiteBackend(StorageBackend):
                 event_data.get("messages_count"),
                 event_data.get("finish_reason"),
                 event_data.get("source", ""),
+                event_data.get("project", ""),
             ),
         )
         await self._conn.commit()
@@ -291,6 +296,9 @@ class SQLiteBackend(StorageBackend):
         if filters.until:
             conditions.append("timestamp <= ?")
             params.append(filters.until.isoformat())
+        if filters.project:
+            conditions.append("project = ?")
+            params.append(filters.project)
 
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
         params.extend([filters.limit, filters.offset])
@@ -302,24 +310,38 @@ class SQLiteBackend(StorageBackend):
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
-    async def get_tool_summary(self, tool_name: str) -> ToolSummary | None:
+    async def get_tool_summary(
+        self, tool_name: str, project: str | None = None
+    ) -> ToolSummary | None:
         assert self._conn is not None
-        cursor = await self._conn.execute(
-            "SELECT status, latency_ms FROM tool_calls WHERE tool_name = ?",
-            (tool_name,),
-        )
+        if project:
+            cursor = await self._conn.execute(
+                "SELECT status, latency_ms FROM tool_calls WHERE tool_name = ? AND project = ?",
+                (tool_name, project),
+            )
+        else:
+            cursor = await self._conn.execute(
+                "SELECT status, latency_ms FROM tool_calls WHERE tool_name = ?",
+                (tool_name,),
+            )
         rows = await cursor.fetchall()
         if not rows:
             return None
         return self._compute_summary(tool_name, list(rows))
 
-    async def list_tool_summaries(self) -> list[ToolSummary]:
+    async def list_tool_summaries(self, project: str | None = None) -> list[ToolSummary]:
         assert self._conn is not None
-        cursor = await self._conn.execute("SELECT DISTINCT tool_name FROM tool_calls")
+        if project:
+            cursor = await self._conn.execute(
+                "SELECT DISTINCT tool_name FROM tool_calls WHERE project = ?",
+                (project,),
+            )
+        else:
+            cursor = await self._conn.execute("SELECT DISTINCT tool_name FROM tool_calls")
         names = [row[0] for row in await cursor.fetchall()]
         summaries = []
         for name in names:
-            summary = await self.get_tool_summary(name)
+            summary = await self.get_tool_summary(name, project=project)
             if summary:
                 summaries.append(summary)
         return summaries
@@ -369,6 +391,9 @@ class SQLiteBackend(StorageBackend):
         if filters.until:
             conditions.append("timestamp <= ?")
             params.append(filters.until.isoformat())
+        if filters.project:
+            conditions.append("project = ?")
+            params.append(filters.project)
 
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
         params.extend([filters.limit, filters.offset])
@@ -380,11 +405,20 @@ class SQLiteBackend(StorageBackend):
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
-    async def list_llm_summaries(self, days: int | None = None) -> list[LLMSummary]:
+    async def list_llm_summaries(
+        self, days: int | None = None, project: str | None = None
+    ) -> list[LLMSummary]:
         """Return aggregated stats per model from llm_calls table."""
         assert self._conn is not None
-        where = "WHERE timestamp >= datetime('now', ?)" if days is not None else ""
-        params: tuple[Any, ...] = (f"-{days} days",) if days is not None else ()
+        where_parts: list[str] = []
+        params: list[Any] = []
+        if days is not None:
+            where_parts.append("timestamp >= datetime('now', ?)")
+            params.append(f"-{days} days")
+        if project:
+            where_parts.append("project = ?")
+            params.append(project)
+        where = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
         cursor = await self._conn.execute(
             f"""SELECT
                 model,
@@ -454,6 +488,50 @@ class SQLiteBackend(StorageBackend):
             return [row[0] for row in rows]
         except _sqlite3.OperationalError:
             return []
+
+    async def list_projects(self) -> list[ProjectSummary]:
+        """Return per-project aggregated stats from tool_calls and llm_calls."""
+        assert self._conn is not None
+        tc_cursor = await self._conn.execute(
+            """SELECT project,
+                      count(*)        AS tool_call_count,
+                      min(timestamp)  AS first_seen,
+                      max(timestamp)  AS last_seen
+               FROM tool_calls
+               WHERE project != ''
+               GROUP BY project"""
+        )
+        tc_rows = {row["project"]: dict(row) for row in await tc_cursor.fetchall()}
+
+        llm_cursor = await self._conn.execute(
+            """SELECT project,
+                      count(*)                            AS llm_call_count,
+                      sum(coalesce(token_input,  0))      AS total_token_input,
+                      sum(coalesce(token_output, 0))      AS total_token_output
+               FROM llm_calls
+               WHERE project != ''
+               GROUP BY project"""
+        )
+        llm_rows = {row["project"]: dict(row) for row in await llm_cursor.fetchall()}
+
+        all_projects = sorted(set(tc_rows) | set(llm_rows))
+        result = []
+        for proj in all_projects:
+            tc = tc_rows.get(proj, {})
+            llm = llm_rows.get(proj, {})
+            result.append(
+                ProjectSummary(
+                    project=proj,
+                    tool_call_count=tc.get("tool_call_count", 0),
+                    llm_call_count=llm.get("llm_call_count", 0),
+                    total_token_input=llm.get("total_token_input", 0),
+                    total_token_output=llm.get("total_token_output", 0),
+                    first_seen=tc.get("first_seen") or "",
+                    last_seen=tc.get("last_seen") or "",
+                )
+            )
+        result.sort(key=lambda p: p.last_seen, reverse=True)
+        return result
 
     async def list_mcp_server_summaries(self, days: int | None = None) -> list[MCPServerSummary]:
         """Return per-server stats for all tools whose name starts with mcp__."""

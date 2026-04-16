@@ -18,6 +18,7 @@ def make_calls_router(service: CollectorService) -> APIRouter:
     @calls_router.get("/calls")
     async def list_calls(
         tool_name: str | None = Query(default=None),
+        project: str | None = Query(default=None),
         drift_only: bool = Query(default=False),
         limit: int = Query(default=50, ge=1, le=500),
         offset: int = Query(default=0, ge=0),
@@ -27,7 +28,7 @@ def make_calls_router(service: CollectorService) -> APIRouter:
         - drift_only=true returns only calls where schema drift was detected.
         - Ordered by timestamp DESC.
         """
-        filters = QueryFilters(tool_name=tool_name, limit=limit, offset=offset)
+        filters = QueryFilters(tool_name=tool_name, project=project, limit=limit, offset=offset)
         calls = await service.storage.query_tool_calls(filters)
         if drift_only:
             calls = [c for c in calls if c.get("drift_detected")]

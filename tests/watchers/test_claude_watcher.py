@@ -5,7 +5,7 @@ import pytest
 
 from anjor.core.events.llm_call import LLMCallEvent
 from anjor.core.events.tool_call import FailureType, ToolCallEvent, ToolCallStatus
-from anjor.watchers.claude import ClaudeTranscriptWatcher
+from anjor.watchers.claude import ClaudeTranscriptWatcher, _decode_project_dir
 
 
 def test_assistant_text_only_emits_llm_event():
@@ -209,3 +209,45 @@ def test_full_fixture(tmp_path):
 
     assert len(llm_events) == 3
     assert len(tool_events) == 3
+
+
+# ── _decode_project_dir ────────────────────────────────────────────────────
+
+
+def test_decode_project_dir_simple():
+    # /Users/anjistic/code/anjor → "-Users-anjistic-code-anjor" → "anjor"
+    assert _decode_project_dir("-Users-anjistic-code-anjor") == "anjor"
+
+
+def test_decode_project_dir_with_spaces():
+    # /Users/anjistic/Desktop/personal projects/anjor → "-Users-anjistic-Desktop-personal projects-anjor"
+    assert _decode_project_dir("-Users-anjistic-Desktop-personal projects-anjor") == "anjor"
+
+
+def test_decode_project_dir_empty():
+    assert _decode_project_dir("") == ""
+
+
+def test_decode_project_dir_only_dashes():
+    assert _decode_project_dir("---") == ""
+
+
+def test_project_from_path_claude_watcher(tmp_path):
+    # Simulate the Claude Code path structure
+    project_dir = tmp_path / "-Users-anjistic-code-myproject"
+    project_dir.mkdir()
+    session_file = project_dir / "session.jsonl"
+    session_file.write_text("")
+    w = ClaudeTranscriptWatcher()
+    assert w._project_from_path(str(session_file)) == "myproject"
+
+
+def test_project_override_takes_precedence_over_auto(tmp_path):
+    project_dir = tmp_path / "-Users-anjistic-code-myproject"
+    project_dir.mkdir()
+    session_file = project_dir / "session.jsonl"
+    session_file.write_text("")
+    # Explicit override
+    w = ClaudeTranscriptWatcher(project="override")
+    assert w._project == "override"
+    # The base _tail logic uses self._project if set, skipping auto-detection

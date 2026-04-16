@@ -54,13 +54,25 @@ class BaseTranscriptWatcher(ABC):
         self,
         collector_url: str = "http://localhost:7843",
         poll_interval: float = 2.0,
+        project: str = "",
     ) -> None:
         self._collector_url = collector_url.rstrip("/")
         self._poll_interval = poll_interval
+        self._project = project
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._offsets: dict[str, int] = {}
         self._client = httpx.Client(timeout=5.0)
+
+    # ── Project extraction ─────────────────────────────────────────────────
+
+    def _project_from_path(self, path: str) -> str:
+        """Extract a project name from a transcript file path.
+
+        Returns "" by default (no project). Subclasses override for providers
+        whose path encodes the working directory (e.g. Claude Code).
+        """
+        return ""
 
     # ── Abstract interface ─────────────────────────────────────────────────
 
@@ -147,6 +159,8 @@ class BaseTranscriptWatcher(ABC):
 
     def _tail(self, path: str) -> None:
         """Read new lines from path since last recorded byte offset."""
+        # Resolve project once per file: explicit override wins, else auto-detect.
+        project = self._project or self._project_from_path(path)
         offset = self._offsets.get(path, 0)
         try:
             with open(path, encoding="utf-8", errors="replace") as fh:
@@ -156,6 +170,8 @@ class BaseTranscriptWatcher(ABC):
                     if line:
                         events = self._safe_parse_line(line)
                         if events:
+                            if project:
+                                events = [e.model_copy(update={"project": project}) for e in events]
                             self._post_events(events)
                 self._offsets[path] = fh.tell()
         except FileNotFoundError:

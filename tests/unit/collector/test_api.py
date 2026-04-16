@@ -326,3 +326,54 @@ class TestLLMUsageEndpoints:
         assert "cache_read" in row
         assert "cache_write" in row
         assert "calls" in row
+
+
+class TestProjectsEndpoint:
+    def test_projects_empty(self, client: TestClient) -> None:
+        resp = client.get("/projects")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_projects_returns_tagged_events(self, client: TestClient) -> None:
+        client.post("/events", json=sample_event(project="myproject"))
+        client.post("/events", json=sample_event(project="myproject"))
+        resp = client.get("/projects")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["project"] == "myproject"
+        assert data[0]["tool_call_count"] == 2
+
+    def test_projects_excludes_untagged(self, client: TestClient) -> None:
+        client.post("/events", json=sample_event(project=""))
+        client.post("/events", json=sample_event(project="tagged"))
+        resp = client.get("/projects")
+        assert resp.status_code == 200
+        assert len(resp.json()) == 1
+        assert resp.json()[0]["project"] == "tagged"
+
+    def test_tools_filter_by_project(self, client: TestClient) -> None:
+        client.post("/events", json=sample_event(tool_name="search", project="alpha"))
+        client.post("/events", json=sample_event(tool_name="lookup", project="beta"))
+        resp = client.get("/tools?project=alpha")
+        assert resp.status_code == 200
+        names = [t["tool_name"] for t in resp.json()]
+        assert names == ["search"]
+
+    def test_calls_filter_by_project(self, client: TestClient) -> None:
+        client.post("/events", json=sample_event(tool_name="search", project="alpha"))
+        client.post("/events", json=sample_event(tool_name="lookup", project="beta"))
+        resp = client.get("/calls?project=alpha")
+        assert resp.status_code == 200
+        calls = resp.json()
+        assert len(calls) == 1
+        assert calls[0]["tool_name"] == "search"
+
+    def test_llm_filter_by_project(self, client: TestClient) -> None:
+        client.post("/events", json=sample_llm_event(project="alpha"))
+        client.post("/events", json=sample_llm_event(project="beta"))
+        resp = client.get("/llm?project=alpha")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["call_count"] == 1

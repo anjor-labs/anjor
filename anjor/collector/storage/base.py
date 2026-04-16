@@ -16,6 +16,7 @@ class QueryFilters:
     status: str | None = None
     since: datetime | None = None
     until: datetime | None = None
+    project: str | None = None
     limit: int = 100
     offset: int = 0
 
@@ -40,8 +41,22 @@ class LLMQueryFilters:
     model: str | None = None
     since: datetime | None = None
     until: datetime | None = None
+    project: str | None = None
     limit: int = 100
     offset: int = 0
+
+
+@dataclass
+class ProjectSummary:
+    """Aggregated stats for a single project tag."""
+
+    project: str
+    tool_call_count: int
+    llm_call_count: int
+    total_token_input: int
+    total_token_output: int
+    first_seen: str
+    last_seen: str
 
 
 @dataclass
@@ -155,7 +170,9 @@ class StorageBackend(ABC):
         ...
 
     @abstractmethod
-    async def list_llm_summaries(self, days: int | None = None) -> list[LLMSummary]:
+    async def list_llm_summaries(
+        self, days: int | None = None, project: str | None = None
+    ) -> list[LLMSummary]:
         """Return aggregated stats per model, optionally limited to the last N days."""
         ...
 
@@ -175,13 +192,15 @@ class StorageBackend(ABC):
         ...
 
     @abstractmethod
-    async def get_tool_summary(self, tool_name: str) -> ToolSummary | None:
-        """Return aggregated stats for a tool."""
+    async def get_tool_summary(
+        self, tool_name: str, project: str | None = None
+    ) -> ToolSummary | None:
+        """Return aggregated stats for a tool, optionally scoped to a project."""
         ...
 
     @abstractmethod
-    async def list_tool_summaries(self) -> list[ToolSummary]:
-        """Return aggregated stats for all tools."""
+    async def list_tool_summaries(self, project: str | None = None) -> list[ToolSummary]:
+        """Return aggregated stats for all tools, optionally scoped to a project."""
         ...
 
     @abstractmethod
@@ -232,6 +251,11 @@ class StorageBackend(ABC):
     @abstractmethod
     async def query_spans_all(self, limit: int = 5000) -> list[dict[str, Any]]:
         """Return all spans across all traces (for global attribution)."""
+        ...
+
+    @abstractmethod
+    async def list_projects(self) -> list[ProjectSummary]:
+        """Return per-project aggregated stats from tool_calls and llm_calls."""
         ...
 
     @abstractmethod

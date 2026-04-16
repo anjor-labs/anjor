@@ -57,6 +57,23 @@ from anjor.watchers.base import BaseTranscriptWatcher
 
 logger = structlog.get_logger(__name__)
 
+
+def _decode_project_dir(encoded: str) -> str:
+    """Extract a human-readable project name from a Claude Code encoded directory name.
+
+    Claude Code stores transcripts at ~/.claude/projects/<encoded>/<session>.jsonl
+    where <encoded> is the absolute working-directory path with every '/' replaced
+    by '-' (spaces and other characters are left as-is).
+
+    Strategy: split on '-' and take the last non-empty segment.  This gives the
+    final path component (the project directory name) for the common case.
+    Projects whose names contain hyphens will be truncated — users should use
+    --project to set an explicit name in that case.
+    """
+    parts = [p for p in encoded.split("-") if p]
+    return parts[-1] if parts else ""
+
+
 _GC_TIMEOUT_SECONDS = 60
 _GC_EVERY_N_CALLS = 10
 _SEEN_UUIDS_MAX = 10_000
@@ -94,6 +111,10 @@ class ClaudeTranscriptWatcher(BaseTranscriptWatcher):
         self._pending: dict[str, dict[str, Any]] = {}
         self._seen_uuids: set[str] = set()
         self._gc_counter = 0
+
+    def _project_from_path(self, path: str) -> str:
+        """Extract project name from a Claude Code transcript file path."""
+        return _decode_project_dir(Path(path).parent.name)
 
     def default_paths(self) -> list[str]:
         if sys.platform == "win32":

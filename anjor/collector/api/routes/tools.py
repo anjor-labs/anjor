@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from anjor.collector.api.schemas import ToolDetailResponse, ToolListItem
 
@@ -16,8 +16,8 @@ def make_tools_router(service: CollectorService) -> APIRouter:
     tools_router = APIRouter()
 
     @tools_router.get("/tools", response_model=list[ToolListItem])
-    async def list_tools() -> list[ToolListItem]:
-        summaries = await service.storage.list_tool_summaries()
+    async def list_tools(project: str | None = Query(default=None)) -> list[ToolListItem]:
+        summaries = await service.storage.list_tool_summaries(project=project)
         return [
             ToolListItem(
                 tool_name=s.tool_name,
@@ -29,8 +29,10 @@ def make_tools_router(service: CollectorService) -> APIRouter:
         ]
 
     @tools_router.get("/tools/{tool_name}", response_model=ToolDetailResponse)
-    async def get_tool(tool_name: str) -> ToolDetailResponse:
-        summary = await service.storage.get_tool_summary(tool_name)
+    async def get_tool(
+        tool_name: str, project: str | None = Query(default=None)
+    ) -> ToolDetailResponse:
+        summary = await service.storage.get_tool_summary(tool_name, project=project)
         if summary is None:
             raise HTTPException(status_code=404, detail=f"Tool {tool_name!r} not found")
         return ToolDetailResponse(

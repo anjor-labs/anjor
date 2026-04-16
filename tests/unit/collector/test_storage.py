@@ -466,3 +466,99 @@ class TestCacheTokenStorage:
         assert "modelB" in models
         assert models["modelA"]["tokens_in"] == 300
         assert models["modelB"]["tokens_in"] == 300
+
+
+class TestProjectFiltering:
+    """Tests for per-project tagging, filtering, and list_projects."""
+
+    async def test_project_stored_on_tool_call(self, storage: SQLiteBackend) -> None:
+        await storage.write_event(make_event(project="myproject"))
+        results = await storage.query_tool_calls(QueryFilters())
+        assert results[0]["project"] == "myproject"
+
+    async def test_filter_tool_calls_by_project(self, storage: SQLiteBackend) -> None:
+        await storage.write_event(make_event(tool_name="search", project="alpha"))
+        await storage.write_event(make_event(tool_name="lookup", project="beta"))
+        results = await storage.query_tool_calls(QueryFilters(project="alpha"))
+        assert len(results) == 1
+        assert results[0]["tool_name"] == "search"
+
+    async def test_list_tool_summaries_filtered_by_project(self, storage: SQLiteBackend) -> None:
+        await storage.write_event(make_event(tool_name="search", project="alpha"))
+        await storage.write_event(make_event(tool_name="lookup", project="beta"))
+        summaries = await storage.list_tool_summaries(project="alpha")
+        assert len(summaries) == 1
+        assert summaries[0].tool_name == "search"
+
+    async def test_get_tool_summary_filtered_by_project(self, storage: SQLiteBackend) -> None:
+        await storage.write_event(make_event(tool_name="search", project="alpha", latency_ms=100))
+        await storage.write_event(make_event(tool_name="search", project="beta", latency_ms=200))
+        summary = await storage.get_tool_summary("search", project="alpha")
+        assert summary is not None
+        assert summary.call_count == 1
+        assert summary.avg_latency_ms == 100.0
+
+    async def test_list_projects_empty(self, storage: SQLiteBackend) -> None:
+        projects = await storage.list_projects()
+        assert projects == []
+
+    async def test_list_projects_aggregates_tool_and_llm(self, storage: SQLiteBackend) -> None:
+        from datetime import UTC, datetime
+
+        ts = datetime.now(UTC).isoformat()
+        await storage.write_event(make_event(project="myproject"))
+        await storage.write_event(make_event(project="myproject"))
+        await storage.write_llm_event(
+            {
+                "event_type": "llm_call",
+                "trace_id": "t1",
+                "session_id": "s1",
+                "agent_id": "default",
+                "timestamp": ts,
+                "sequence_no": 0,
+                "model": "claude-opus-4-6",
+                "latency_ms": 500.0,
+                "token_usage": {"input": 100, "output": 50, "cache_read": 0, "cache_creation": 0},
+                "project": "myproject",
+                "source": "claude_code",
+            }
+        )
+        projects = await storage.list_projects()
+        assert len(projects) == 1
+        assert projects[0].project == "myproject"
+        assert projects[0].tool_call_count == 2
+        assert projects[0].llm_call_count == 1
+        assert projects[0].total_token_input == 100
+
+    async def test_list_projects_excludes_untagged(self, storage: SQLiteBackend) -> None:
+        await storage.write_event(make_event(project=""))  # no project tag
+        await storage.write_event(make_event(project="tagged"))
+        projects = await storage.list_projects()
+        assert len(projects) == 1
+        assert projects[0].project == "tagged"
+
+    async def test_filter_llm_summaries_by_project(self, storage: SQLiteBackend) -> None:
+        from datetime import UTC, datetime
+
+        ts = datetime.now(UTC).isoformat()
+
+        def llm(project: str, input: int) -> dict:
+            return {
+                "event_type": "llm_call",
+                "trace_id": "t1",
+                "session_id": "s1",
+                "agent_id": "default",
+                "timestamp": ts,
+                "sequence_no": 0,
+                "model": "claude-opus-4-6",
+                "latency_ms": 100.0,
+                "token_usage": {"input": input, "output": 10, "cache_read": 0, "cache_creation": 0},
+                "project": project,
+                "source": "claude_code",
+            }
+
+        await storage.write_llm_event(llm("alpha", 100))
+        await storage.write_llm_event(llm("beta", 999))
+        summaries = await storage.list_llm_summaries(project="alpha")
+        assert len(summaries) == 1
+        assert summaries[0].total_token_input == 100

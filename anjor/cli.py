@@ -54,6 +54,14 @@ def main() -> None:
         default=2.0,
         help="Transcript polling interval in seconds (default: 2.0). Only used with --watch-transcripts.",  # noqa: E501
     )
+    start.add_argument(
+        "--project",
+        default="",
+        help=(
+            "Project name tag for all ingested events (overrides auto-detection). "
+            "Only used with --watch-transcripts."
+        ),
+    )
 
     mcp_cmd = sub.add_parser("mcp", help="Start anjor as an MCP server (for Claude Code)")
     mcp_cmd.add_argument(
@@ -77,6 +85,11 @@ def main() -> None:
         default=2.0,
         help="Transcript polling interval in seconds (default: 2.0)",
     )
+    mcp_cmd.add_argument(
+        "--project",
+        default="",
+        help="Project name tag for all ingested events (overrides auto-detection).",
+    )
 
     wt_cmd = sub.add_parser(
         "watch-transcripts",
@@ -99,6 +112,11 @@ def main() -> None:
         type=float,
         default=2.0,
         help="Transcript polling interval in seconds (default: 2.0)",
+    )
+    wt_cmd.add_argument(
+        "--project",
+        default="",
+        help="Project name tag for all ingested events (overrides auto-detection).",
     )
 
     args = parser.parse_args()
@@ -206,6 +224,7 @@ def _start(args: argparse.Namespace) -> None:
         manager = WatcherManager(
             collector_url=f"http://localhost:{config.collector_port}",
             poll_interval=args.poll_interval,
+            project=args.project,
         )
         manager.start(providers)
         active = manager.active_providers()
@@ -231,6 +250,7 @@ def _run_mcp(args: argparse.Namespace) -> None:
         providers=providers,
         collector_port=args.port,
         poll_interval_s=args.poll_interval,
+        project=args.project,
     )
 
 
@@ -260,7 +280,11 @@ def _run_watch_transcripts(args: argparse.Namespace) -> None:
 
     from anjor.watchers.manager import WatcherManager
 
-    manager = WatcherManager(collector_url=collector_url, poll_interval=args.poll_interval)
+    manager = WatcherManager(
+        collector_url=collector_url,
+        poll_interval=args.poll_interval,
+        project=args.project,
+    )
     manager.start(providers)
 
     if not manager.active_providers():

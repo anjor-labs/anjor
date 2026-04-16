@@ -232,6 +232,18 @@ class MCPResponse(BaseModel):
     tools: list[MCPToolItem]
 
 
+class ProjectSummaryItem(BaseModel):
+    """Per-project aggregated stats from GET /projects."""
+
+    project: str
+    tool_call_count: int
+    llm_call_count: int
+    total_token_input: int
+    total_token_output: int
+    first_seen: str
+    last_seen: str
+
+
 class EventIngestRequest(BaseModel):
     """Incoming event payload. Validated before storage.
 

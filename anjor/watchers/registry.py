@@ -30,6 +30,7 @@ def build_active_watchers(
     providers: list[str] | None = None,
     collector_url: str = "http://localhost:7843",
     poll_interval: float = 2.0,
+    project: str = "",
 ) -> list[BaseTranscriptWatcher]:
     """Build watcher instances for the specified (or auto-detected) providers.
 
@@ -46,13 +47,15 @@ def build_active_watchers(
             if cls is None:
                 logger.warning("unknown_watcher_provider", key=key)
                 continue
-            result.append(cls(collector_url=collector_url, poll_interval=poll_interval))
+            result.append(
+                cls(collector_url=collector_url, poll_interval=poll_interval, project=project)
+            )
         return result
 
     # Auto-detect: check which providers have transcript files present.
     detected: list[BaseTranscriptWatcher] = []
     for cls in WATCHER_REGISTRY.values():
-        instance = cls(collector_url=collector_url, poll_interval=poll_interval)
+        instance = cls(collector_url=collector_url, poll_interval=poll_interval, project=project)
         if any(glob.glob(p, recursive=True) for p in instance.default_paths()):
             detected.append(instance)
     return detected

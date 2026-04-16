@@ -17,6 +17,7 @@ from anjor.collector.api.routes.health import make_health_router
 from anjor.collector.api.routes.intelligence import make_intelligence_router
 from anjor.collector.api.routes.llm import make_llm_router
 from anjor.collector.api.routes.mcp import make_mcp_router
+from anjor.collector.api.routes.projects import make_projects_router
 from anjor.collector.api.routes.tools import make_tools_router
 from anjor.collector.api.routes.traces import make_traces_router
 from anjor.collector.service import CollectorService
@@ -66,6 +67,7 @@ def create_app(
     app.include_router(make_intelligence_router(resolved_service))
     app.include_router(make_traces_router(resolved_service))
     app.include_router(make_mcp_router(resolved_service))
+    app.include_router(make_projects_router(resolved_service))
 
     @app.get("/", include_in_schema=False)
     async def root_redirect() -> RedirectResponse:
