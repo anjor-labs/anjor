@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "anjor": {
+      "command": "anjor",
+      "args": ["mcp"],
+      "description": "Anjor observability — call anjor_status to see live tool/LLM stats during dev"
+    }
+  }
+}
