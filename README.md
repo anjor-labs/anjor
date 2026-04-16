@@ -8,7 +8,7 @@
 
 AI agents fail silently. A tool times out, a schema drifts, the context window fills up — and you find out from a user complaint, not a dashboard.
 
-Anjor fixes that. It intercepts your agent's HTTP traffic at the protocol layer and gives you full visibility into every LLM call, tool use, and MCP server interaction — latency, token usage, context window growth, schema drift, prompt changes — without changing a single line of your agent code. Beyond passive logging, it surfaces actionable intelligence: failure pattern clustering, token optimization suggestions, and per-tool quality grades (A–F).
+Anjor fixes that. It gives you full visibility into every LLM call, tool use, and MCP server interaction — latency, token usage, context window growth, schema drift, prompt changes — without changing a single line of your agent code. Beyond passive logging, it surfaces actionable intelligence: failure pattern clustering, token optimization suggestions, and per-tool quality grades (A–F).
 
 One-line install. No cloud. No account required.
 
@@ -18,7 +18,7 @@ One-line install. No cloud. No account required.
 
 ![Overview](docs/screenshots/overview.png)
 
-*The overview gives a bulls-eye view across the whole platform — tool health, LLM cost, MCP server status, top failure patterns, and drift alerts at a glance.*
+*Platform-wide summary: tool health, LLM cost by model, MCP server status, top failure patterns, and drift alerts at a glance.*
 
 <details>
 <summary>More screenshots</summary>
@@ -69,9 +69,58 @@ pip install "anjor[mcp]"
 
 ## Quickstart
 
-There are two ways to use Anjor depending on whether you are building your own agent or using an existing AI coding tool.
+### Tracking Claude Code (or Gemini CLI)
 
-### Path A: Monitor your own Agent (Live Patching)
+Best for users of Claude Code or Gemini CLI who want a visual dashboard of their sessions. No changes to your workflow needed.
+
+#### Option A: Via MCP (recommended — auto-starts with Claude Code)
+
+Add to `.mcp.json` in your project root (or `~/.claude/.mcp.json` for global):
+
+```json
+{
+  "mcpServers": {
+    "anjor": {
+      "command": "anjor",
+      "args": ["mcp", "--watch-transcripts"]
+    }
+  }
+}
+```
+
+Anjor auto-starts the collector, ingests your Claude Code session transcripts, and exposes `anjor_status` as a tool Claude Code can call to check session health.
+
+For Gemini CLI, add to `.gemini/settings.json` (or `~/.gemini/settings.json`):
+
+```json
+{
+  "mcpServers": {
+    "anjor": {
+      "command": "anjor",
+      "args": ["mcp", "--watch-transcripts", "--providers", "gemini"]
+    }
+  }
+}
+```
+
+#### Option B: Standalone (no MCP required)
+
+```bash
+anjor start --watch-transcripts
+```
+
+One command starts the collector, dashboard, and transcript watcher together. Open `http://localhost:7843/ui/` to see your sessions.
+
+To watch specific agents or adjust the polling interval:
+```bash
+anjor start --watch-transcripts --providers claude,gemini --poll-interval 5.0
+```
+
+Run `anjor watch-transcripts --list-providers` to see which agents are detected on your machine.
+
+---
+
+### Tracking Your Own Agent (API Patching)
 
 Best for developers building custom AI agents who want real-time telemetry.
 
@@ -89,57 +138,6 @@ import anthropic
 client = anthropic.Anthropic()
 # All calls are now captured — no other changes needed.
 ```
-
----
-
-### Path B: Monitor AI Coding Agents (Transcripts)
-
-Best for users of Claude Code or Gemini CLI who want a visual dashboard of their sessions.
-
-#### Claude Code (via MCP)
-
-Add to `.mcp.json` in your project root (or `~/.claude/.mcp.json` for global):
-
-```json
-{
-  "mcpServers": {
-    "anjor": {
-      "command": "anjor",
-      "args": ["mcp", "--watch-transcripts"]
-    }
-  }
-}
-```
-
-Anjor auto-starts the collector, ingests your Claude Code session transcripts, and exposes `anjor_status` as a tool Claude Code can call to check session health.
-
-#### Gemini CLI (via MCP)
-
-Add to `.gemini/settings.json` in your project root (or `~/.gemini/settings.json`):
-
-```json
-{
-  "mcpServers": {
-    "anjor": {
-      "command": "anjor",
-      "args": ["mcp", "--watch-transcripts", "--providers", "gemini"]
-    }
-  }
-}
-```
-
-Anjor ingests your Gemini CLI session files from `~/.gemini/tmp/` and exposes `anjor_status` as a Gemini tool.
-
-#### Without MCP (transcript-only, any agent)
-
-```bash
-anjor start                                         # start collector + dashboard
-anjor watch-transcripts --providers claude,gemini   # watch in background
-```
-
-Run `anjor watch-transcripts --list-providers` to see which agents are detected on your machine.
-
----
 
 ---
 
@@ -164,19 +162,6 @@ Run `anjor watch-transcripts --list-providers` to see which agents are detected 
 | Multi-agent spans | Parent/child span linking across agent boundaries |
 | Trace graphs | DAG reconstruction, topological order, cycle detection |
 | Cross-agent attribution | Token usage and failure rate broken down per agent |
-
----
-
-## Dashboard
-
-![Overview](docs/screenshots/overview.png)
-*Platform-wide summary: tool health, LLM cost by model, MCP server status, top failure patterns, and drift alerts at a glance.*
-
-![Tool detail](docs/screenshots/tool-detail.png)
-*Per-tool drill-down: latency percentiles, schema drift history, and input/output payload inspector.*
-
-![Intelligence](docs/screenshots/intelligence.png)
-*Actionable intelligence: failure clusters with fix suggestions, token optimization candidates, and per-tool quality grades (A–F).*
 
 ---
 
@@ -209,12 +194,14 @@ anjor watch-transcripts --providers claude,gemini   # specific agents
 anjor watch-transcripts                             # auto-detect all
 ```
 
-### Real-time watching
-Keep the watcher running in the background — it polls every 1 second and uses minimal resources:
+### Real-time watching (standalone)
+Keep the watcher running in the background — it polls every 2 seconds:
 ```bash
-anjor watch-transcripts --providers gemini          # Gemini CLI sessions
-anjor watch-transcripts --providers claude,gemini   # both
+anjor watch-transcripts --providers claude          # Claude Code sessions
+anjor watch-transcripts --poll-interval 5.0         # custom interval
 ```
+
+Or use `anjor start --watch-transcripts` to run the collector and watcher together in one process.
 
 ### List detected agents
 ```bash
