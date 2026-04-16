@@ -16,6 +16,11 @@ def main() -> None:
         prog="anjor",
         description="Anjor — observability for AI agents",
     )
+    parser.add_argument(
+        "--version",
+        action="store_true",
+        help="Print the anjor version and exit",
+    )
     sub = parser.add_subparsers(dest="command")
 
     start = sub.add_parser("start", help="Start the collector and dashboard")
@@ -64,6 +69,12 @@ def main() -> None:
     wt_cmd.add_argument("--port", type=int, default=7843, help="Collector port (default: 7843)")
 
     args = parser.parse_args()
+
+    if args.version:
+        from anjor import __version__
+
+        print(f"anjor {__version__}")
+        sys.exit(0)
 
     if args.command is None:
         parser.print_help()

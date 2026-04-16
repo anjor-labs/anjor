@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 class HealthResponse(BaseModel):
     status: str = "ok"
+    anjor_version: str = ""
     uptime_seconds: float
     queue_depth: int
     db_path: str

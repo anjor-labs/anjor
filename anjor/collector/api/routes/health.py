@@ -21,7 +21,10 @@ def make_health_router(service: CollectorService) -> APIRouter:
 
     @health_router.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
+        from anjor import __version__
+
         return HealthResponse(
+            anjor_version=__version__,
             uptime_seconds=time.monotonic() - _start_time,
             queue_depth=service.pipeline.stats.enqueued - service.pipeline.stats.dispatched,
             db_path=service.config.db_path,

@@ -42,7 +42,12 @@ from anjor.interceptors.patch import PatchInterceptor
 from anjor.interceptors.requests_patch import RequestsInterceptor as _RequestsInterceptor
 from anjor.mcp import is_mcp_tool, parse_mcp_tool_name
 
-__version__ = "0.5.1"
+try:
+    from importlib.metadata import version as _pkg_version
+
+    __version__ = _pkg_version("anjor")
+except Exception:
+    __version__ = "0.0.0+unknown"
 __all__ = [
     "patch",
     "span",

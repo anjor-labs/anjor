@@ -65,6 +65,7 @@ class SQLiteBackend(StorageBackend):
         if self._db_path != ":memory:":
             await self._conn.execute("PRAGMA journal_mode=WAL")
         await self._run_migrations()
+        await self._ensure_columns()
         self._flush_task = asyncio.create_task(self._periodic_flush())
 
     async def _run_migrations(self) -> None:
@@ -119,6 +120,30 @@ class SQLiteBackend(StorageBackend):
                 "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
                 (version, _now_iso()),
             )
+            await self._conn.commit()
+
+    async def _ensure_columns(self) -> None:
+        """Belt-and-suspenders: verify critical columns exist and add any that are missing.
+
+        Guards against Python 3.12+ DDL transaction-handling differences that can
+        cause ALTER TABLE statements inside _run_migrations to silently roll back on
+        existing databases (e.g. a DB created with an older release of anjor).
+        """
+        assert self._conn is not None
+        needed: list[tuple[str, str, str]] = [
+            ("tool_calls", "source", "TEXT NOT NULL DEFAULT ''"),
+            ("llm_calls", "source", "TEXT NOT NULL DEFAULT ''"),
+        ]
+        altered = False
+        for table, col, typedef in needed:
+            cur = await self._conn.execute(f"PRAGMA table_info({table})")  # noqa: S608
+            existing = {row[1].lower() for row in await cur.fetchall()}
+            if col not in existing:
+                await self._conn.execute(
+                    f"ALTER TABLE {table} ADD COLUMN {col} {typedef}"  # noqa: S608
+                )
+                altered = True
+        if altered:
             await self._conn.commit()
 
     # ------------------------------------------------------------------
@@ -418,12 +443,17 @@ class SQLiteBackend(StorageBackend):
         return [dict(row) for row in rows]
 
     async def query_llm_sources(self) -> list[str]:
+        import sqlite3 as _sqlite3
+
         assert self._conn is not None
-        cursor = await self._conn.execute(
-            "SELECT DISTINCT source FROM llm_calls WHERE source != ''"
-        )
-        rows = await cursor.fetchall()
-        return [row[0] for row in rows]
+        try:
+            cursor = await self._conn.execute(
+                "SELECT DISTINCT source FROM llm_calls WHERE source != ''"
+            )
+            rows = await cursor.fetchall()
+            return [row[0] for row in rows]
+        except _sqlite3.OperationalError:
+            return []
 
     async def list_mcp_server_summaries(self, days: int | None = None) -> list[MCPServerSummary]:
         """Return per-server stats for all tools whose name starts with mcp__."""
