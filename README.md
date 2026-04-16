@@ -9,7 +9,7 @@
 
 AI agents fail silently. A tool times out, a schema drifts, the context window fills up — and you find out from a user complaint, not a dashboard.
 
-Anjor fixes that. It gives you full visibility into every LLM call, tool use, and MCP server interaction — latency, token usage, context window growth, schema drift, prompt changes — without changing a single line of your agent code. Beyond passive logging, it surfaces actionable intelligence: failure pattern clustering, token optimization suggestions, and per-tool quality grades (A–F).
+Anjor fixes that. It gives you full visibility into every LLM call, tool use, and MCP server interaction — latency, token usage, context window growth, schema drift, prompt changes — without changing a single line of your agent code. Beyond passive logging, it surfaces actionable analysis: failure pattern clustering, token optimization suggestions, and per-tool quality scores (A–F).
 
 One-line install. No cloud. No account required.
 
@@ -326,7 +326,10 @@ It opens the connection lazily on first query and is safe to use as a context ma
 
 ## Limitations
 
-- No cloud sync, authentication, or team features
+- **Streaming calls** — captured only when the response stream is fully consumed. If your agent reads the stream partially or exits early (e.g. stops iterating a generator before the final chunk), that call is not recorded.
+- **Quality scores** — computed from three measurable signals: reliability (failure rate), schema stability (drift rate), and latency consistency (coefficient of variation). They use fixed weights, not ML. They surface patterns worth investigating; they don't identify root causes.
+- **Cost estimates** — the price table in the dashboard is maintained manually and will drift as providers update their pricing. Token counts from transcripts are exact; dollar figures are approximate.
+- **No cloud sync, authentication, or team features** — Anjor is local-only. All data stays on your machine.
 
 ---
 

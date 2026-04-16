@@ -114,7 +114,7 @@
 | `analysis/tracing/graph.py` | `TraceGraph` — DAG reconstruction, topological sort, cycle detection |
 | `analysis/tracing/attribution.py` | `AttributionAnalyser` — per-agent token + failure breakdown |
 | `analysis/intelligence/` | `FailureClusterer`, `TokenOptimizer`, `QualityScorer` |
-| `dashboard/static/` | Vanilla JS + Tailwind CDN dashboard served at `:7843/ui/` |
+| `dashboard/static/` | Vanilla JS + Tailwind CDN dashboard; served at `:7843/ui/`; add new pages here |
 
 ## Design Decisions
 
