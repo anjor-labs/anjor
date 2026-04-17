@@ -16,10 +16,19 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
-from pydantic import Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource
 
 _log = logging.getLogger(__name__)
+
+
+class AlertConfig(BaseModel):
+    """A single alert condition from [[alerts]] in .anjor.toml."""
+
+    name: str
+    condition: str  # e.g. "failure_rate > 0.20" or "context_utilisation > 0.80"
+    window_calls: int = Field(default=10, ge=1)  # rolling window for rate/latency metrics
+    webhook: str  # URL to POST alert payload to
 
 
 class SanitiseConfig(BaseSettings):
@@ -105,6 +114,9 @@ class AnjorConfig(BaseSettings):
 
     # Sanitisation config (nested)
     sanitise: SanitiseConfig = Field(default_factory=SanitiseConfig)
+
+    # Alert conditions — configured via [[alerts]] in .anjor.toml
+    alerts: list[AlertConfig] = Field(default_factory=list)
 
     @field_validator("host")
     @classmethod

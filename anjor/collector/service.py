@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from anjor.collector.storage import StorageBackend, create_storage_backend
 from anjor.core.config import AnjorConfig
+from anjor.core.pipeline.handlers import AlertHandler
 from anjor.core.pipeline.pipeline import EventPipeline
 
 
@@ -15,10 +18,12 @@ class CollectorService:
         config: AnjorConfig | None = None,
         storage: StorageBackend | None = None,
         pipeline: EventPipeline | None = None,
+        alert_handler: AlertHandler | None = None,
     ) -> None:
         self.config = config or AnjorConfig()
         self.storage = storage or create_storage_backend(self.config)
         self.pipeline = pipeline or EventPipeline()
+        self.alert_handler = alert_handler or AlertHandler(self.config.alerts)
 
     async def start(self) -> None:
         """Connect storage and start the event pipeline."""
@@ -29,3 +34,8 @@ class CollectorService:
         """Drain pipeline, flush storage, close connection."""
         await self.pipeline.stop()
         await self.storage.close()
+
+    async def ingest(self, event_data: dict[str, Any]) -> None:
+        """Write event to storage and evaluate alert conditions."""
+        await self.storage.write_event(event_data)
+        await self.alert_handler.handle_dict(event_data)

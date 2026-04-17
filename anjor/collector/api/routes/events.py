@@ -29,7 +29,7 @@ def make_events_router(service: CollectorService) -> APIRouter:
             )
 
         event_dict = body.model_dump()
-        await service.storage.write_event(event_dict)
+        await service.ingest(event_dict)
         return EventIngestResponse()
 
     @events_router.post("/flush", response_model=FlushResponse)
