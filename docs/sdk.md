@@ -1,11 +1,11 @@
-# @anjor/sdk — JavaScript / TypeScript SDK
+# @anjor-labs/sdk — JavaScript / TypeScript SDK
 
 A lightweight TypeScript package for instrumenting JavaScript/TypeScript AI agents. Posts events to the Anjor collector's existing `POST /events` endpoint — no new infrastructure needed.
 
 ## Install
 
 ```bash
-npm install @anjor/sdk
+npm install @anjor-labs/sdk
 ```
 
 Requires Node 18+ (uses native `fetch`). Zero runtime dependencies.
@@ -13,7 +13,7 @@ Requires Node 18+ (uses native `fetch`). Zero runtime dependencies.
 ## Quick start
 
 ```ts
-import { anjor } from '@anjor/sdk'
+import { anjor } from '@anjor-labs/sdk'
 
 // One instance per agent process — carries sessionId and traceId
 const a = anjor({
@@ -101,5 +101,5 @@ import type {
   AnjorEvent,
   OpenAICompletionResponse,
   AnthropicMessageResponse,
-} from '@anjor/sdk'
+} from '@anjor-labs/sdk'
 ```

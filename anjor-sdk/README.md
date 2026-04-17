@@ -1,11 +1,11 @@
-# @anjor/sdk
+# @anjor-labs/sdk
 
 JavaScript/TypeScript SDK for the [Anjor](https://github.com/anjor-labs/anjor) observability platform. Lets AI agents running in Node.js post tool-call and LLM-call events to the Anjor collector with zero overhead on the agent critical path.
 
 ## Installation
 
 ```bash
-npm install @anjor/sdk
+npm install @anjor-labs/sdk
 ```
 
 Requires Node 18+ (uses the built-in `fetch` and `crypto` APIs — no runtime dependencies).
@@ -22,7 +22,7 @@ anjor start --watch-transcripts
 ## Quick start
 
 ```typescript
-import { anjor } from '@anjor/sdk'
+import { anjor } from '@anjor-labs/sdk'
 
 // Create a client — each instance gets its own session + trace IDs
 const client = anjor({
@@ -82,7 +82,7 @@ const completion = await client.traceCall(
 
 ## Fire-and-forget guarantee
 
-`@anjor/sdk` **never throws into your agent code** as a result of observability work. If the collector is not running, if the network is unavailable, or if event serialisation fails, the error is silently swallowed. Your agent always gets back the result it expects from `traceTool` / `traceCall`.
+`@anjor-labs/sdk` **never throws into your agent code** as a result of observability work. If the collector is not running, if the network is unavailable, or if event serialisation fails, the error is silently swallowed. Your agent always gets back the result it expects from `traceTool` / `traceCall`.
 
 This mirrors the `anjor.patch()` contract in the Python SDK.
 
@@ -100,5 +100,5 @@ This mirrors the `anjor.patch()` contract in the Python SDK.
 Full type definitions are included. The package is written in strict TypeScript and ships `.d.ts` files — no `@types/` package needed.
 
 ```typescript
-import type { AnjorConfig, ToolCallEvent, LLMCallEvent } from '@anjor/sdk'
+import type { AnjorConfig, ToolCallEvent, LLMCallEvent } from '@anjor-labs/sdk'
 ```

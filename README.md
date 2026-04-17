@@ -102,7 +102,7 @@ response = client.messages.create(...)   # captured automatically
 
 **JavaScript / TypeScript agents:**
 ```ts
-import { anjor } from '@anjor/sdk'
+import { anjor } from '@anjor-labs/sdk'
 
 const a = anjor({ collectorUrl: 'http://localhost:7843' })
 const result = await a.traceTool('web_search', () => searchTool(query))
@@ -155,7 +155,7 @@ otlp_endpoint = "http://localhost:4318"
 | [API reference](docs/api-reference.md) | All REST endpoints with parameters |
 | [Alerting & budgeting](docs/alerting.md) | Webhook setup, Slack integration, all alert conditions |
 | [Intelligence features](docs/intelligence.md) | Root cause advisor, failure clusters, quality grades, prompt tracking |
-| [`@anjor/sdk`](docs/sdk.md) | JavaScript/TypeScript SDK — `traceTool`, `traceCall`, token extraction |
+| [`@anjor-labs/sdk`](docs/sdk.md) | JavaScript/TypeScript SDK — `traceTool`, `traceCall`, token extraction |
 | [Providers & watchers](docs/providers.md) | Supported LLM SDKs and transcript agents |
 | [Architecture](docs/architecture.md) | Layer diagram and design decisions |
 

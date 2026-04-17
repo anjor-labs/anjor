@@ -157,10 +157,10 @@ class AnjorClient {
   private _postEvent(event: AnjorEvent): void {
     const url = `${this.collectorUrl}/events`
     // Use globalThis.fetch if available (Node 18+), else fall back gracefully
-    const fetchFn = typeof globalThis.fetch === 'function' ? globalThis.fetch : null
-    if (!fetchFn) return
+    const g = globalThis as typeof globalThis & { fetch?: typeof fetch }
+    if (typeof g.fetch !== 'function') return
 
-    fetchFn(url, {
+    g.fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(event),
