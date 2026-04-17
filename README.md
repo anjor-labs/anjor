@@ -248,6 +248,8 @@ Anjor can ingest and visualize history from agents that write local session tran
 | **Gemini CLI** | `gemini_cli` | `~/.gemini/tmp/**/*.json` | Yes — `.gemini/settings.json` |
 | **OpenAI Codex** | `openai_codex` | `~/.codex/sessions/**/*.jsonl` | Coming soon |
 
+> **Note:** AntiGravity was removed from the watcher list — it is an IDE (VS Code fork), not an AI coding agent, and writes no session transcripts.
+
 ### One-shot ingestion
 ```bash
 anjor watch-transcripts --providers claude,gemini   # specific agents
