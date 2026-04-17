@@ -21,6 +21,7 @@ class HealthResponse(BaseModel):
 class ToolListItem(BaseModel):
     tool_name: str
     call_count: int
+    failure_count: int = 0
     success_rate: float
     avg_latency_ms: float
 

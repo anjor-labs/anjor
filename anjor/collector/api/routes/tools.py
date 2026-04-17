@@ -16,12 +16,18 @@ def make_tools_router(service: CollectorService) -> APIRouter:
     tools_router = APIRouter()
 
     @tools_router.get("/tools", response_model=list[ToolListItem])
-    async def list_tools(project: str | None = Query(default=None)) -> list[ToolListItem]:
-        summaries = await service.storage.list_tool_summaries(project=project)
+    async def list_tools(
+        project: str | None = Query(default=None),
+        since_minutes: int | None = Query(default=None),
+    ) -> list[ToolListItem]:
+        summaries = await service.storage.list_tool_summaries(
+            project=project, since_minutes=since_minutes
+        )
         return [
             ToolListItem(
                 tool_name=s.tool_name,
                 call_count=s.call_count,
+                failure_count=s.failure_count,
                 success_rate=s.success_rate,
                 avg_latency_ms=s.avg_latency_ms,
             )
@@ -30,9 +36,13 @@ def make_tools_router(service: CollectorService) -> APIRouter:
 
     @tools_router.get("/tools/{tool_name}", response_model=ToolDetailResponse)
     async def get_tool(
-        tool_name: str, project: str | None = Query(default=None)
+        tool_name: str,
+        project: str | None = Query(default=None),
+        since_minutes: int | None = Query(default=None),
     ) -> ToolDetailResponse:
-        summary = await service.storage.get_tool_summary(tool_name, project=project)
+        summary = await service.storage.get_tool_summary(
+            tool_name, project=project, since_minutes=since_minutes
+        )
         if summary is None:
             raise HTTPException(status_code=404, detail=f"Tool {tool_name!r} not found")
         return ToolDetailResponse(

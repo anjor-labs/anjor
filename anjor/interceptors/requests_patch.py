@@ -71,7 +71,7 @@ class RequestsInterceptor(BaseInterceptor):
             if self._installed:
                 return
             self._original_session_send = requests.Session.send
-            requests.Session.send = self._make_wrapper()  # type: ignore[method-assign]
+            requests.Session.send = self._make_wrapper()  # type: ignore
             self._installed = True
             logger.info("requests_interceptor_installed")
 
@@ -86,7 +86,7 @@ class RequestsInterceptor(BaseInterceptor):
             if not self._installed:
                 return
             if self._original_session_send is not None:
-                requests.Session.send = self._original_session_send  # type: ignore[method-assign]
+                requests.Session.send = self._original_session_send  # type: ignore
             self._installed = False
             logger.info("requests_interceptor_uninstalled")
 

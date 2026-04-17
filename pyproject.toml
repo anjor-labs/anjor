@@ -91,6 +91,10 @@ exclude = ["tests/"]
 module = "mcp.*"
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = "requests.*"
+ignore_missing_imports = true
+
 [tool.coverage.run]
 source = ["anjor"]
 omit = [

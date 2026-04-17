@@ -91,6 +91,16 @@ def main() -> None:
         help="Project name tag for all ingested events (overrides auto-detection).",
     )
 
+    status_cmd = sub.add_parser("status", help="Show a compact session health summary")
+    status_cmd.add_argument("--port", type=int, default=7843, help="Collector port (default: 7843)")
+    status_cmd.add_argument(
+        "--since-minutes",
+        type=int,
+        default=120,
+        help="Look-back window in minutes (default: 120)",
+    )
+    status_cmd.add_argument("--project", default=None, help="Filter to a specific project tag")
+
     wt_cmd = sub.add_parser(
         "watch-transcripts",
         help="Watch AI coding agent transcript files (standalone)",
@@ -135,6 +145,8 @@ def main() -> None:
         _start(args)
     elif args.command == "mcp":
         _run_mcp(args)
+    elif args.command == "status":
+        _run_status(args)
     elif args.command == "watch-transcripts":
         _run_watch_transcripts(args)
 
@@ -252,6 +264,52 @@ def _run_mcp(args: argparse.Namespace) -> None:
         poll_interval_s=args.poll_interval,
         project=args.project,
     )
+
+
+def _run_status(args: argparse.Namespace) -> None:
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    from anjor.analysis.advisor import SessionAdvisor
+
+    port: int = args.port
+    since_minutes: int = args.since_minutes
+    project: str | None = args.project
+
+    base_url = f"http://localhost:{port}"
+
+    def _fetch(path: str) -> list[dict]:  # type: ignore[type-arg]
+        params: dict[str, object] = {"since_minutes": since_minutes}
+        if project:
+            params["project"] = project
+        query = urllib.parse.urlencode(params)
+        url = f"{base_url}{path}?{query}"
+        try:
+            with urllib.request.urlopen(url, timeout=3) as resp:  # noqa: S310
+                import json
+
+                return json.loads(resp.read())  # type: ignore[no-any-return]
+        except urllib.error.URLError:
+            return []
+
+    tools = _fetch("/tools")
+    llm_models = _fetch("/llm")
+
+    advisor = SessionAdvisor()
+    insights = advisor.analyse(tools=tools, llm_models=llm_models)
+    summary = advisor.format_summary(
+        tools=tools,
+        llm_models=llm_models,
+        since_minutes=since_minutes,
+        insights=insights,
+    )
+
+    if not tools and not llm_models:
+        print(f"anjor: no data (is the collector running on port {port}?)")
+        sys.exit(2)
+
+    print(summary)
 
 
 def _run_watch_transcripts(args: argparse.Namespace) -> None:

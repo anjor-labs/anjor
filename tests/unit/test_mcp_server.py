@@ -151,18 +151,39 @@ async def test_run_mcp_server_tools():
             def json(self) -> dict:
                 return self._data
 
+        _tools_data = [
+            {
+                "tool_name": "fake",
+                "call_count": 5,
+                "failure_count": 0,
+                "success_rate": 1.0,
+                "avg_latency_ms": 100.0,
+            }
+        ]
+        _llm_data = [
+            {
+                "model": "claude-sonnet-4-6",
+                "call_count": 2,
+                "avg_context_utilisation": 0.3,
+                "total_token_input": 1000,
+                "total_token_output": 200,
+                "total_cache_read": 0,
+                "total_cache_write": 0,
+            }
+        ]
+
         async def mock_get(url: str, **kwargs) -> MockResponse:  # noqa: ANN003
             if "tools" in url:
-                return MockResponse(200, {"tools": [{"name": "fake", "call_count": 5}]})
-            return MockResponse(200, {"models": [{"name": "fake", "call_count": 2}]})
+                return MockResponse(200, _tools_data)
+            return MockResponse(200, _llm_data)
 
         with patch("httpx.AsyncClient.get", side_effect=mock_get), patch("httpx.post") as mock_post:
             mcp_types_mod.TextContent.reset_mock()
             await call_funcs("anjor_status", {})
             tc_call = mcp_types_mod.TextContent.call_args
             text_arg = tc_call.kwargs.get("text", "")
-            assert "total_tool_calls" in text_arg
-            assert "5" in text_arg
+            assert "5 calls" in text_arg
+            assert "last 2h" in text_arg
             mock_post.assert_called_once()
 
         # Test call_tool HTTP error

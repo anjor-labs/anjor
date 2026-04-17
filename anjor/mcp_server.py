@@ -138,12 +138,23 @@ def run_mcp_server(
             mcp_types.Tool(
                 name="anjor_status",
                 description=(
-                    "Returns current session statistics from the anjor observability "
-                    "platform: total tool calls, LLM calls, failure count, and top tools."
+                    "Returns time-windowed session statistics from the anjor observability "
+                    "platform: tool calls, LLM calls, failure rates, context utilisation, "
+                    "estimated cost, and actionable insights about the current session."
                 ),
                 inputSchema={
                     "type": "object",
-                    "properties": {},
+                    "properties": {
+                        "since_minutes": {
+                            "type": "integer",
+                            "description": "Look-back window in minutes (default: 120).",
+                            "default": 120,
+                        },
+                        "project": {
+                            "type": "string",
+                            "description": "Filter to a specific project tag (optional).",
+                        },
+                    },
                     "required": [],
                 },
             )
@@ -167,31 +178,35 @@ def run_mcp_server(
         if name != "anjor_status":
             return [mcp_types.TextContent(type="text", text=f"Unknown tool: {name}")]
 
+        since_minutes: int = int(arguments.get("since_minutes", 120))
+        project: str | None = arguments.get("project") or None
+
         result_text = "{}"
         is_error = False
         try:
+            from anjor.analysis.advisor import SessionAdvisor
+
+            params: dict[str, Any] = {"since_minutes": since_minutes}
+            if project:
+                params["project"] = project
+
             async with _httpx.AsyncClient(timeout=5.0) as client:
-                tc_resp = await client.get(f"{collector_url}/tools")
-                llm_resp = await client.get(f"{collector_url}/llm")
+                tc_resp = await client.get(f"{collector_url}/tools", params=params)
+                llm_resp = await client.get(f"{collector_url}/llm", params=params)
 
-            tc_data = tc_resp.json() if tc_resp.status_code == 200 else {}
-            llm_data = llm_resp.json() if llm_resp.status_code == 200 else {}
+            tools: list[dict[str, Any]] = tc_resp.json() if tc_resp.status_code == 200 else []
+            llm_models: list[dict[str, Any]] = (
+                llm_resp.json() if llm_resp.status_code == 200 else []
+            )
 
-            tools = tc_data.get("tools", [])
-            total_calls = sum(t.get("call_count", 0) for t in tools)
-            failure_count = sum(t.get("failure_count", 0) for t in tools)
-            top_tools = sorted(tools, key=lambda t: t.get("call_count", 0), reverse=True)[:5]
-            llm_calls = sum(m.get("call_count", 0) for m in llm_data.get("models", []))
-
-            status: dict[str, Any] = {
-                "total_tool_calls": total_calls,
-                "total_llm_calls": llm_calls,
-                "failure_count": failure_count,
-                "top_tools": [
-                    {"name": t["name"], "calls": t.get("call_count", 0)} for t in top_tools
-                ],
-            }
-            result_text = json.dumps(status, indent=2)
+            advisor = SessionAdvisor()
+            insights = advisor.analyse(tools=tools, llm_models=llm_models)
+            result_text = advisor.format_summary(
+                tools=tools,
+                llm_models=llm_models,
+                since_minutes=since_minutes,
+                insights=insights,
+            )
         except Exception as exc:
             is_error = True
             result_text = json.dumps({"error": str(exc)})

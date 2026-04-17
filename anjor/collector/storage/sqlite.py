@@ -311,37 +311,55 @@ class SQLiteBackend(StorageBackend):
         return [dict(row) for row in rows]
 
     async def get_tool_summary(
-        self, tool_name: str, project: str | None = None
+        self,
+        tool_name: str,
+        project: str | None = None,
+        since_minutes: int | None = None,
     ) -> ToolSummary | None:
         assert self._conn is not None
+        conditions = ["tool_name = ?"]
+        params: list[object] = [tool_name]
         if project:
-            cursor = await self._conn.execute(
-                "SELECT status, latency_ms FROM tool_calls WHERE tool_name = ? AND project = ?",
-                (tool_name, project),
-            )
-        else:
-            cursor = await self._conn.execute(
-                "SELECT status, latency_ms FROM tool_calls WHERE tool_name = ?",
-                (tool_name,),
-            )
+            conditions.append("project = ?")
+            params.append(project)
+        if since_minutes is not None:
+            conditions.append("timestamp >= datetime('now', ?)")
+            params.append(f"-{since_minutes} minutes")
+        where = " AND ".join(conditions)
+        cursor = await self._conn.execute(
+            f"SELECT status, latency_ms FROM tool_calls WHERE {where}",  # noqa: S608
+            params,
+        )
         rows = await cursor.fetchall()
         if not rows:
             return None
         return self._compute_summary(tool_name, list(rows))
 
-    async def list_tool_summaries(self, project: str | None = None) -> list[ToolSummary]:
+    async def list_tool_summaries(
+        self,
+        project: str | None = None,
+        since_minutes: int | None = None,
+    ) -> list[ToolSummary]:
         assert self._conn is not None
+        conditions: list[str] = []
+        params: list[object] = []
         if project:
-            cursor = await self._conn.execute(
-                "SELECT DISTINCT tool_name FROM tool_calls WHERE project = ?",
-                (project,),
-            )
-        else:
-            cursor = await self._conn.execute("SELECT DISTINCT tool_name FROM tool_calls")
+            conditions.append("project = ?")
+            params.append(project)
+        if since_minutes is not None:
+            conditions.append("timestamp >= datetime('now', ?)")
+            params.append(f"-{since_minutes} minutes")
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+        cursor = await self._conn.execute(
+            f"SELECT DISTINCT tool_name FROM tool_calls {where}",  # noqa: S608
+            params,
+        )
         names = [row[0] for row in await cursor.fetchall()]
         summaries = []
         for name in names:
-            summary = await self.get_tool_summary(name, project=project)
+            summary = await self.get_tool_summary(
+                name, project=project, since_minutes=since_minutes
+            )
             if summary:
                 summaries.append(summary)
         return summaries
@@ -406,13 +424,19 @@ class SQLiteBackend(StorageBackend):
         return [dict(row) for row in rows]
 
     async def list_llm_summaries(
-        self, days: int | None = None, project: str | None = None
+        self,
+        days: int | None = None,
+        project: str | None = None,
+        since_minutes: int | None = None,
     ) -> list[LLMSummary]:
         """Return aggregated stats per model from llm_calls table."""
         assert self._conn is not None
         where_parts: list[str] = []
         params: list[Any] = []
-        if days is not None:
+        if since_minutes is not None:
+            where_parts.append("timestamp >= datetime('now', ?)")
+            params.append(f"-{since_minutes} minutes")
+        elif days is not None:
             where_parts.append("timestamp >= datetime('now', ?)")
             params.append(f"-{days} days")
         if project:

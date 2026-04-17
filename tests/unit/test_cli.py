@@ -417,3 +417,132 @@ class TestMCPAndWatchTranscriptsCommand:
         ):
             _run_watch_transcripts(args)
             mock_start.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# anjor status command
+# ---------------------------------------------------------------------------
+
+
+class TestRunStatus:
+    def _make_args(self, port: int = 7843, since_minutes: int = 120, project: str | None = None):  # type: ignore[return]
+        import argparse
+
+        return argparse.Namespace(port=port, since_minutes=since_minutes, project=project)
+
+    def _tool(self, name: str, calls: int, failures: int) -> dict:  # type: ignore[type-arg]
+        return {
+            "tool_name": name,
+            "call_count": calls,
+            "failure_count": failures,
+            "success_rate": (calls - failures) / calls if calls else 1.0,
+            "avg_latency_ms": 100.0,
+        }
+
+    def _llm(self, model: str, calls: int, ctx: float = 0.3) -> dict:  # type: ignore[type-arg]
+        return {
+            "model": model,
+            "call_count": calls,
+            "avg_context_utilisation": ctx,
+            "total_token_input": 1000,
+            "total_token_output": 200,
+            "total_cache_read": 0,
+            "total_cache_write": 0,
+        }
+
+    def _make_resp(self, data: bytes) -> object:
+        """Return a context-manager response object that yields *data* from read()."""
+
+        class _Resp:
+            def __enter__(self) -> _Resp:
+                return self
+
+            def __exit__(self, *a: object) -> None:
+                pass
+
+            def read(self) -> bytes:
+                return data
+
+        return _Resp()
+
+    def test_status_prints_summary(self, capsys: pytest.CaptureFixture[str]) -> None:
+        import json
+
+        from anjor.cli import _run_status
+
+        tools = [self._tool("bash", 10, 0)]
+        llm = [self._llm("claude-sonnet-4-6", 5)]
+
+        def mock_urlopen(url: str, timeout: float) -> object:
+            payload = json.dumps(tools if "tools" in url else llm).encode()
+            return self._make_resp(payload)
+
+        with patch("urllib.request.urlopen", side_effect=mock_urlopen):
+            _run_status(self._make_args())
+
+        out = capsys.readouterr().out
+        assert "last 2h" in out
+        assert "10 calls" in out
+
+    def test_status_no_data_exits_2(self) -> None:
+        import urllib.error
+
+        from anjor.cli import _run_status
+
+        def mock_urlopen(url: str, timeout: float) -> object:
+            raise urllib.error.URLError("refused")
+
+        with (
+            patch("urllib.request.urlopen", side_effect=mock_urlopen),
+            pytest.raises(SystemExit) as exc,
+        ):
+            _run_status(self._make_args())
+        assert exc.value.code == 2
+
+    def test_status_with_project_filter(self, capsys: pytest.CaptureFixture[str]) -> None:
+        from anjor.cli import _run_status
+
+        captured_urls: list[str] = []
+
+        def mock_urlopen(url: str, timeout: float) -> object:
+            captured_urls.append(url)
+            return self._make_resp(b"[]")
+
+        try:
+            with patch("urllib.request.urlopen", side_effect=mock_urlopen):
+                _run_status(self._make_args(project="myapp"))
+        except SystemExit:
+            pass
+
+        assert any("project=myapp" in u for u in captured_urls)
+
+    def test_status_dispatch_via_main(self, capsys: pytest.CaptureFixture[str]) -> None:
+        import urllib.error
+
+        def mock_urlopen(url: str, timeout: float) -> object:
+            raise urllib.error.URLError("refused")
+
+        with (
+            patch.object(sys, "argv", ["anjor", "status"]),
+            patch("urllib.request.urlopen", side_effect=mock_urlopen),
+            pytest.raises(SystemExit) as exc,
+        ):
+            main()
+        assert exc.value.code == 2
+
+    def test_status_since_minutes_param(self, capsys: pytest.CaptureFixture[str]) -> None:
+        from anjor.cli import _run_status
+
+        captured_urls: list[str] = []
+
+        def mock_urlopen(url: str, timeout: float) -> object:
+            captured_urls.append(url)
+            return self._make_resp(b"[]")
+
+        try:
+            with patch("urllib.request.urlopen", side_effect=mock_urlopen):
+                _run_status(self._make_args(since_minutes=30))
+        except SystemExit:
+            pass
+
+        assert any("since_minutes=30" in u for u in captured_urls)

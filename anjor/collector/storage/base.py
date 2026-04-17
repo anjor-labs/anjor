@@ -171,9 +171,12 @@ class StorageBackend(ABC):
 
     @abstractmethod
     async def list_llm_summaries(
-        self, days: int | None = None, project: str | None = None
+        self,
+        days: int | None = None,
+        project: str | None = None,
+        since_minutes: int | None = None,
     ) -> list[LLMSummary]:
-        """Return aggregated stats per model, optionally limited to the last N days."""
+        """Return aggregated stats per model, optionally limited to the last N days or N minutes."""
         ...
 
     @abstractmethod
@@ -193,14 +196,21 @@ class StorageBackend(ABC):
 
     @abstractmethod
     async def get_tool_summary(
-        self, tool_name: str, project: str | None = None
+        self,
+        tool_name: str,
+        project: str | None = None,
+        since_minutes: int | None = None,
     ) -> ToolSummary | None:
-        """Return aggregated stats for a tool, optionally scoped to a project."""
+        """Return aggregated stats for a tool, optionally scoped to a project and time window."""
         ...
 
     @abstractmethod
-    async def list_tool_summaries(self, project: str | None = None) -> list[ToolSummary]:
-        """Return aggregated stats for all tools, optionally scoped to a project."""
+    async def list_tool_summaries(
+        self,
+        project: str | None = None,
+        since_minutes: int | None = None,
+    ) -> list[ToolSummary]:
+        """Return aggregated stats for all tools, optionally scoped to project and time window."""
         ...
 
     @abstractmethod
