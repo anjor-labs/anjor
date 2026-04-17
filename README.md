@@ -64,7 +64,7 @@ pip install anjor
 pip install "anjor[mcp]"
 ```
 
-> **Note:** `anjor watch-transcripts` and `anjor mcp` require v0.8.0+.
+> **Note:** `anjor watch-transcripts` and `anjor mcp` require v0.8.0+. `anjor status` requires v0.9.0+.
 
 ---
 
@@ -89,7 +89,7 @@ Add to `.mcp.json` in your project root (or `~/.claude/.mcp.json` for global):
 }
 ```
 
-Anjor auto-starts the collector, ingests your Claude Code session transcripts, and exposes `anjor_status` as a tool Claude Code can call to check session health.
+Anjor auto-starts the collector, ingests your Claude Code session transcripts, and exposes `anjor_status` as a tool Claude Code can call mid-session. It returns a time-windowed summary with actionable insights — failure rates, context utilisation, estimated cost — silently suppressed when everything is healthy.
 
 For Gemini CLI, add to `.gemini/settings.json` (or `~/.gemini/settings.json`):
 
@@ -118,6 +118,24 @@ anjor start --watch-transcripts --providers claude,gemini --poll-interval 5.0
 ```
 
 Run `anjor watch-transcripts --list-providers` to see which agents are detected on your machine.
+
+#### Terminal health check (no browser needed)
+
+```bash
+anjor status                          # last 2h summary
+anjor status --since-minutes 30       # last 30 minutes
+anjor status --project myapp          # filter to a specific project
+```
+
+Prints a compact one-line summary with any actionable warnings below it:
+
+```
+last 2h: 47 calls · 6% failure · $0.08 · 74% ctx
+⚠  web_search has a 30% failure rate (3/10 calls)
+⚠  Context at 74%
+```
+
+Silent when everything is healthy. Exits with code 2 if the collector is not running.
 
 ---
 
@@ -231,10 +249,10 @@ The `/mcp` endpoint returns per-server and per-tool aggregates and supports a `?
 |--------|------|-------------|
 | POST | `/events` | Ingest a tool/LLM/span event |
 | POST | `/flush` | Force-flush pending batch writes; returns `{"flushed": N}` |
-| GET | `/tools` | All tools with summary stats |
-| GET | `/tools/{name}` | Tool detail (latency percentiles, drift) |
+| GET | `/tools` | All tools with summary stats (`?since_minutes=N`, `?project=`) |
+| GET | `/tools/{name}` | Tool detail (latency percentiles, drift) (`?since_minutes=N`) |
 | GET | `/mcp` | MCP server and tool aggregates (`?days=N`) |
-| GET | `/llm` | LLM call summary by model (`?days=N`) |
+| GET | `/llm` | LLM call summary by model (`?days=N`, `?since_minutes=N`, `?project=`) |
 | GET | `/llm/usage/daily` | Daily token usage by model (`?days=N`) |
 | GET | `/calls` | Paginated raw event log |
 | GET | `/traces` | Trace list (newest first) |
