@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from anjor.collector.api.middleware import EventsRateLimitMiddleware
 from anjor.collector.api.routes.calls import make_calls_router
 from anjor.collector.api.routes.events import make_events_router
 from anjor.collector.api.routes.health import make_health_router
@@ -58,6 +59,12 @@ def create_app(
         allow_methods=["GET", "POST"],
         allow_headers=["*"],
     )
+    if resolved_config.rate_limit_rps > 0:
+        app.add_middleware(
+            EventsRateLimitMiddleware,
+            rps=resolved_config.rate_limit_rps,
+            burst=resolved_config.rate_limit_burst,
+        )
 
     app.include_router(make_health_router(resolved_service))
     app.include_router(make_events_router(resolved_service))

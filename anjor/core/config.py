@@ -112,6 +112,12 @@ class AnjorConfig(BaseSettings):
     # Terminal summary printed at process exit (disable with ANJOR_SHOW_SUMMARY=false)
     show_summary: bool = Field(default=True)
 
+    # Rate limiting on POST /events (token bucket per source IP)
+    # Defaults are intentionally generous — local use never hits them.
+    # Set rate_limit_rps=0 to disable entirely.
+    rate_limit_rps: float = Field(default=500, ge=0)
+    rate_limit_burst: int = Field(default=1000, ge=1)
+
     # Sanitisation config (nested)
     sanitise: SanitiseConfig = Field(default_factory=SanitiseConfig)
 
