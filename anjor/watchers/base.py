@@ -55,10 +55,12 @@ class BaseTranscriptWatcher(ABC):
         collector_url: str = "http://localhost:7843",
         poll_interval: float = 2.0,
         project: str = "",
+        capture_messages: bool = False,
     ) -> None:
         self._collector_url = collector_url.rstrip("/")
         self._poll_interval = poll_interval
         self._project = project
+        self._capture_messages = capture_messages
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._offsets: dict[str, int] = {}

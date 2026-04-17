@@ -47,6 +47,7 @@ import structlog
 from anjor.analysis.drift.fingerprint import fingerprint
 from anjor.core.events.base import BaseEvent
 from anjor.core.events.llm_call import LLMCallEvent, LLMTokenUsage
+from anjor.core.events.message import MessageEvent
 from anjor.core.events.tool_call import (
     FailureType,
     ToolCallEvent,
@@ -197,8 +198,10 @@ class ClaudeTranscriptWatcher(BaseTranscriptWatcher):
             )
             events.append(llm_event)
 
+        content_blocks = message.get("content") or []
+
         # ── Buffer tool_use blocks ─────────────────────────────────────────
-        for block in message.get("content") or []:
+        for block in content_blocks:
             if not isinstance(block, dict) or block.get("type") != "tool_use":
                 continue
             tool_id: str = block.get("id") or str(uuid4())
@@ -209,6 +212,28 @@ class ClaudeTranscriptWatcher(BaseTranscriptWatcher):
                 "session_id": session_id,
             }
 
+        # ── MessageEvent (opt-in) ──────────────────────────────────────────
+        if self._capture_messages:
+            text_parts = [
+                b.get("text", "")
+                for b in content_blocks
+                if isinstance(b, dict) and b.get("type") == "text" and b.get("text")
+            ]
+            preview = " ".join(text_parts)[:500]
+            if preview:
+                events.append(
+                    MessageEvent(
+                        role="assistant",
+                        content_preview=preview,
+                        turn_index=0,
+                        token_count=token_output or None,
+                        session_id=session_id,
+                        trace_id=session_id,
+                        timestamp=ts,
+                        source=self.source_tag,
+                    )
+                )
+
         return events
 
     # ── User turn (tool results) ───────────────────────────────────────────
@@ -216,11 +241,47 @@ class ClaudeTranscriptWatcher(BaseTranscriptWatcher):
     def _handle_user(self, entry: dict[str, Any]) -> list[BaseEvent]:
         message: dict[str, Any] = entry.get("message") or {}
         content = message.get("content")
-        if not isinstance(content, list):
-            return []
-
+        session_id: str = entry.get("sessionId", "") or str(uuid4())
         ts = _parse_ts(entry.get("timestamp", ""))
         events: list[BaseEvent] = []
+
+        # ── MessageEvent for plain text user turns (opt-in) ───────────────
+        if self._capture_messages:
+            if isinstance(content, str) and content.strip():
+                events.append(
+                    MessageEvent(
+                        role="user",
+                        content_preview=content[:500],
+                        turn_index=0,
+                        session_id=session_id,
+                        trace_id=session_id,
+                        timestamp=ts,
+                        source=self.source_tag,
+                    )
+                )
+            elif isinstance(content, list):
+                text_parts = [
+                    b.get("text", "")
+                    for b in content
+                    if isinstance(b, dict) and b.get("type") == "text" and b.get("text")
+                ]
+                preview = " ".join(text_parts)[:500]
+                if preview:
+                    events.append(
+                        MessageEvent(
+                            role="user",
+                            content_preview=preview,
+                            turn_index=0,
+                            session_id=session_id,
+                            trace_id=session_id,
+                            timestamp=ts,
+                            source=self.source_tag,
+                        )
+                    )
+
+        # ── Tool results ──────────────────────────────────────────────────
+        if not isinstance(content, list):
+            return events
 
         for block in content:
             if not isinstance(block, dict) or block.get("type") != "tool_result":

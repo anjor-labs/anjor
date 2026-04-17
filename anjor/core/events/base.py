@@ -13,6 +13,7 @@ class EventType(StrEnum):
     TOOL_CALL = "tool_call"
     LLM_CALL = "llm_call"
     AGENT_SPAN = "agent_span"
+    MESSAGE = "message"
     MEMORY_READ = "memory_read"
     AGENT_DECISION = "agent_decision"
     WORKFLOW = "workflow"

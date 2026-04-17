@@ -306,6 +306,7 @@ def _start(args: argparse.Namespace) -> None:
             collector_url=f"http://localhost:{config.collector_port}",
             poll_interval=args.poll_interval,
             project=args.project,
+            capture_messages=config.capture_messages,
         )
         manager.start(providers)
         active = manager.active_providers()
@@ -596,12 +597,15 @@ def _run_watch_transcripts(args: argparse.Namespace) -> None:
     )
     collector_url = f"http://localhost:{args.port}"
 
+    from anjor.core.config import AnjorConfig
     from anjor.watchers.manager import WatcherManager
 
+    _cfg = AnjorConfig()
     manager = WatcherManager(
         collector_url=collector_url,
         poll_interval=args.poll_interval,
         project=args.project,
+        capture_messages=_cfg.capture_messages,
     )
     manager.start(providers)
 

@@ -239,6 +239,31 @@ class SQLiteBackend(StorageBackend):
             await self.write_llm_event(event_data)
         elif event_type == "agent_span":
             await self.write_span(event_data)
+        elif event_type == "message":
+            await self.write_message_event(event_data)
+
+    async def write_message_event(self, event_data: dict[str, Any]) -> None:
+        """Persist a MessageEvent to session_messages."""
+        assert self._conn is not None
+        await self._conn.execute(
+            """INSERT INTO session_messages (
+                session_id, trace_id, agent_id, timestamp, turn_index,
+                role, content_preview, token_count, source, project
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                event_data.get("session_id", ""),
+                event_data.get("trace_id", ""),
+                event_data.get("agent_id", "default"),
+                event_data.get("timestamp", ""),
+                event_data.get("turn_index", 0),
+                event_data.get("role", "user"),
+                event_data.get("content_preview", ""),
+                event_data.get("token_count"),
+                event_data.get("source", ""),
+                event_data.get("project", ""),
+            ),
+        )
+        await self._conn.commit()
 
     async def write_llm_event(self, event_data: dict[str, Any]) -> None:
         """Persist an LLMCallEvent directly to the llm_calls table (not batched)."""

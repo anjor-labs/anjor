@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from anjor.core.events.llm_call import LLMCallEvent
+from anjor.core.events.message import MessageEvent
 from anjor.core.events.tool_call import FailureType, ToolCallEvent, ToolCallStatus
 from anjor.watchers.claude import ClaudeTranscriptWatcher, _decode_project_dir
 
@@ -251,3 +252,69 @@ def test_project_override_takes_precedence_over_auto(tmp_path):
     w = ClaudeTranscriptWatcher(project="override")
     assert w._project == "override"
     # The base _tail logic uses self._project if set, skipping auto-detection
+
+
+# ---------------------------------------------------------------------------
+# Conversation capture (capture_messages=True)
+# ---------------------------------------------------------------------------
+
+_ASSISTANT_LINE = '{"type":"assistant","uuid":"cap1","timestamp":"2026-04-15T10:00:01Z","sessionId":"sess-cap","message":{"model":"claude","stop_reason":"end_turn","usage":{"input_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":42},"content":[{"type":"text","text":"Hello, how can I help?"}]}}'
+_USER_STR_LINE = '{"type":"user","uuid":"u-str","timestamp":"2026-04-15T10:00:02Z","sessionId":"sess-cap","message":{"role":"user","content":"Please list the files"}}'
+_USER_LIST_LINE = '{"type":"user","uuid":"u-lst","timestamp":"2026-04-15T10:00:03Z","sessionId":"sess-cap","message":{"role":"user","content":[{"type":"text","text":"Explain this code"}]}}'
+
+
+def test_capture_off_no_message_events():
+    w = ClaudeTranscriptWatcher(capture_messages=False)
+    events = w.parse_line(_ASSISTANT_LINE)
+    assert not any(isinstance(e, MessageEvent) for e in events)
+
+
+def test_capture_on_assistant_emits_message_event():
+    w = ClaudeTranscriptWatcher(capture_messages=True)
+    events = w.parse_line(_ASSISTANT_LINE)
+    msg_events = [e for e in events if isinstance(e, MessageEvent)]
+    assert len(msg_events) == 1
+    msg = msg_events[0]
+    assert msg.role == "assistant"
+    assert "Hello" in msg.content_preview
+    assert msg.token_count == 42
+
+
+def test_capture_on_user_string_emits_message_event():
+    w = ClaudeTranscriptWatcher(capture_messages=True)
+    events = w.parse_line(_USER_STR_LINE)
+    msg_events = [e for e in events if isinstance(e, MessageEvent)]
+    assert len(msg_events) == 1
+    assert msg_events[0].role == "user"
+    assert "files" in msg_events[0].content_preview
+
+
+def test_capture_on_user_list_text_block_emits_message_event():
+    w = ClaudeTranscriptWatcher(capture_messages=True)
+    events = w.parse_line(_USER_LIST_LINE)
+    msg_events = [e for e in events if isinstance(e, MessageEvent)]
+    assert len(msg_events) == 1
+    assert msg_events[0].role == "user"
+    assert "Explain" in msg_events[0].content_preview
+
+
+def test_capture_on_user_tool_result_only_no_extra_message_event():
+    # Tool result turns should not emit MessageEvents
+    w = ClaudeTranscriptWatcher(capture_messages=True)
+    w.parse_line(
+        '{"type":"assistant","uuid":"ax","timestamp":"2026-04-15T10:00:01Z","sessionId":"s","message":{"model":"claude","stop_reason":"tool_use","usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0},"content":[{"type":"tool_use","id":"tu_x","name":"Bash","input":{}}]}}'
+    )
+    events = w.parse_line(
+        '{"type":"user","uuid":"ux","timestamp":"2026-04-15T10:00:03Z","sessionId":"s","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu_x","content":"done","is_error":false}]}}'
+    )
+    assert not any(isinstance(e, MessageEvent) for e in events)
+
+
+def test_content_preview_truncated_at_500():
+    long_text = "x" * 600
+    line = f'{{"type":"user","uuid":"u-long","timestamp":"2026-04-15T10:00:01Z","sessionId":"s","message":{{"role":"user","content":"{long_text}"}}}}'
+    w = ClaudeTranscriptWatcher(capture_messages=True)
+    events = w.parse_line(line)
+    msg_events = [e for e in events if isinstance(e, MessageEvent)]
+    assert len(msg_events) == 1
+    assert len(msg_events[0].content_preview) == 500
