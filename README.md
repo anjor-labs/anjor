@@ -139,6 +139,48 @@ Silent when everything is healthy. Exits with code 2 if the collector is not run
 
 ---
 
+### Alerting and Budgeting
+
+Configure threshold alerts in `.anjor.toml` — Anjor fires a webhook whenever a condition is breached. Silent by default; you only hear from it when something matters.
+
+```toml
+[[alerts]]
+name = "high_failure_rate"
+condition = "failure_rate > 0.20"
+window_calls = 10                            # rolling window of last N tool calls
+webhook = "https://hooks.slack.com/services/..."
+
+[[alerts]]
+name = "context_warning"
+condition = "context_utilisation > 0.80"
+webhook = "https://hooks.slack.com/services/..."
+
+[[alerts]]
+name = "daily_budget"
+condition = "daily_cost_usd > 5.00"
+webhook = "https://example.com/webhook"
+```
+
+**Supported conditions:**
+
+| Condition | Triggers on |
+|-----------|-------------|
+| `failure_rate > N` | Rolling window of tool calls exceeds N (0–1) |
+| `p95_latency > N` | p95 latency in rolling window exceeds N ms |
+| `context_utilisation > N` | Any LLM call where context used exceeds N (0–1) |
+| `daily_cost_usd > N` | Cumulative estimated cost today exceeds $N |
+| `session_cost_usd > N` | Cumulative cost since collector start exceeds $N |
+| `error_type == "timeout"` | Tool call fails with the specified error type |
+
+Webhook payload:
+```json
+{"alert": "daily_budget", "value": 5.21, "threshold": 5.00, "timestamp": "2026-04-17T..."}
+```
+
+When the URL contains `hooks.slack.com`, the payload is auto-formatted as `{"text": "anjor alert: ..."}` for Slack compatibility.
+
+---
+
 ### Tracking Your Own Agent (API Patching)
 
 Best for developers building custom AI agents who want real-time telemetry.
