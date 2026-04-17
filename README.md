@@ -64,7 +64,7 @@ pip install anjor
 pip install "anjor[mcp]"
 ```
 
-> **Note:** `anjor watch-transcripts` and `anjor mcp` require v0.8.0+. `anjor status` requires v0.9.0+.
+> **Note:** `anjor watch-transcripts` and `anjor mcp` require v0.8.0+. `anjor status` requires v0.9.0+. `anjor report`, `anjor diff`, and OTel export require v1.0.0+.
 
 ---
 
@@ -136,6 +136,28 @@ last 2h: 47 calls · 6% failure · $0.08 · 74% ctx
 ```
 
 Silent when everything is healthy. Exits with code 2 if the collector is not running.
+
+---
+
+### CI/CD Quality Gates
+
+Use `anjor report` and `anjor diff` in CI pipelines — both read SQLite directly, no running collector needed.
+
+```bash
+# After your test run, gate on quality metrics
+anjor report --assert "success_rate >= 0.95" --assert "p95_latency_ms <= 3000"
+# exit 0 = all assertions pass; exit 1 = assertion failed; exit 2 = no data
+
+# Compare last 24h vs prior 24h — catch regressions before they ship
+anjor diff --window 24h
+
+# Full report as Markdown for CI artifacts
+anjor report --format markdown --since 2h > report.md
+```
+
+**Supported assertion metrics:** `success_rate`, `p95_latency_ms`, `failure_count`, `total_cost_usd`
+
+**Diff windows:** `30m`, `2h`, `24h`, `7d` — any combination of minutes, hours, days.
 
 ---
 
@@ -300,6 +322,8 @@ The `/mcp` endpoint returns per-server and per-tool aggregates and supports a `?
 | GET | `/calls` | Paginated raw event log |
 | GET | `/traces` | Trace list (newest first) |
 | GET | `/traces/{id}/graph` | DAG graph for a single trace |
+| GET | `/sessions` | Sessions with captured messages (requires `capture_messages=true`) |
+| GET | `/sessions/{id}/replay` | Chronological turn timeline (messages + tool calls) |
 | GET | `/health` | Uptime, queue depth, db path |
 | GET | `/intelligence/failures` | Failure clusters sorted by rate |
 | GET | `/intelligence/optimization` | Token hog tools + savings estimates |
@@ -326,6 +350,14 @@ db_path = "my_project.db"
 batch_size = 10
 batch_interval_ms = 200
 log_level = "DEBUG"
+
+# OTel export — ship spans to any OTel-compatible endpoint (Jaeger, Tempo, Datadog Agent)
+[export]
+otlp_endpoint = "http://localhost:4318"
+# otlp_headers = { "x-api-key" = "..." }   # optional auth
+
+# Conversation capture — opt-in, off by default; stores first 500 chars of each turn locally
+# capture_messages = true
 ```
 
 Via code:

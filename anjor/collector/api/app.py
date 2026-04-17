@@ -49,7 +49,7 @@ def create_app(
 
     app = FastAPI(
         title="Anjor Collector",
-        version="0.4.0",
+        version="1.0.0",
         description="Local event ingestion and query API for Anjor.",
         lifespan=lifespan,
     )

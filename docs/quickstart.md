@@ -195,6 +195,36 @@ curl http://localhost:7843/traces/{trace_id}/graph
 
 ---
 
+## CI/CD Quality Gates
+
+`anjor report` and `anjor diff` read SQLite directly — no running collector needed.
+
+```bash
+# Assert quality thresholds in CI (exit 1 on failure, exit 2 if no data)
+anjor report --assert "success_rate >= 0.95" --assert "p95_latency_ms <= 3000"
+
+# Compare last 24h vs prior 24h — catch regressions before they ship
+anjor diff --window 24h
+
+# Markdown report for CI artifacts
+anjor report --format markdown --since 2h > report.md
+```
+
+---
+
+## Session Replay
+
+Enable conversation capture to replay sessions in the dashboard:
+
+```toml
+# .anjor.toml
+capture_messages = true   # opt-in; off by default
+```
+
+With capture enabled, `http://localhost:7843/ui/replay.html` shows a chronological timeline of user turns, assistant responses, and tool calls for each session. Message content is stored locally only and never leaves the machine.
+
+---
+
 ## Configuration
 
 ```bash
@@ -210,6 +240,11 @@ db_path = "my_project.db"
 batch_size = 10
 batch_interval_ms = 200
 log_level = "DEBUG"
+
+# OTel export — bridge to Jaeger, Tempo, Datadog Agent, etc.
+[export]
+otlp_endpoint = "http://localhost:4318"
+# otlp_headers = { "x-api-key" = "..." }
 ```
 
 ---
