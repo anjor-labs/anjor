@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anjor — Session Replay</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="utils.js"></script>
+</head>
+<body class="min-h-screen bg-gray-950 text-gray-100 font-mono">
+  <div id="nav"></div>
+  <main class="px-6 py-8 max-w-7xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-xl font-bold text-white">Session Replay</h1>
+      <span id="updated" class="text-xs text-gray-600"></span>
+    </div>
+
+    <div id="empty-notice" class="hidden bg-gray-900 border border-gray-800 rounded-lg p-6 text-sm text-gray-400">
+      No sessions with captured messages yet.<br>
+      Enable <code class="text-blue-400">capture_messages = true</code> in <code class="text-blue-400">.anjor.toml</code> to start capturing conversation turns.
+    </div>
+
+    <div class="flex gap-4 h-[calc(100vh-10rem)]">
+      <!-- Session list sidebar -->
+      <div class="w-72 shrink-0 flex flex-col gap-2 overflow-y-auto pr-1" id="session-list">
+        <p class="text-gray-600 text-sm">Loading…</p>
+      </div>
+
+      <!-- Replay pane -->
+      <div class="flex-1 overflow-y-auto" id="replay-pane">
+        <p class="text-gray-600 text-sm mt-8 text-center">Select a session to replay.</p>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    document.getElementById('nav').innerHTML = buildNav('/ui/replay.html')
+
+    let selectedSession = null
+
+    async function loadSessions() {
+      let sessions = []
+      try { sessions = await fetch(`${API}/sessions?limit=100`).then(r => r.json()) } catch { sessions = [] }
+      const list = document.getElementById('session-list')
+      const empty = document.getElementById('empty-notice')
+      if (!sessions.length) {
+        list.innerHTML = ''
+        empty.classList.remove('hidden')
+        return
+      }
+      empty.classList.add('hidden')
+      list.innerHTML = sessions.map(s => `
+        <button onclick="loadReplay('${s.session_id}')"
+          class="session-btn w-full text-left bg-gray-900 hover:bg-gray-800 border border-gray-800 rounded-lg px-3 py-2.5 transition-colors"
+          data-id="${s.session_id}">
+          <div class="text-xs text-gray-200 truncate font-semibold">${s.session_id.slice(0, 8)}…</div>
+          <div class="text-xs text-gray-500 mt-0.5">${fmt.ts(s.last_seen)} · ${s.message_count} msg</div>
+          ${s.project ? `<div class="text-xs text-blue-500 mt-0.5">${s.project}</div>` : ''}
+        </button>
+      `).join('')
+      document.getElementById('updated').textContent = 'Updated ' + new Date().toLocaleTimeString()
+    }
+
+    async function loadReplay(sessionId) {
+      selectedSession = sessionId
+      document.querySelectorAll('.session-btn').forEach(b => {
+        b.classList.toggle('border-blue-600', b.dataset.id === sessionId)
+        b.classList.toggle('border-gray-800', b.dataset.id !== sessionId)
+      })
+      const pane = document.getElementById('replay-pane')
+      pane.innerHTML = '<p class="text-gray-600 text-sm mt-8 text-center">Loading…</p>'
+      let data
+      try {
+        data = await fetch(`${API}/sessions/${encodeURIComponent(sessionId)}/replay`).then(r => r.json())
+      } catch {
+        pane.innerHTML = '<p class="text-red-400 text-sm mt-8 text-center">Failed to load replay.</p>'
+        return
+      }
+      if (data.detail) {
+        pane.innerHTML = `<p class="text-red-400 text-sm mt-8 text-center">${data.detail}</p>`
+        return
+      }
+      pane.innerHTML = `
+        <div class="text-xs text-gray-500 mb-4">${data.turn_count} turn${data.turn_count !== 1 ? 's' : ''} · session ${sessionId.slice(0, 8)}…</div>
+        <div class="space-y-3">
+          ${data.turns.map(turn => renderTurn(turn)).join('')}
+        </div>
+      `
+    }
+
+    function renderTurn(t) {
+      if (t.kind === 'tool') return renderToolTurn(t)
+      if (t.kind === 'user') return renderUserTurn(t)
+      return renderAssistantTurn(t)
+    }
+
+    function renderUserTurn(t) {
+      return `
+        <div class="flex gap-3">
+          <div class="w-16 shrink-0 text-right">
+            <span class="text-xs text-gray-600">${fmt.ts(t.timestamp)}</span>
+          </div>
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-xs font-bold text-blue-400">You</span>
+            </div>
+            <div class="bg-blue-950 border border-blue-900 rounded-lg px-3 py-2 text-sm text-gray-200 whitespace-pre-wrap break-words">${escHtml(t.content_preview || '')}</div>
+          </div>
+        </div>`
+    }
+
+    function renderAssistantTurn(t) {
+      const tokenBadge = t.token_count ? `<span class="text-xs text-gray-600 ml-2">${fmt.tokens(t.token_count)} tok</span>` : ''
+      return `
+        <div class="flex gap-3">
+          <div class="w-16 shrink-0 text-right">
+            <span class="text-xs text-gray-600">${fmt.ts(t.timestamp)}</span>
+          </div>
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-xs font-bold text-purple-400">Claude</span>${tokenBadge}
+            </div>
+            <div class="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-200 whitespace-pre-wrap break-words">${escHtml(t.content_preview || '')}</div>
+          </div>
+        </div>`
+    }
+
+    function renderToolTurn(t) {
+      const ok = t.status === 'success'
+      const statusCls = ok ? 'text-green-400' : 'text-red-400'
+      const dot = ok ? '●' : '✕'
+      return `
+        <div class="flex gap-3">
+          <div class="w-16 shrink-0 text-right">
+            <span class="text-xs text-gray-600">${fmt.ts(t.timestamp)}</span>
+          </div>
+          <div class="flex-1">
+            <div class="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2">
+              <span class="${statusCls} text-xs">${dot}</span>
+              <span class="text-xs font-bold text-gray-300">${escHtml(t.tool_name || 'tool')}</span>
+              <span class="text-xs text-gray-600 ml-auto">${fmt.ms(t.latency_ms)}</span>
+            </div>
+          </div>
+        </div>`
+    }
+
+    function escHtml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+    }
+
+    function load() { loadSessions() }
+
+    load()
+    initAutoRefresh(load)
+  </script>
+</body>
+</html>

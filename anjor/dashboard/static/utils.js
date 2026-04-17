@@ -53,6 +53,7 @@ const NAV_LINKS = [
   ['/ui/llm.html', 'Usage'],
   ['/ui/intelligence.html', 'Intelligence'],
   ['/ui/traces.html', 'Traces'],
+  ['/ui/replay.html', 'Replay'],
 ]
 
 function spanKindIcon(kind) {

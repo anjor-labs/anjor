@@ -809,6 +809,78 @@ class SQLiteBackend(StorageBackend):
             for row in rows
         ]
 
+    async def list_sessions(self, limit: int = 50, offset: int = 0) -> list[dict[str, object]]:
+        """Return sessions that have message events, newest first."""
+        assert self._conn is not None
+        async with self._conn.execute(
+            """SELECT session_id, COUNT(*) as message_count,
+                      MIN(timestamp) as first_seen, MAX(timestamp) as last_seen,
+                      project, source
+               FROM session_messages
+               GROUP BY session_id
+               ORDER BY last_seen DESC
+               LIMIT ? OFFSET ?""",
+            (limit, offset),
+        ) as cur:
+            rows = await cur.fetchall()
+        return [
+            {
+                "session_id": r[0],
+                "message_count": r[1],
+                "first_seen": r[2],
+                "last_seen": r[3],
+                "project": r[4] or "",
+                "source": r[5] or "",
+            }
+            for r in rows
+        ]
+
+    async def get_session_replay(self, session_id: str) -> list[dict[str, object]]:
+        """Return all turns (messages + tool calls) for a session, ordered by timestamp."""
+        assert self._conn is not None
+        async with self._conn.execute(
+            """SELECT 'message' AS kind, timestamp, role AS subtype,
+                      content_preview, token_count, NULL, NULL, NULL
+               FROM session_messages
+               WHERE session_id = ?
+               UNION ALL
+               SELECT 'tool', timestamp, status,
+                      NULL, NULL, tool_name, status, latency_ms
+               FROM tool_calls
+               WHERE session_id = ?
+               ORDER BY timestamp ASC""",
+            (session_id, session_id),
+        ) as cur:
+            rows = await cur.fetchall()
+        turns: list[dict[str, object]] = []
+        for r in rows:
+            kind: str = r[0]
+            if kind == "message":
+                turns.append(
+                    {
+                        "kind": r[2],  # role → "user" or "assistant"
+                        "timestamp": r[1],
+                        "content_preview": r[3],
+                        "token_count": r[4],
+                        "tool_name": None,
+                        "status": None,
+                        "latency_ms": None,
+                    }
+                )
+            else:
+                turns.append(
+                    {
+                        "kind": "tool",
+                        "timestamp": r[1],
+                        "content_preview": None,
+                        "token_count": None,
+                        "tool_name": r[5],
+                        "status": r[6],
+                        "latency_ms": r[7],
+                    }
+                )
+        return turns
+
     async def close(self) -> None:
         if self._flush_task is not None:
             self._flush_task.cancel()

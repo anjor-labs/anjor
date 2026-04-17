@@ -272,3 +272,28 @@ class EventIngestRequest(BaseModel):
     output_schema_hash: str = ""
     token_usage: dict[str, Any] | None = None
     schema_drift: dict[str, Any] | None = None
+
+
+class SessionItem(BaseModel):
+    session_id: str
+    message_count: int
+    first_seen: str
+    last_seen: str
+    project: str = ""
+    source: str = ""
+
+
+class ReplayTurn(BaseModel):
+    kind: str  # "user" | "assistant" | "tool"
+    timestamp: str
+    content_preview: str | None = None
+    token_count: int | None = None
+    tool_name: str | None = None
+    status: str | None = None
+    latency_ms: float | None = None
+
+
+class ReplayResponse(BaseModel):
+    session_id: str
+    turn_count: int
+    turns: list[ReplayTurn]
