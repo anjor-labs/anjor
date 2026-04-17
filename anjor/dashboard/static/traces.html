@@ -56,8 +56,38 @@
 
       if (traces.length === 0) {
         document.getElementById('app').innerHTML = header + `
-          <div class="bg-gray-900 border border-gray-800 rounded-lg p-8 text-center">
-            <p class="text-gray-500 text-sm">No traces yet. Seed some data or run an agent with <code class="text-blue-400">anjor.patch()</code>.</p>
+          <div class="bg-gray-900 border border-gray-800 rounded-lg p-6 space-y-4">
+            <p class="text-sm text-gray-300 font-medium">No traces yet.</p>
+            <p class="text-sm text-gray-500">
+              Traces show the execution graph of <strong class="text-gray-300">multi-agent systems</strong>
+              — parent/child span hierarchies, per-agent token budgets, and failure attribution.
+              They are populated when your agents emit spans via <code class="text-blue-400">anjor.patch()</code>.
+            </p>
+            <p class="text-sm text-gray-500">
+              Using Claude Code, Gemini CLI, or Codex?
+              → <a href="/ui/replay.html" class="text-blue-400 hover:underline">Session Replay</a> is the right place to look at those sessions.
+            </p>
+            <div class="mt-2">
+              <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">Instrument your own agent</p>
+              <pre class="bg-gray-950 border border-gray-800 rounded p-4 text-xs text-green-300 overflow-x-auto">import anjor
+
+# Patch at startup — zero impact if collector isn't running
+anjor.patch()
+
+# Your agent code runs as normal; Anjor captures LLM + tool calls
+# and groups them into traces by session/trace_id automatically.</pre>
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">Multi-agent spans (optional)</p>
+              <pre class="bg-gray-950 border border-gray-800 rounded p-4 text-xs text-green-300 overflow-x-auto">from anjor import span
+
+async def orchestrator():
+    with span("planner", kind="orchestrator") as root:
+        with span("researcher", kind="subagent", parent=root):
+            await call_researcher_agent()
+        with span("writer", kind="subagent", parent=root):
+            await call_writer_agent()</pre>
+            </div>
           </div>`
         return
       }

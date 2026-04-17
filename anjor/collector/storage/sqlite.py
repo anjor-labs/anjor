@@ -777,73 +777,14 @@ class SQLiteBackend(StorageBackend):
         await self._conn.commit()
 
     async def query_spans(self, trace_id: str) -> list[dict[str, Any]]:
-        """Return all spans for a trace, ordered by started_at.
-
-        Falls back to a synthetic single-span from llm_calls + tool_calls for
-        transcript-based sessions that have no real agent_spans.
-        """
+        """Return all spans for a trace from agent_spans, ordered by started_at."""
         assert self._conn is not None
         cursor = await self._conn.execute(
             "SELECT * FROM agent_spans WHERE trace_id = ? ORDER BY started_at ASC",
             (trace_id,),
         )
         rows = await cursor.fetchall()
-        if rows:
-            return [dict(row) for row in rows]
-
-        # Synthesize a root span from llm_calls / tool_calls for transcript sessions
-        llm_cur = await self._conn.execute(
-            """SELECT min(timestamp) AS started_at, max(timestamp) AS ended_at,
-                      sum(coalesce(token_input, 0)) AS token_input,
-                      sum(coalesce(token_output, 0)) AS token_output,
-                      count(*) AS llm_calls_count,
-                      min(source) AS source
-               FROM llm_calls WHERE trace_id = ?""",
-            (trace_id,),
-        )
-        llm_row = await llm_cur.fetchone()
-
-        tc_cur = await self._conn.execute(
-            """SELECT count(*) AS tool_calls_count,
-                      min(CASE WHEN status = 'error' THEN 'error' END) AS err_status
-               FROM tool_calls WHERE trace_id = ?""",
-            (trace_id,),
-        )
-        tc_row = await tc_cur.fetchone()
-
-        if not llm_row or not llm_row["started_at"]:
-            return []
-
-        source_labels = {
-            "claude_code": "Claude Code",
-            "gemini_cli": "Gemini CLI",
-            "openai_codex": "OpenAI Codex",
-        }
-        source = llm_row["source"] or ""
-        agent_name = source_labels.get(source, source or "session")
-
-        started_at = llm_row["started_at"] or ""
-        ended_at = llm_row["ended_at"] or started_at
-        status = tc_row["err_status"] if tc_row and tc_row["err_status"] else "ok"
-
-        return [
-            {
-                "span_id": trace_id,
-                "trace_id": trace_id,
-                "parent_span_id": None,
-                "agent_name": agent_name,
-                "agent_id": "default",
-                "span_kind": "root",
-                "status": status,
-                "token_input": llm_row["token_input"] or 0,
-                "token_output": llm_row["token_output"] or 0,
-                "tool_calls_count": tc_row["tool_calls_count"] if tc_row else 0,
-                "llm_calls_count": llm_row["llm_calls_count"] or 0,
-                "started_at": started_at,
-                "ended_at": ended_at,
-                "duration_ms": None,
-            }
-        ]
+        return [dict(row) for row in rows]
 
     async def query_spans_all(self, limit: int = 5000) -> list[dict[str, Any]]:
         """Return all spans across all traces."""
@@ -856,68 +797,28 @@ class SQLiteBackend(StorageBackend):
         return [dict(row) for row in rows]
 
     async def list_traces(self, limit: int = 50, offset: int = 0) -> list[TraceSummary]:
-        """Return one TraceSummary per trace_id, newest first.
-
-        Real agent_spans take priority. Sessions from transcript watchers are
-        synthesized as single-span traces using llm_calls + tool_calls.
-        """
+        """Return one TraceSummary per trace_id from agent_spans, newest first."""
         assert self._conn is not None
         cursor = await self._conn.execute(
-            """WITH real_traces AS (
-                 SELECT
-                   trace_id,
-                   min(CASE WHEN parent_span_id IS NULL THEN agent_name END) AS root_agent_name,
-                   count(*) AS span_count,
-                   sum(token_input) AS total_token_input,
-                   sum(token_output) AS total_token_output,
-                   min(started_at) AS started_at,
-                   min(CASE WHEN status = 'error' THEN 'error' ELSE 'ok' END) AS status
-                 FROM agent_spans
-                 GROUP BY trace_id
-               ),
-               session_traces AS (
-                 SELECT
-                   t.trace_id,
-                   coalesce(t.source, '') AS root_agent_name,
-                   (SELECT count(*) FROM llm_calls lc WHERE lc.trace_id = t.trace_id)
-                     + (SELECT count(*) FROM tool_calls tc WHERE tc.trace_id = t.trace_id)
-                     AS span_count,
-                   sum(coalesce(lc2.token_input, 0)) AS total_token_input,
-                   sum(coalesce(lc2.token_output, 0)) AS total_token_output,
-                   min(t.timestamp) AS started_at,
-                   'ok' AS status
-                 FROM (
-                   SELECT trace_id, min(timestamp) AS timestamp, min(source) AS source
-                   FROM llm_calls
-                   WHERE trace_id NOT IN (SELECT DISTINCT trace_id FROM agent_spans)
-                   GROUP BY trace_id
-                 ) t
-                 LEFT JOIN llm_calls lc2 ON lc2.trace_id = t.trace_id
-                 GROUP BY t.trace_id
-               ),
-               combined AS (
-                 SELECT * FROM real_traces
-                 UNION ALL
-                 SELECT * FROM session_traces
-                 WHERE trace_id NOT IN (SELECT trace_id FROM real_traces)
-               )
-               SELECT * FROM combined
+            """SELECT
+                trace_id,
+                min(CASE WHEN parent_span_id IS NULL THEN agent_name END) AS root_agent_name,
+                count(*) AS span_count,
+                sum(token_input) AS total_token_input,
+                sum(token_output) AS total_token_output,
+                min(started_at) AS started_at,
+                min(CASE WHEN status = 'error' THEN 'error' ELSE 'ok' END) AS status
+               FROM agent_spans
+               GROUP BY trace_id
                ORDER BY started_at DESC
                LIMIT ? OFFSET ?""",
             (limit, offset),
         )
         rows = await cursor.fetchall()
-        source_labels = {
-            "claude_code": "Claude Code",
-            "gemini_cli": "Gemini CLI",
-            "openai_codex": "OpenAI Codex",
-        }
         return [
             TraceSummary(
                 trace_id=row["trace_id"],
-                root_agent_name=source_labels.get(
-                    row["root_agent_name"] or "", row["root_agent_name"] or "unknown"
-                ),
+                root_agent_name=row["root_agent_name"] or "unknown",
                 span_count=row["span_count"] or 0,
                 total_token_input=row["total_token_input"] or 0,
                 total_token_output=row["total_token_output"] or 0,
