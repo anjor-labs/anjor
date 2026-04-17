@@ -62,6 +62,13 @@ def main() -> None:
             "Only used with --watch-transcripts."
         ),
     )
+    start.add_argument(
+        "--no-capture-messages",
+        dest="no_capture_messages",
+        action="store_true",
+        default=False,
+        help="Disable message capture (overrides config default of on).",
+    )
 
     mcp_cmd = sub.add_parser("mcp", help="Start anjor as an MCP server (for Claude Code)")
     mcp_cmd.add_argument(
@@ -89,6 +96,13 @@ def main() -> None:
         "--project",
         default="",
         help="Project name tag for all ingested events (overrides auto-detection).",
+    )
+    mcp_cmd.add_argument(
+        "--no-capture-messages",
+        dest="no_capture_messages",
+        action="store_true",
+        default=False,
+        help="Disable message capture (overrides config default of on).",
     )
 
     status_cmd = sub.add_parser("status", help="Show a compact session health summary")
@@ -192,6 +206,13 @@ def main() -> None:
         "--project",
         default="",
         help="Project name tag for all ingested events (overrides auto-detection).",
+    )
+    wt_cmd.add_argument(
+        "--no-capture-messages",
+        dest="no_capture_messages",
+        action="store_true",
+        default=False,
+        help="Disable message capture (overrides config default of on).",
     )
 
     args = parser.parse_args()
@@ -302,11 +323,12 @@ def _start(args: argparse.Namespace) -> None:
         providers = (
             [p.strip() for p in args.providers.split(",") if p.strip()] if args.providers else None
         )
+        capture = config.capture_messages and not args.no_capture_messages
         manager = WatcherManager(
             collector_url=f"http://localhost:{config.collector_port}",
             poll_interval=args.poll_interval,
             project=args.project,
-            capture_messages=config.capture_messages,
+            capture_messages=capture,
         )
         manager.start(providers)
         active = manager.active_providers()
@@ -333,6 +355,7 @@ def _run_mcp(args: argparse.Namespace) -> None:
         collector_port=args.port,
         poll_interval_s=args.poll_interval,
         project=args.project,
+        capture_messages=not args.no_capture_messages,
     )
 
 
@@ -601,11 +624,12 @@ def _run_watch_transcripts(args: argparse.Namespace) -> None:
     from anjor.watchers.manager import WatcherManager
 
     _cfg = AnjorConfig()
+    capture = _cfg.capture_messages and not args.no_capture_messages
     manager = WatcherManager(
         collector_url=collector_url,
         poll_interval=args.poll_interval,
         project=args.project,
-        capture_messages=_cfg.capture_messages,
+        capture_messages=capture,
     )
     manager.start(providers)
 

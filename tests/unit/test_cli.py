@@ -364,6 +364,7 @@ class TestMCPAndWatchTranscriptsCommand:
             port=9000,
             poll_interval=2.0,
             project="myproject",
+            no_capture_messages=False,
         )
         with patch("anjor.mcp_server.run_mcp_server") as mock_run:
             _run_mcp(args)
@@ -373,6 +374,7 @@ class TestMCPAndWatchTranscriptsCommand:
                 collector_port=9000,
                 poll_interval_s=2.0,
                 project="myproject",
+                capture_messages=True,
             )
 
     def test_run_watch_transcripts_list(self, capsys):
@@ -389,7 +391,12 @@ class TestMCPAndWatchTranscriptsCommand:
         from anjor.cli import _run_watch_transcripts
 
         args = argparse.Namespace(
-            list_providers=False, providers="claude", port=7843, poll_interval=2.0, project=""
+            list_providers=False,
+            providers="claude",
+            port=7843,
+            poll_interval=2.0,
+            project="",
+            no_capture_messages=False,
         )
         with (
             patch("anjor.watchers.manager.WatcherManager.start") as mock_start,
@@ -409,7 +416,12 @@ class TestMCPAndWatchTranscriptsCommand:
         from anjor.cli import _run_watch_transcripts
 
         args = argparse.Namespace(
-            list_providers=False, providers="claude", port=7843, poll_interval=2.0, project=""
+            list_providers=False,
+            providers="claude",
+            port=7843,
+            poll_interval=2.0,
+            project="",
+            no_capture_messages=False,
         )
         with (
             patch("anjor.watchers.manager.WatcherManager.start") as mock_start,

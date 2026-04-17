@@ -90,6 +90,7 @@ def run_mcp_server(
     collector_port: int = 7843,
     poll_interval_s: float = 2.0,
     project: str = "",
+    capture_messages: bool = True,
 ) -> None:
     """Start the anjor MCP server. Exits 1 if mcp SDK is not installed."""
     try:
@@ -114,6 +115,7 @@ def run_mcp_server(
                 collector_url=collector_url,
                 poll_interval=poll_interval_s,
                 project=project,
+                capture_messages=capture_messages,
             )
             manager.start(providers)
             active = manager.active_providers()

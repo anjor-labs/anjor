@@ -270,11 +270,14 @@ Anjor can ingest and visualize history from agents that write local session tran
 | **Gemini CLI** | `gemini_cli` | `~/.gemini/tmp/**/*.json` | Yes — `.gemini/settings.json` | Yes |
 | **OpenAI Codex** | `openai_codex` | `~/.codex/sessions/**/*.jsonl` | Coming soon | Yes |
 
-Enable message capture in `.anjor.toml` to unlock Session Replay (stores first 500 chars of each turn locally):
+Message capture is **on by default** — Session Replay works out of the box. To disable:
 
 ```toml
-capture_messages = true
+# .anjor.toml
+capture_messages = false
 ```
+
+Or pass `--no-capture-messages` to `anjor start` / `anjor mcp` / `anjor watch-transcripts`.
 
 > **Note:** AntiGravity was removed from the watcher list — it is an IDE (VS Code fork), not an AI coding agent, and writes no session transcripts.
 
@@ -328,7 +331,7 @@ The `/mcp` endpoint returns per-server and per-tool aggregates and supports a `?
 | GET | `/calls` | Paginated raw event log |
 | GET | `/traces` | Trace list (newest first) |
 | GET | `/traces/{id}/graph` | DAG graph for a single trace |
-| GET | `/sessions` | Sessions list (`?archived=true/false`); requires `capture_messages=true` |
+| GET | `/sessions` | Sessions list (`?archived=true/false`); on by default |
 | GET | `/sessions/{id}/replay` | Chronological turn timeline (messages + tool calls) |
 | POST | `/sessions/{id}/archive` | Archive a session |
 | POST | `/sessions/{id}/unarchive` | Restore an archived session |
@@ -366,8 +369,8 @@ log_level = "DEBUG"
 otlp_endpoint = "http://localhost:4318"
 # otlp_headers = { "x-api-key" = "..." }   # optional auth
 
-# Conversation capture — opt-in, off by default; stores first 500 chars of each turn locally
-# capture_messages = true
+# Conversation capture — on by default; stores first 500 chars of each turn locally
+# capture_messages = false   # uncomment to disable
 ```
 
 Via code:

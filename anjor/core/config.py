@@ -121,10 +121,11 @@ class AnjorConfig(BaseSettings):
     # Terminal summary printed at process exit (disable with ANJOR_SHOW_SUMMARY=false)
     show_summary: bool = Field(default=True)
 
-    # Conversation capture: opt-in, off by default. When enabled, user and assistant
-    # text turns are captured as MessageEvents (first 500 chars only).
-    # Privacy: message content is stored locally and only when explicitly enabled.
-    capture_messages: bool = Field(default=False)
+    # Conversation capture: on by default. User and assistant text turns are captured
+    # as MessageEvents (first 500 chars only), stored locally only.
+    # Disable with ANJOR_CAPTURE_MESSAGES=false, capture_messages=false in .anjor.toml,
+    # or --no-capture-messages on the CLI.
+    capture_messages: bool = Field(default=True)
 
     # Rate limiting on POST /events (token bucket per source IP)
     # Defaults are intentionally generous — local use never hits them.
