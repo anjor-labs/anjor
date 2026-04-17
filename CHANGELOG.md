@@ -11,6 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.1] — 2026-04-17
+
+### Added
+- **Session Replay — provider filter tabs** — filter sessions by Claude Code, Gemini CLI, or OpenAI Codex via tab bar on the left panel
+- **Session Replay — archive / unarchive / delete** — hover-reveal actions on each session card; archived sessions visible in a separate tab
+- **Session Replay — project tagging** — click the project label on any session card to edit and re-tag it; propagates to all events in that session across the Usage, Tools, and Calls pages
+- **Gemini CLI message capture** — user and assistant text turns now captured as `MessageEvent` when `capture_messages = true`; provider label shows "Gemini" in replay
+- **OpenAI Codex message capture** — `event_msg/user_message` and `event_msg/agent_message` events parsed and captured
+- **`/llm/usage/daily` project filter** — daily trend chart on the Usage page now updates correctly when the project selector changes
+- **Traces empty state** — helpful guidance explaining that Traces is for instrumented agents (`anjor.patch()`), with code examples; CLI sessions belong in Replay
+
+### Changed
+- Session Replay is now the **default landing page** (`/` redirects to `/ui/replay.html`); most recent session auto-loads
+- Session cards use compact hover-reveal design; actions and edit controls visible only on hover
+- Timestamps use contextual date format: time only for today, `Apr 17 · 14:32` for older sessions
+- Traces page no longer synthesizes fake traces from transcript sessions — only real `agent_spans` appear
+
+### Fixed
+- Daily trend chart on Usage page ignored the project filter — backend now filters correctly
+- Traces page was populating with synthetic single-node traces from transcript sessions that conveyed no useful information
+
+---
+
 ## [0.6.0] — 2026-04-14
 
 ### Added

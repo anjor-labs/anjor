@@ -264,11 +264,17 @@ All three providers are auto-detected — no configuration required.
 
 Anjor can ingest and visualize history from agents that write local session transcripts. It acts as a post-hoc observatory even for agents you didn't build.
 
-| Agent | Source tag | Discovery path | MCP support |
-|-------|-----------|----------------|-------------|
-| **Claude Code** | `claude_code` | `~/.claude/projects/**/*.jsonl` | Yes — `.mcp.json` |
-| **Gemini CLI** | `gemini_cli` | `~/.gemini/tmp/**/*.json` | Yes — `.gemini/settings.json` |
-| **OpenAI Codex** | `openai_codex` | `~/.codex/sessions/**/*.jsonl` | Coming soon |
+| Agent | Source tag | Discovery path | MCP support | Message capture |
+|-------|-----------|----------------|-------------|-----------------|
+| **Claude Code** | `claude_code` | `~/.claude/projects/**/*.jsonl` | Yes — `.mcp.json` | Yes |
+| **Gemini CLI** | `gemini_cli` | `~/.gemini/tmp/**/*.json` | Yes — `.gemini/settings.json` | Yes |
+| **OpenAI Codex** | `openai_codex` | `~/.codex/sessions/**/*.jsonl` | Coming soon | Yes |
+
+Enable message capture in `.anjor.toml` to unlock Session Replay (stores first 500 chars of each turn locally):
+
+```toml
+capture_messages = true
+```
 
 > **Note:** AntiGravity was removed from the watcher list — it is an IDE (VS Code fork), not an AI coding agent, and writes no session transcripts.
 
@@ -318,12 +324,16 @@ The `/mcp` endpoint returns per-server and per-tool aggregates and supports a `?
 | GET | `/tools/{name}` | Tool detail (latency percentiles, drift) (`?since_minutes=N`) |
 | GET | `/mcp` | MCP server and tool aggregates (`?days=N`) |
 | GET | `/llm` | LLM call summary by model (`?days=N`, `?since_minutes=N`, `?project=`) |
-| GET | `/llm/usage/daily` | Daily token usage by model (`?days=N`) |
+| GET | `/llm/usage/daily` | Daily token usage by model (`?days=N`, `?project=`) |
 | GET | `/calls` | Paginated raw event log |
 | GET | `/traces` | Trace list (newest first) |
 | GET | `/traces/{id}/graph` | DAG graph for a single trace |
-| GET | `/sessions` | Sessions with captured messages (requires `capture_messages=true`) |
+| GET | `/sessions` | Sessions list (`?archived=true/false`); requires `capture_messages=true` |
 | GET | `/sessions/{id}/replay` | Chronological turn timeline (messages + tool calls) |
+| POST | `/sessions/{id}/archive` | Archive a session |
+| POST | `/sessions/{id}/unarchive` | Restore an archived session |
+| DELETE | `/sessions/{id}` | Permanently delete a session and all its events |
+| PATCH | `/sessions/{id}/project` | Re-tag a session's project (propagates to all events) |
 | GET | `/health` | Uptime, queue depth, db path |
 | GET | `/intelligence/failures` | Failure clusters sorted by rate |
 | GET | `/intelligence/optimization` | Token hog tools + savings estimates |
