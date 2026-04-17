@@ -57,6 +57,13 @@ pipx install "anjor[mcp]"
 ## Quickstart
 
 ### If you use Claude Code, Gemini CLI, or Codex
+**Start anjor manually** (no MCP required):
+
+```bash
+anjor start --watch-transcripts
+```
+
+** OR **
 
 Add to `.mcp.json` in your project root (Claude Code picks this up automatically):
 
@@ -72,12 +79,6 @@ Add to `.mcp.json` in your project root (Claude Code picks this up automatically
 ```
 
 Anjor starts automatically with Claude Code, ingests your session transcripts, and adds `anjor_status` as a tool Claude can call to check its own health mid-session. Open `http://localhost:7843/ui/` to see your dashboard.
-
-**Or start manually** (no MCP required):
-
-```bash
-anjor start --watch-transcripts
-```
 
 ---
 
