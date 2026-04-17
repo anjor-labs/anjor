@@ -22,6 +22,15 @@ from pydantic_settings import BaseSettings, PydanticBaseSettingsSource
 _log = logging.getLogger(__name__)
 
 
+class ExportConfig(BaseModel):
+    """OTLP export settings from [export] in .anjor.toml."""
+
+    model_config = {"frozen": True}
+
+    otlp_endpoint: str | None = None
+    otlp_headers: dict[str, str] = Field(default_factory=dict)
+
+
 class AlertConfig(BaseModel):
     """A single alert condition from [[alerts]] in .anjor.toml."""
 
@@ -123,6 +132,9 @@ class AnjorConfig(BaseSettings):
 
     # Alert conditions — configured via [[alerts]] in .anjor.toml
     alerts: list[AlertConfig] = Field(default_factory=list)
+
+    # OTLP export — configured via [export] in .anjor.toml
+    export: ExportConfig = Field(default_factory=ExportConfig)
 
     @field_validator("host")
     @classmethod
