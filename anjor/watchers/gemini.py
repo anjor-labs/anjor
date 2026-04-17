@@ -60,6 +60,7 @@ import structlog
 
 from anjor.core.events.base import BaseEvent
 from anjor.core.events.llm_call import LLMCallEvent, LLMTokenUsage
+from anjor.core.events.message import MessageEvent
 from anjor.core.events.tool_call import (
     FailureType,
     ToolCallEvent,
@@ -166,9 +167,14 @@ class GeminiTranscriptWatcher(BaseTranscriptWatcher):
             if msg_id and key in self._seen_ids:
                 continue
 
-            if msg.get("type") == "gemini":
+            msg_type = msg.get("type")
+            if msg_type == "gemini":
                 evts = self._handle_gemini_message(msg, session_id)
                 events.extend(evts)
+            elif msg_type == "user" and self._capture_messages:
+                evt = self._handle_user_message(msg, session_id)
+                if evt is not None:
+                    events.append(evt)
 
             if msg_id:
                 self._seen_ids.add(key)
@@ -182,6 +188,34 @@ class GeminiTranscriptWatcher(BaseTranscriptWatcher):
         self._offsets[path] = current_size
 
     # ── Parsing helpers ────────────────────────────────────────────────────
+
+    def _extract_text(self, content: Any) -> str:
+        """Extract plain text from Gemini content (string or list of {text} dicts)."""
+        if isinstance(content, str):
+            return content[:500]
+        if isinstance(content, list):
+            parts = [
+                item.get("text", "")
+                for item in content
+                if isinstance(item, dict) and item.get("text")
+            ]
+            return " ".join(parts)[:500]
+        return ""
+
+    def _handle_user_message(self, msg: dict[str, Any], session_id: str) -> MessageEvent | None:
+        preview = self._extract_text(msg.get("content", ""))
+        if not preview.strip():
+            return None
+        ts = _parse_ts(msg.get("timestamp", ""))
+        return MessageEvent(
+            role="user",
+            content_preview=preview,
+            turn_index=0,
+            session_id=session_id,
+            trace_id=session_id,
+            timestamp=ts,
+            source=self.source_tag,
+        )
 
     def _handle_gemini_message(self, msg: dict[str, Any], session_id: str) -> list[BaseEvent]:
         """Emit one LLMCallEvent + zero-or-more ToolCallEvents per gemini turn."""
@@ -219,6 +253,23 @@ class GeminiTranscriptWatcher(BaseTranscriptWatcher):
                 source=self.source_tag,
             )
             events.append(llm_event)
+
+        # ── MessageEvent (opt-in) ──────────────────────────────────────────
+        if self._capture_messages:
+            preview = self._extract_text(msg.get("content", ""))
+            if preview.strip():
+                events.append(
+                    MessageEvent(
+                        role="assistant",
+                        content_preview=preview,
+                        turn_index=0,
+                        token_count=token_output or None,
+                        session_id=session_id,
+                        trace_id=session_id,
+                        timestamp=ts,
+                        source=self.source_tag,
+                    )
+                )
 
         # ── ToolCallEvents (one per toolCall entry) ────────────────────────
         for tc in msg.get("toolCalls", []):

@@ -109,6 +109,12 @@ class TestGetReplay:
         assert resp.status_code == 404
 
     @pytest.mark.asyncio
+    async def test_replay_source_field_present(self, db_with_data: SQLiteBackend) -> None:
+        turns = await db_with_data.get_session_replay("sess-A")
+        assert all("source" in t for t in turns)
+        assert turns[0]["source"] == "claude_code"
+
+    @pytest.mark.asyncio
     async def test_tool_turns_included(self, db_with_data: SQLiteBackend) -> None:
         # Insert a tool call with same session_id
         await db_with_data.write_event(
@@ -137,3 +143,72 @@ class TestGetReplay:
         assert len(tool_turns) == 1
         assert tool_turns[0]["tool_name"] == "Bash"
         assert tool_turns[0]["latency_ms"] == 120.0
+
+
+class TestArchiveSession:
+    @pytest.mark.asyncio
+    async def test_archive_sets_flag(self, db_with_data: SQLiteBackend) -> None:
+        await db_with_data.archive_session("sess-A", archived=True)
+        active = await db_with_data.list_sessions(archived=False)
+        archived = await db_with_data.list_sessions(archived=True)
+        assert not any(r["session_id"] == "sess-A" for r in active)
+        assert any(r["session_id"] == "sess-A" for r in archived)
+
+    @pytest.mark.asyncio
+    async def test_unarchive_restores(self, db_with_data: SQLiteBackend) -> None:
+        await db_with_data.archive_session("sess-A", archived=True)
+        await db_with_data.archive_session("sess-A", archived=False)
+        active = await db_with_data.list_sessions(archived=False)
+        assert any(r["session_id"] == "sess-A" for r in active)
+
+    def test_api_archive(self, client: TestClient) -> None:
+        with client:
+            resp = client.post("/sessions/nonexistent/archive")
+        assert resp.status_code in (200, 404)
+
+    def test_api_archived_filter(self, client: TestClient) -> None:
+        with client:
+            resp = client.get("/sessions?archived=true")
+        assert resp.status_code == 200
+        assert isinstance(resp.json(), list)
+
+
+class TestDeleteSession:
+    @pytest.mark.asyncio
+    async def test_delete_removes_all_data(self, db_with_data: SQLiteBackend) -> None:
+        await db_with_data.delete_session("sess-A")
+        rows = await db_with_data.list_sessions()
+        assert not any(r["session_id"] == "sess-A" for r in rows)
+        turns = await db_with_data.get_session_replay("sess-A")
+        assert turns == []
+
+    def test_api_delete_204(self, client: TestClient) -> None:
+        with client:
+            resp = client.delete("/sessions/any-session")
+        assert resp.status_code == 204
+
+
+class TestSetSessionProject:
+    @pytest.mark.asyncio
+    async def test_project_updated_in_list(self, db_with_data: SQLiteBackend) -> None:
+        await db_with_data.set_session_project("sess-A", "new-project")
+        rows = await db_with_data.list_sessions()
+        row = next(r for r in rows if r["session_id"] == "sess-A")
+        assert row["project"] == "new-project"
+
+    @pytest.mark.asyncio
+    async def test_project_propagates_to_messages(self, db_with_data: SQLiteBackend) -> None:
+        await db_with_data.set_session_project("sess-A", "retagged")
+        async with db_with_data._conn.execute(  # type: ignore[union-attr]
+            "SELECT project FROM session_messages WHERE session_id = 'sess-A' LIMIT 1"
+        ) as cur:
+            row = await cur.fetchone()
+        assert row is not None and row[0] == "retagged"
+
+    def test_api_patch_project(self, client: TestClient) -> None:
+        with client:
+            resp = client.patch(
+                "/sessions/nonexistent/project",
+                json={"project": "myapp"},
+            )
+        assert resp.status_code in (200, 404)

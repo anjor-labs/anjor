@@ -334,5 +334,86 @@ class TestCodexGC:
         assert "new_call" in w._pending
 
 
+# ---------------------------------------------------------------------------
+# Message capture tests (capture_messages=True)
+# ---------------------------------------------------------------------------
+
+
+def _wc() -> CodexTranscriptWatcher:
+    return CodexTranscriptWatcher(collector_url="http://localhost:7843", capture_messages=True)
+
+
+class TestCodexMessageCapture:
+    def _setup(self, w: CodexTranscriptWatcher) -> None:
+        w._current_session_id = "session-abc"
+        w._current_model = "gpt-5.3-codex"
+        w._current_context_window = 128000
+
+    def test_user_message_event_emits_user_turn(self) -> None:
+        w = _wc()
+        self._setup(w)
+        line = _line(
+            type="event_msg",
+            payload={
+                "type": "user_message",
+                "message": "Fix the bug please",
+                "images": [],
+                "local_images": [],
+            },
+        )
+        from anjor.core.events.message import MessageEvent
+
+        events = w.parse_line(line) or []
+        assert len(events) == 1
+        assert isinstance(events[0], MessageEvent)
+        assert events[0].role == "user"
+        assert "Fix the bug" in events[0].content_preview
+        assert events[0].source == "openai_codex"
+
+    def test_agent_message_event_emits_assistant_turn(self) -> None:
+        w = _wc()
+        self._setup(w)
+        line = _line(
+            type="event_msg",
+            payload={
+                "type": "agent_message",
+                "message": "I have fixed the bug.",
+                "phase": "complete",
+            },
+        )
+        from anjor.core.events.message import MessageEvent
+
+        events = w.parse_line(line) or []
+        assert len(events) == 1
+        assert isinstance(events[0], MessageEvent)
+        assert events[0].role == "assistant"
+        assert "fixed the bug" in events[0].content_preview
+        assert events[0].source == "openai_codex"
+
+    def test_user_message_empty_not_captured(self) -> None:
+        w = _wc()
+        self._setup(w)
+        line = _line(type="event_msg", payload={"type": "user_message", "message": ""})
+        events = w.parse_line(line) or []
+        assert events == [] or events is None
+
+    def test_agent_message_empty_not_captured(self) -> None:
+        w = _wc()
+        self._setup(w)
+        line = _line(type="event_msg", payload={"type": "agent_message", "message": ""})
+        events = w.parse_line(line) or []
+        assert events == [] or events is None
+
+    def test_messages_not_captured_without_flag(self) -> None:
+        w = _w()  # capture_messages=False
+        w._current_session_id = "s"
+        for payload in [
+            {"type": "user_message", "message": "hello"},
+            {"type": "agent_message", "message": "world"},
+        ]:
+            events = w.parse_line(_line(type="event_msg", payload=payload))
+            assert events is None or events == []
+
+
 # pytest.approx needed for latency assertions
 import pytest  # noqa: E402

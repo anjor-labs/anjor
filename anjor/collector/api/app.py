@@ -80,7 +80,7 @@ def create_app(
 
     @app.get("/", include_in_schema=False)
     async def root_redirect() -> RedirectResponse:
-        return RedirectResponse(url="/ui/index.html")
+        return RedirectResponse(url="/ui/replay.html")
 
     if _STATIC_DIR.exists():
         app.mount("/ui", StaticFiles(directory=str(_STATIC_DIR), html=True), name="ui")

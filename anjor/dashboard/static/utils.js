@@ -9,6 +9,13 @@ const fmt = {
   tokens:  (v) => v == null ? '—' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v),
   num:     (v) => v == null ? '—' : v >= 1_000_000 ? (v / 1_000_000).toFixed(2) + 'M' : v >= 1_000 ? (v / 1_000).toFixed(1) + 'k' : String(v),
   ts:      (v) => v == null ? '—' : new Date(v).toLocaleTimeString(),
+  dt:      (v) => {
+    if (v == null) return '—'
+    const d = new Date(v)
+    const today = new Date().toDateString() === d.toDateString()
+    const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+    return today ? time : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · ' + time
+  },
   utilPct: (v) => v == null ? '—' : (v * 100).toFixed(1) + '%',
 }
 

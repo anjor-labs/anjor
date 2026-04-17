@@ -312,3 +312,112 @@ class TestGeminiFixture:
         # Error tool call
         err_events = [e for e in tool_events if e["status"] == "failure"]
         assert len(err_events) == 1
+
+
+# ---------------------------------------------------------------------------
+# Message capture tests (capture_messages=True)
+# ---------------------------------------------------------------------------
+
+
+def _watcher_capture(tmp_path: Path) -> GeminiTranscriptWatcher:
+    w = GeminiTranscriptWatcher(collector_url="http://localhost:9999", capture_messages=True)
+    w._OFFSETS_PATH = tmp_path / "offsets.json"  # type: ignore[attr-defined]
+    return w
+
+
+class TestGeminiMessageCapture:
+    def _run_tail(self, tmp_path: Path, session_data: dict) -> list:
+        w = _watcher_capture(tmp_path)
+        session_file = tmp_path / "chat.json"
+        session_file.write_text(json.dumps(session_data), encoding="utf-8")
+        posted: list = []
+        with patch.object(
+            w._client, "post", side_effect=lambda url, json, **kw: posted.append(json)
+        ):  # noqa: A002
+            w._tail(str(session_file))
+        return posted
+
+    def test_user_message_captured(self, tmp_path: Path) -> None:
+        session = _make_session(
+            [
+                {
+                    "id": "u1",
+                    "type": "user",
+                    "timestamp": "2026-04-15T10:00:00Z",
+                    "content": [{"text": "List files please"}],
+                },
+            ]
+        )
+        posted = self._run_tail(tmp_path, session)
+        msg_events = [p for p in posted if p["event_type"] == "message"]
+        assert len(msg_events) == 1
+        assert msg_events[0]["role"] == "user"
+        assert "List files" in msg_events[0]["content_preview"]
+
+    def test_user_message_string_content(self, tmp_path: Path) -> None:
+        session = _make_session(
+            [
+                {
+                    "id": "u1",
+                    "type": "user",
+                    "timestamp": "2026-04-15T10:00:00Z",
+                    "content": "Hello there",
+                },
+            ]
+        )
+        posted = self._run_tail(tmp_path, session)
+        msg_events = [p for p in posted if p["event_type"] == "message"]
+        assert len(msg_events) == 1
+        assert msg_events[0]["content_preview"] == "Hello there"
+
+    def test_assistant_message_captured(self, tmp_path: Path) -> None:
+        msg = _gemini_msg(msg_id="g1")
+        msg["content"] = "Here are the files."
+        session = _make_session([msg])
+        posted = self._run_tail(tmp_path, session)
+        msg_events = [p for p in posted if p["event_type"] == "message"]
+        assert len(msg_events) == 1
+        assert msg_events[0]["role"] == "assistant"
+        assert "Here are the files" in msg_events[0]["content_preview"]
+
+    def test_assistant_empty_content_not_captured(self, tmp_path: Path) -> None:
+        msg = _gemini_msg(msg_id="g1")
+        msg["content"] = ""
+        session = _make_session([msg])
+        posted = self._run_tail(tmp_path, session)
+        msg_events = [p for p in posted if p["event_type"] == "message"]
+        assert len(msg_events) == 0
+
+    def test_user_empty_content_not_captured(self, tmp_path: Path) -> None:
+        session = _make_session(
+            [
+                {"id": "u1", "type": "user", "timestamp": "2026-04-15T10:00:00Z", "content": []},
+            ]
+        )
+        posted = self._run_tail(tmp_path, session)
+        msg_events = [p for p in posted if p["event_type"] == "message"]
+        assert len(msg_events) == 0
+
+    def test_no_messages_without_capture_flag(self, tmp_path: Path) -> None:
+        msg = _gemini_msg(msg_id="g1")
+        msg["content"] = "Some text"
+        session = _make_session(
+            [
+                {
+                    "id": "u1",
+                    "type": "user",
+                    "timestamp": "2026-04-15T10:00:00Z",
+                    "content": [{"text": "hi"}],
+                },
+                msg,
+            ]
+        )
+        w = _watcher(tmp_path)  # capture_messages=False
+        session_file = tmp_path / "chat.json"
+        session_file.write_text(json.dumps(session), encoding="utf-8")
+        posted: list = []
+        with patch.object(
+            w._client, "post", side_effect=lambda url, json, **kw: posted.append(json)
+        ):  # noqa: A002
+            w._tail(str(session_file))
+        assert not any(p["event_type"] == "message" for p in posted)

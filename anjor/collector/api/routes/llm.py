@@ -44,9 +44,9 @@ def make_llm_router(service: CollectorService) -> APIRouter:
         ]
 
     @llm_router.get("/llm/usage/daily", response_model=list[DailyUsageItem])
-    async def get_daily_usage(days: int = 14) -> list[DailyUsageItem]:
+    async def get_daily_usage(days: int = 14, project: str | None = None) -> list[DailyUsageItem]:
         """Return token usage grouped by date and model for the last N days."""
-        rows = await service.storage.list_daily_usage(days=days)
+        rows = await service.storage.list_daily_usage(days=days, project=project)
         return [DailyUsageItem(**row) for row in rows]
 
     @llm_router.get("/llm/trace/{trace_id}", response_model=list[LLMDetailItem])

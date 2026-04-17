@@ -150,3 +150,92 @@ class TestGetTraceGraph:
         assert "duration_ms" in node
         assert node["token_input"] == 300
         assert node["token_output"] == 100
+
+
+def _llm_event(trace_id: str, source: str = "claude_code") -> dict:
+    return {
+        "event_type": "llm_call",
+        "trace_id": trace_id,
+        "session_id": trace_id,
+        "agent_id": "default",
+        "timestamp": datetime.now(UTC).isoformat(),
+        "model": "claude-3-5-sonnet",
+        "latency_ms": 500.0,
+        "token_usage": {"input": 200, "output": 80, "cache_read": 0, "cache_creation": 0},
+        "status": "success",
+        "failure_type": None,
+        "source": source,
+        "project": "proj1",
+        "context_window_tokens": 1000,
+        "context_utilisation": 0.2,
+    }
+
+
+def _tool_event(trace_id: str) -> dict:
+    return {
+        "event_type": "tool_call",
+        "trace_id": trace_id,
+        "session_id": trace_id,
+        "agent_id": "default",
+        "timestamp": datetime.now(UTC).isoformat(),
+        "sequence_no": 0,
+        "tool_name": "Bash",
+        "status": "success",
+        "failure_type": None,
+        "latency_ms": 100.0,
+        "input_payload": {},
+        "output_payload": {},
+        "input_schema_hash": "",
+        "output_schema_hash": "",
+        "source": "claude_code",
+        "project": "proj1",
+    }
+
+
+class TestSyntheticTraces:
+    """Traces synthesized from llm_calls/tool_calls for transcript-based sessions."""
+
+    def test_list_traces_includes_synthetic(self, client: TestClient) -> None:
+        tid = str(uuid.uuid4())
+        client.post("/events", json=_llm_event(tid))
+        resp = client.get("/traces")
+        assert resp.status_code == 200
+        data = resp.json()
+        ids = [t["trace_id"] for t in data]
+        assert tid in ids
+
+    def test_synthetic_trace_agent_name_from_source(self, client: TestClient) -> None:
+        tid = str(uuid.uuid4())
+        client.post("/events", json=_llm_event(tid, source="claude_code"))
+        data = client.get("/traces").json()
+        t = next(t for t in data if t["trace_id"] == tid)
+        assert t["root_agent_name"] == "Claude Code"
+
+    def test_synthetic_trace_token_totals(self, client: TestClient) -> None:
+        tid = str(uuid.uuid4())
+        client.post("/events", json=_llm_event(tid))
+        data = client.get("/traces").json()
+        t = next(t for t in data if t["trace_id"] == tid)
+        assert t["total_token_input"] == 200
+        assert t["total_token_output"] == 80
+
+    def test_get_graph_returns_synthetic_span(self, client: TestClient) -> None:
+        tid = str(uuid.uuid4())
+        client.post("/events", json=_llm_event(tid))
+        client.post("/events", json=_tool_event(tid))
+        resp = client.get(f"/traces/{tid}/graph")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["node_count"] == 1
+        node = data["nodes"][0]
+        assert node["span_kind"] == "root"
+        assert node["agent_name"] == "Claude Code"
+        assert node["token_input"] == 200
+        assert node["llm_calls_count"] == 1
+        assert node["tool_calls_count"] == 1
+
+    def test_real_trace_not_duplicated(self, client: TestClient) -> None:
+        tid = str(uuid.uuid4())
+        client.post("/events", json=span_event(tid, agent_name="planner"))
+        data = client.get("/traces").json()
+        assert sum(1 for t in data if t["trace_id"] == tid) == 1

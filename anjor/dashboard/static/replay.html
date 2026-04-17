@@ -16,19 +16,63 @@
     </div>
 
     <div id="empty-notice" class="hidden bg-gray-900 border border-gray-800 rounded-lg p-6 text-sm text-gray-400">
-      No sessions with captured messages yet.<br>
-      Enable <code class="text-blue-400">capture_messages = true</code> in <code class="text-blue-400">.anjor.toml</code> to start capturing conversation turns.
+      No sessions found. Enable <code class="text-blue-400">capture_messages = true</code> in <code class="text-blue-400">.anjor.toml</code> to capture conversation turns.
     </div>
 
     <div class="flex gap-4 h-[calc(100vh-10rem)]">
-      <!-- Session list sidebar -->
-      <div class="w-72 shrink-0 flex flex-col gap-2 overflow-y-auto pr-1" id="session-list">
-        <p class="text-gray-600 text-sm">Loading…</p>
+      <!-- Sidebar -->
+      <div class="w-64 shrink-0 flex flex-col gap-2 min-h-0">
+
+        <!-- Active / Archived tabs -->
+        <div class="flex gap-1">
+          <button id="tab-active" onclick="switchTab(false)"
+            class="flex-1 text-xs py-1 rounded border bg-gray-700 border-gray-500 text-white transition-colors">
+            Active
+          </button>
+          <button id="tab-archived" onclick="switchTab(true)"
+            class="flex-1 text-xs py-1 rounded border bg-gray-900 border-gray-700 text-gray-400 hover:bg-gray-800 transition-colors">
+            Archived
+          </button>
+        </div>
+
+        <!-- Provider filter -->
+        <div id="provider-tabs" class="flex flex-wrap gap-1"></div>
+
+        <!-- Session list -->
+        <div class="flex-1 overflow-y-auto flex flex-col gap-1.5 pr-0.5" id="session-list">
+          <p class="text-gray-600 text-xs">Loading…</p>
+        </div>
       </div>
 
       <!-- Replay pane -->
-      <div class="flex-1 overflow-y-auto" id="replay-pane">
-        <p class="text-gray-600 text-sm mt-8 text-center">Select a session to replay.</p>
+      <div class="flex-1 flex flex-col min-h-0">
+        <div id="replay-controls" class="hidden items-center gap-3 mb-3 flex-wrap">
+          <span id="replay-summary" class="text-xs text-gray-500 flex-1"></span>
+          <button id="btn-tools" onclick="toggleTools()"
+            class="text-xs px-2.5 py-1 rounded border border-gray-700 bg-gray-900 text-gray-300 hover:bg-gray-800 transition-colors">
+            Hide tools
+          </button>
+          <button id="btn-sort" onclick="toggleSort()"
+            class="text-xs px-2.5 py-1 rounded border border-gray-700 bg-gray-900 text-gray-300 hover:bg-gray-800 transition-colors">
+            Newest first
+          </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto" id="replay-pane">
+          <p class="text-gray-600 text-sm mt-8 text-center">Select a session to replay.</p>
+        </div>
+
+        <div id="replay-pagination" class="hidden items-center justify-between mt-3 pt-3 border-t border-gray-800">
+          <button onclick="changePage(-1)" id="btn-prev"
+            class="text-xs px-3 py-1 rounded border border-gray-700 bg-gray-900 text-gray-300 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+            ← Prev
+          </button>
+          <span id="page-label" class="text-xs text-gray-500"></span>
+          <button onclick="changePage(1)" id="btn-next"
+            class="text-xs px-3 py-1 rounded border border-gray-700 bg-gray-900 text-gray-300 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+            Next →
+          </button>
+        </div>
       </div>
     </div>
   </main>
@@ -36,58 +80,240 @@
   <script>
     document.getElementById('nav').innerHTML = buildNav('/ui/replay.html')
 
-    let selectedSession = null
+    const PAGE_SIZE = 50
 
-    async function loadSessions() {
-      let sessions = []
-      try { sessions = await fetch(`${API}/sessions?limit=100`).then(r => r.json()) } catch { sessions = [] }
+    const PROVIDER_META = {
+      claude_code:  { label: 'Claude', cls: 'bg-purple-900 text-purple-300 border-purple-700' },
+      gemini_cli:   { label: 'Gemini', cls: 'bg-blue-900   text-blue-300   border-blue-700'   },
+      openai_codex: { label: 'Codex',  cls: 'bg-green-900  text-green-300  border-green-700'  },
+    }
+
+    function providerMeta(src) {
+      return PROVIDER_META[src] || { label: src || 'Other', cls: 'bg-gray-800 text-gray-300 border-gray-600' }
+    }
+    function providerBadge(src) {
+      const m = providerMeta(src)
+      return `<span class="px-1.5 py-0.5 rounded border text-xs ${m.cls}">${m.label}</span>`
+    }
+    function providerLabel(src) { return providerMeta(src).label }
+
+    // ── State ────────────────────────────────────────────────────────────────
+    let allSessions = [], showArchived = false, activeProvider = null
+    let selectedSession = null, allTurns = []
+    let sortDesc = true, showTools = true, currentPage = 0
+
+    function filteredSessions() {
+      return activeProvider ? allSessions.filter(s => s.source === activeProvider) : allSessions
+    }
+
+    // ── Tab / provider switching ─────────────────────────────────────────────
+    function switchTab(archived) {
+      showArchived = archived; activeProvider = null
+      const on = 'flex-1 text-xs py-1 rounded border bg-gray-700 border-gray-500 text-white transition-colors'
+      const off = 'flex-1 text-xs py-1 rounded border bg-gray-900 border-gray-700 text-gray-400 hover:bg-gray-800 transition-colors'
+      document.getElementById('tab-active').className   = archived ? off : on
+      document.getElementById('tab-archived').className = archived ? on  : off
+      loadSessions()
+    }
+
+    function setProvider(src) { activeProvider = src; renderProviderTabs(); renderSessionList() }
+
+    // ── Replay controls ──────────────────────────────────────────────────────
+    function visibleTurns() {
+      const t = showTools ? allTurns : allTurns.filter(t => t.kind !== 'tool')
+      return sortDesc ? [...t].reverse() : t
+    }
+    function toggleTools() {
+      showTools = !showTools; currentPage = 0
+      document.getElementById('btn-tools').textContent = showTools ? 'Hide tools' : 'Show tools'
+      renderPage()
+    }
+    function toggleSort() {
+      sortDesc = !sortDesc; currentPage = 0
+      document.getElementById('btn-sort').textContent = sortDesc ? 'Newest first' : 'Oldest first'
+      renderPage()
+    }
+    function changePage(delta) {
+      const max = Math.max(0, Math.ceil(visibleTurns().length / PAGE_SIZE) - 1)
+      currentPage = Math.max(0, Math.min(max, currentPage + delta))
+      renderPage()
+    }
+
+    // ── Session actions ──────────────────────────────────────────────────────
+    async function archiveSession(id, doArchive, ev) {
+      ev.stopPropagation()
+      await fetch(`${API}/sessions/${encodeURIComponent(id)}/${doArchive ? 'archive' : 'unarchive'}`, { method: 'POST' })
+      if (selectedSession === id) clearReplay()
+      await loadSessions()
+    }
+
+    async function deleteSession(id, ev) {
+      ev.stopPropagation()
+      if (!confirm(`Delete session ${id.slice(0,8)}…?\n\nRemoves all tool calls, LLM calls, and messages. Cannot be undone.`)) return
+      await fetch(`${API}/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' })
+      if (selectedSession === id) clearReplay()
+      await loadSessions()
+    }
+
+    function clearReplay() {
+      selectedSession = null
+      document.getElementById('replay-pane').innerHTML = '<p class="text-gray-600 text-sm mt-8 text-center">Select a session to replay.</p>'
+      document.getElementById('replay-controls').classList.add('hidden')
+      document.getElementById('replay-controls').classList.remove('flex')
+      document.getElementById('replay-pagination').classList.add('hidden')
+      document.getElementById('replay-pagination').classList.remove('flex')
+    }
+
+    // Project inline edit — replaces span with input on click
+    function startEditProject(id, spanEl, currentProject) {
+      event.stopPropagation()
+      const input = document.createElement('input')
+      input.type = 'text'
+      input.value = currentProject
+      input.placeholder = 'tag project…'
+      input.className = 'w-full text-xs bg-gray-800 border border-blue-600 rounded px-1.5 py-0.5 text-blue-400 placeholder-gray-600 focus:outline-none'
+      spanEl.replaceWith(input)
+      input.focus()
+      input.select()
+      const save = async () => {
+        const project = input.value.trim()
+        await fetch(`${API}/sessions/${encodeURIComponent(id)}/project`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ project }),
+        })
+        await loadSessions()
+      }
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); save() } if (e.key === 'Escape') loadSessions() })
+      input.addEventListener('blur', save)
+      input.addEventListener('click', e => e.stopPropagation())
+    }
+
+    // ── Render sidebar ───────────────────────────────────────────────────────
+    function renderProviderTabs() {
+      const sources = [...new Set(allSessions.map(s => s.source).filter(Boolean))]
+      const el = document.getElementById('provider-tabs')
+      if (sources.length <= 1) { el.innerHTML = ''; return }
+      const btn = (label, onclick, active) =>
+        `<button onclick="${onclick}" class="text-xs px-2 py-0.5 rounded border transition-colors ${active
+          ? 'bg-gray-700 border-gray-500 text-white'
+          : 'bg-gray-900 border-gray-700 text-gray-400 hover:bg-gray-800'}">${label}</button>`
+      el.innerHTML = btn('All', 'setProvider(null)', activeProvider === null) +
+        sources.map(s => {
+          const m = providerMeta(s)
+          return `<button onclick="setProvider('${s}')" class="text-xs px-2 py-0.5 rounded border transition-colors ${
+            activeProvider === s ? m.cls : 'bg-gray-900 border-gray-700 text-gray-400 hover:bg-gray-800'}">${m.label}</button>`
+        }).join('')
+    }
+
+    function renderSessionList() {
+      const sessions = filteredSessions()
       const list = document.getElementById('session-list')
       const empty = document.getElementById('empty-notice')
+
+      if (!allSessions.length) { list.innerHTML = ''; empty.classList.remove('hidden'); return }
+      empty.classList.add('hidden')
+
       if (!sessions.length) {
-        list.innerHTML = ''
-        empty.classList.remove('hidden')
+        list.innerHTML = `<p class="text-gray-600 text-xs text-center mt-4">${showArchived ? 'No archived sessions.' : 'No sessions for this provider.'}</p>`
         return
       }
-      empty.classList.add('hidden')
-      list.innerHTML = sessions.map(s => `
-        <button onclick="loadReplay('${s.session_id}')"
-          class="session-btn w-full text-left bg-gray-900 hover:bg-gray-800 border border-gray-800 rounded-lg px-3 py-2.5 transition-colors"
-          data-id="${s.session_id}">
-          <div class="text-xs text-gray-200 truncate font-semibold">${s.session_id.slice(0, 8)}…</div>
-          <div class="text-xs text-gray-500 mt-0.5">${fmt.ts(s.last_seen)} · ${s.message_count} msg</div>
-          ${s.project ? `<div class="text-xs text-blue-500 mt-0.5">${s.project}</div>` : ''}
-        </button>
-      `).join('')
+
+      list.innerHTML = sessions.map(s => {
+        const selected = s.session_id === selectedSession
+        const archiveTitle = showArchived ? 'Unarchive' : 'Archive'
+        const archiveCall = `archiveSession('${s.session_id}',${!showArchived},event)`
+        const project = s.project || ''
+        const projectEl = project
+          ? `<span class="text-xs text-blue-500 cursor-text hover:text-blue-400" onclick="startEditProject('${s.session_id}',this,'${escHtml(project)}')">${escHtml(project)}</span>`
+          : `<span class="text-xs text-gray-700 italic cursor-text hover:text-gray-500" onclick="startEditProject('${s.session_id}',this,'')">add project…</span>`
+
+        return `
+          <div class="group session-card bg-gray-900 border ${selected ? 'border-blue-600' : 'border-gray-800'} rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-850 transition-colors"
+               style="${selected ? '' : ''}" onclick="loadReplay('${s.session_id}')" data-id="${s.session_id}">
+            <!-- Row 1: id + badge + hover actions -->
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs font-semibold text-gray-200 flex-1 truncate">${s.session_id.slice(0,8)}…</span>
+              ${providerBadge(s.source)}
+              <div class="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-1">
+                <button onclick="${archiveCall}" title="${archiveTitle}"
+                  class="text-gray-600 hover:text-yellow-400 text-xs px-1 transition-colors">↧</button>
+                <button onclick="deleteSession('${s.session_id}',event)" title="Delete"
+                  class="text-gray-600 hover:text-red-400 text-xs px-1 transition-colors">✕</button>
+              </div>
+            </div>
+            <!-- Row 2: date/time + message count -->
+            <div class="text-xs text-gray-600 mt-0.5">${fmt.dt(s.last_seen)} · ${s.message_count} msg</div>
+            <!-- Row 3: project (click to edit) -->
+            <div class="mt-1">${projectEl}</div>
+          </div>`
+      }).join('')
+
       document.getElementById('updated').textContent = 'Updated ' + new Date().toLocaleTimeString()
     }
 
+    // ── Render replay pane ───────────────────────────────────────────────────
+    function renderPage() {
+      const turns = visibleTurns()
+      const total = turns.length
+      const pageCount = Math.ceil(total / PAGE_SIZE) || 1
+      currentPage = Math.min(currentPage, pageCount - 1)
+      const slice = turns.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE)
+
+      document.getElementById('replay-pane').innerHTML = slice.length
+        ? `<div class="space-y-3">${slice.map(renderTurn).join('')}</div>`
+        : '<p class="text-gray-600 text-sm mt-8 text-center">No turns to show.</p>'
+
+      const pagEl = document.getElementById('replay-pagination')
+      if (pageCount > 1) {
+        pagEl.classList.remove('hidden'); pagEl.classList.add('flex')
+        document.getElementById('page-label').textContent = `Page ${currentPage + 1} of ${pageCount} · ${total} turns`
+        document.getElementById('btn-prev').disabled = currentPage === 0
+        document.getElementById('btn-next').disabled = currentPage >= pageCount - 1
+      } else {
+        pagEl.classList.add('hidden'); pagEl.classList.remove('flex')
+      }
+
+      const msgs = allTurns.filter(t => t.kind !== 'tool').length
+      const tools = allTurns.filter(t => t.kind === 'tool').length
+      document.getElementById('replay-summary').textContent =
+        `${msgs} msg · ${tools} tool call${tools !== 1 ? 's' : ''} · ${total} shown`
+    }
+
+    // ── Data loading ─────────────────────────────────────────────────────────
+    async function loadSessions() {
+      try { allSessions = await fetch(`${API}/sessions?limit=100&archived=${showArchived}`).then(r => r.json()) }
+      catch { allSessions = [] }
+      renderProviderTabs()
+      renderSessionList()
+      // Auto-load most recent session on first page load
+      if (selectedSession === null && allSessions.length > 0) {
+        loadReplay(filteredSessions()[0]?.session_id || allSessions[0].session_id)
+      }
+    }
+
     async function loadReplay(sessionId) {
+      if (!sessionId) return
       selectedSession = sessionId
-      document.querySelectorAll('.session-btn').forEach(b => {
-        b.classList.toggle('border-blue-600', b.dataset.id === sessionId)
-        b.classList.toggle('border-gray-800', b.dataset.id !== sessionId)
+      // Highlight selected card
+      document.querySelectorAll('.session-card').forEach(c => {
+        const sel = c.dataset.id === sessionId
+        c.classList.toggle('border-blue-600', sel)
+        c.classList.toggle('border-gray-800', !sel)
       })
       const pane = document.getElementById('replay-pane')
       pane.innerHTML = '<p class="text-gray-600 text-sm mt-8 text-center">Loading…</p>'
       let data
-      try {
-        data = await fetch(`${API}/sessions/${encodeURIComponent(sessionId)}/replay`).then(r => r.json())
-      } catch {
-        pane.innerHTML = '<p class="text-red-400 text-sm mt-8 text-center">Failed to load replay.</p>'
-        return
-      }
-      if (data.detail) {
-        pane.innerHTML = `<p class="text-red-400 text-sm mt-8 text-center">${data.detail}</p>`
-        return
-      }
-      pane.innerHTML = `
-        <div class="text-xs text-gray-500 mb-4">${data.turn_count} turn${data.turn_count !== 1 ? 's' : ''} · session ${sessionId.slice(0, 8)}…</div>
-        <div class="space-y-3">
-          ${data.turns.map(turn => renderTurn(turn)).join('')}
-        </div>
-      `
+      try { data = await fetch(`${API}/sessions/${encodeURIComponent(sessionId)}/replay`).then(r => r.json()) }
+      catch { pane.innerHTML = '<p class="text-red-400 text-sm mt-8 text-center">Failed to load.</p>'; return }
+      if (data.detail) { pane.innerHTML = `<p class="text-red-400 text-sm mt-8 text-center">${data.detail}</p>`; return }
+      allTurns = data.turns; currentPage = 0
+      document.getElementById('replay-controls').classList.remove('hidden')
+      document.getElementById('replay-controls').classList.add('flex')
+      renderPage()
     }
 
+    // ── Turn renderers ───────────────────────────────────────────────────────
     function renderTurn(t) {
       if (t.kind === 'tool') return renderToolTurn(t)
       if (t.kind === 'user') return renderUserTurn(t)
@@ -95,61 +321,42 @@
     }
 
     function renderUserTurn(t) {
-      return `
-        <div class="flex gap-3">
-          <div class="w-16 shrink-0 text-right">
-            <span class="text-xs text-gray-600">${fmt.ts(t.timestamp)}</span>
-          </div>
-          <div class="flex-1">
-            <div class="flex items-center gap-2 mb-1">
-              <span class="text-xs font-bold text-blue-400">You</span>
-            </div>
-            <div class="bg-blue-950 border border-blue-900 rounded-lg px-3 py-2 text-sm text-gray-200 whitespace-pre-wrap break-words">${escHtml(t.content_preview || '')}</div>
-          </div>
-        </div>`
+      return `<div class="flex gap-3">
+        <div class="w-16 shrink-0 text-right"><span class="text-xs text-gray-600">${fmt.ts(t.timestamp)}</span></div>
+        <div class="flex-1">
+          <div class="text-xs font-bold text-blue-400 mb-1">You</div>
+          <div class="bg-blue-950 border border-blue-900 rounded-lg px-3 py-2 text-sm text-gray-200 whitespace-pre-wrap break-words">${escHtml(t.content_preview || '')}</div>
+        </div></div>`
     }
 
     function renderAssistantTurn(t) {
-      const tokenBadge = t.token_count ? `<span class="text-xs text-gray-600 ml-2">${fmt.tokens(t.token_count)} tok</span>` : ''
-      return `
-        <div class="flex gap-3">
-          <div class="w-16 shrink-0 text-right">
-            <span class="text-xs text-gray-600">${fmt.ts(t.timestamp)}</span>
-          </div>
-          <div class="flex-1">
-            <div class="flex items-center gap-2 mb-1">
-              <span class="text-xs font-bold text-purple-400">Claude</span>${tokenBadge}
-            </div>
-            <div class="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-200 whitespace-pre-wrap break-words">${escHtml(t.content_preview || '')}</div>
-          </div>
-        </div>`
+      const tok = t.token_count ? `<span class="text-xs text-gray-600 ml-2">${fmt.tokens(t.token_count)} tok</span>` : ''
+      return `<div class="flex gap-3">
+        <div class="w-16 shrink-0 text-right"><span class="text-xs text-gray-600">${fmt.ts(t.timestamp)}</span></div>
+        <div class="flex-1">
+          <div class="flex items-center mb-1"><span class="text-xs font-bold text-purple-400">${escHtml(providerLabel(t.source))}</span>${tok}</div>
+          <div class="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-200 whitespace-pre-wrap break-words">${escHtml(t.content_preview || '')}</div>
+        </div></div>`
     }
 
     function renderToolTurn(t) {
       const ok = t.status === 'success'
-      const statusCls = ok ? 'text-green-400' : 'text-red-400'
-      const dot = ok ? '●' : '✕'
-      return `
-        <div class="flex gap-3">
-          <div class="w-16 shrink-0 text-right">
-            <span class="text-xs text-gray-600">${fmt.ts(t.timestamp)}</span>
+      return `<div class="flex gap-3">
+        <div class="w-16 shrink-0 text-right"><span class="text-xs text-gray-600">${fmt.ts(t.timestamp)}</span></div>
+        <div class="flex-1">
+          <div class="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2">
+            <span class="${ok ? 'text-green-400' : 'text-red-400'} text-xs">${ok ? '●' : '✕'}</span>
+            <span class="text-xs font-bold text-gray-300">${escHtml(t.tool_name || 'tool')}</span>
+            <span class="text-xs text-gray-600 ml-auto">${fmt.ms(t.latency_ms)}</span>
           </div>
-          <div class="flex-1">
-            <div class="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2">
-              <span class="${statusCls} text-xs">${dot}</span>
-              <span class="text-xs font-bold text-gray-300">${escHtml(t.tool_name || 'tool')}</span>
-              <span class="text-xs text-gray-600 ml-auto">${fmt.ms(t.latency_ms)}</span>
-            </div>
-          </div>
-        </div>`
+        </div></div>`
     }
 
     function escHtml(s) {
-      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
     }
 
     function load() { loadSessions() }
-
     load()
     initAutoRefresh(load)
   </script>

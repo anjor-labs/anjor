@@ -467,6 +467,35 @@ class TestCacheTokenStorage:
         assert models["modelA"]["tokens_in"] == 300
         assert models["modelB"]["tokens_in"] == 300
 
+    async def test_list_daily_usage_project_filter(self, storage: SQLiteBackend) -> None:
+        from datetime import UTC, datetime
+
+        ev_alpha = {
+            "trace_id": "t-alpha",
+            "session_id": "s-alpha",
+            "model": "claude-haiku-4-5-20251001",
+            "latency_ms": 100.0,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "token_usage": {"input": 111, "output": 22, "cache_read": 0, "cache_creation": 0},
+            "source": "claude_code",
+            "project": "alpha",
+        }
+        ev_beta = {
+            "trace_id": "t-beta",
+            "session_id": "s-beta",
+            "model": "claude-haiku-4-5-20251001",
+            "latency_ms": 100.0,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "token_usage": {"input": 999, "output": 33, "cache_read": 0, "cache_creation": 0},
+            "source": "claude_code",
+            "project": "beta",
+        }
+        await storage.write_llm_event(ev_alpha)
+        await storage.write_llm_event(ev_beta)
+        rows = await storage.list_daily_usage(days=14, project="alpha")
+        assert len(rows) == 1
+        assert rows[0]["tokens_in"] == 111
+
 
 class TestProjectFiltering:
     """Tests for per-project tagging, filtering, and list_projects."""

@@ -504,24 +504,43 @@ class SQLiteBackend(StorageBackend):
             for row in rows
         ]
 
-    async def list_daily_usage(self, days: int = 14) -> list[dict[str, Any]]:
+    async def list_daily_usage(
+        self, days: int = 14, project: str | None = None
+    ) -> list[dict[str, Any]]:
         """Return token usage grouped by date and model for the last N days."""
         assert self._conn is not None
-        cursor = await self._conn.execute(
-            """SELECT
-                substr(timestamp, 1, 10)       AS date,
-                model,
-                sum(coalesce(token_input,  0)) AS tokens_in,
-                sum(coalesce(token_output, 0)) AS tokens_out,
-                sum(coalesce(token_cache_read,  0)) AS cache_read,
-                sum(coalesce(token_cache_write, 0)) AS cache_write,
-                count(*)                       AS calls
-               FROM llm_calls
-               WHERE timestamp >= datetime('now', ?)
-               GROUP BY date, model
-               ORDER BY date ASC""",
-            (f"-{days} days",),
-        )
+        if project:
+            cursor = await self._conn.execute(
+                """SELECT
+                    substr(timestamp, 1, 10)       AS date,
+                    model,
+                    sum(coalesce(token_input,  0)) AS tokens_in,
+                    sum(coalesce(token_output, 0)) AS tokens_out,
+                    sum(coalesce(token_cache_read,  0)) AS cache_read,
+                    sum(coalesce(token_cache_write, 0)) AS cache_write,
+                    count(*)                       AS calls
+                   FROM llm_calls
+                   WHERE timestamp >= datetime('now', ?) AND project = ?
+                   GROUP BY date, model
+                   ORDER BY date ASC""",
+                (f"-{days} days", project),
+            )
+        else:
+            cursor = await self._conn.execute(
+                """SELECT
+                    substr(timestamp, 1, 10)       AS date,
+                    model,
+                    sum(coalesce(token_input,  0)) AS tokens_in,
+                    sum(coalesce(token_output, 0)) AS tokens_out,
+                    sum(coalesce(token_cache_read,  0)) AS cache_read,
+                    sum(coalesce(token_cache_write, 0)) AS cache_write,
+                    count(*)                       AS calls
+                   FROM llm_calls
+                   WHERE timestamp >= datetime('now', ?)
+                   GROUP BY date, model
+                   ORDER BY date ASC""",
+                (f"-{days} days",),
+            )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
@@ -758,14 +777,73 @@ class SQLiteBackend(StorageBackend):
         await self._conn.commit()
 
     async def query_spans(self, trace_id: str) -> list[dict[str, Any]]:
-        """Return all spans for a trace, ordered by started_at."""
+        """Return all spans for a trace, ordered by started_at.
+
+        Falls back to a synthetic single-span from llm_calls + tool_calls for
+        transcript-based sessions that have no real agent_spans.
+        """
         assert self._conn is not None
         cursor = await self._conn.execute(
             "SELECT * FROM agent_spans WHERE trace_id = ? ORDER BY started_at ASC",
             (trace_id,),
         )
         rows = await cursor.fetchall()
-        return [dict(row) for row in rows]
+        if rows:
+            return [dict(row) for row in rows]
+
+        # Synthesize a root span from llm_calls / tool_calls for transcript sessions
+        llm_cur = await self._conn.execute(
+            """SELECT min(timestamp) AS started_at, max(timestamp) AS ended_at,
+                      sum(coalesce(token_input, 0)) AS token_input,
+                      sum(coalesce(token_output, 0)) AS token_output,
+                      count(*) AS llm_calls_count,
+                      min(source) AS source
+               FROM llm_calls WHERE trace_id = ?""",
+            (trace_id,),
+        )
+        llm_row = await llm_cur.fetchone()
+
+        tc_cur = await self._conn.execute(
+            """SELECT count(*) AS tool_calls_count,
+                      min(CASE WHEN status = 'error' THEN 'error' END) AS err_status
+               FROM tool_calls WHERE trace_id = ?""",
+            (trace_id,),
+        )
+        tc_row = await tc_cur.fetchone()
+
+        if not llm_row or not llm_row["started_at"]:
+            return []
+
+        source_labels = {
+            "claude_code": "Claude Code",
+            "gemini_cli": "Gemini CLI",
+            "openai_codex": "OpenAI Codex",
+        }
+        source = llm_row["source"] or ""
+        agent_name = source_labels.get(source, source or "session")
+
+        started_at = llm_row["started_at"] or ""
+        ended_at = llm_row["ended_at"] or started_at
+        status = tc_row["err_status"] if tc_row and tc_row["err_status"] else "ok"
+
+        return [
+            {
+                "span_id": trace_id,
+                "trace_id": trace_id,
+                "parent_span_id": None,
+                "agent_name": agent_name,
+                "agent_id": "default",
+                "span_kind": "root",
+                "status": status,
+                "token_input": llm_row["token_input"] or 0,
+                "token_output": llm_row["token_output"] or 0,
+                "tool_calls_count": tc_row["tool_calls_count"] if tc_row else 0,
+                "llm_calls_count": llm_row["llm_calls_count"] or 0,
+                "started_at": started_at,
+                "ended_at": ended_at,
+                "duration_ms": None,
+            }
+        ]
 
     async def query_spans_all(self, limit: int = 5000) -> list[dict[str, Any]]:
         """Return all spans across all traces."""
@@ -778,29 +856,69 @@ class SQLiteBackend(StorageBackend):
         return [dict(row) for row in rows]
 
     async def list_traces(self, limit: int = 50, offset: int = 0) -> list[TraceSummary]:
-        """Return one TraceSummary per trace_id, newest first."""
+        """Return one TraceSummary per trace_id, newest first.
+
+        Real agent_spans take priority. Sessions from transcript watchers are
+        synthesized as single-span traces using llm_calls + tool_calls.
+        """
         assert self._conn is not None
         cursor = await self._conn.execute(
-            """SELECT
-                trace_id,
-                min(CASE WHEN parent_span_id IS NULL THEN agent_name END) AS root_agent_name,
-                count(*) AS span_count,
-                sum(token_input) AS total_token_input,
-                sum(token_output) AS total_token_output,
-                min(started_at) AS started_at,
-                min(CASE WHEN status = 'error' THEN 'error' ELSE 'ok' END) AS status
-               FROM agent_spans
-               GROUP BY trace_id
+            """WITH real_traces AS (
+                 SELECT
+                   trace_id,
+                   min(CASE WHEN parent_span_id IS NULL THEN agent_name END) AS root_agent_name,
+                   count(*) AS span_count,
+                   sum(token_input) AS total_token_input,
+                   sum(token_output) AS total_token_output,
+                   min(started_at) AS started_at,
+                   min(CASE WHEN status = 'error' THEN 'error' ELSE 'ok' END) AS status
+                 FROM agent_spans
+                 GROUP BY trace_id
+               ),
+               session_traces AS (
+                 SELECT
+                   t.trace_id,
+                   coalesce(t.source, '') AS root_agent_name,
+                   (SELECT count(*) FROM llm_calls lc WHERE lc.trace_id = t.trace_id)
+                     + (SELECT count(*) FROM tool_calls tc WHERE tc.trace_id = t.trace_id)
+                     AS span_count,
+                   sum(coalesce(lc2.token_input, 0)) AS total_token_input,
+                   sum(coalesce(lc2.token_output, 0)) AS total_token_output,
+                   min(t.timestamp) AS started_at,
+                   'ok' AS status
+                 FROM (
+                   SELECT trace_id, min(timestamp) AS timestamp, min(source) AS source
+                   FROM llm_calls
+                   WHERE trace_id NOT IN (SELECT DISTINCT trace_id FROM agent_spans)
+                   GROUP BY trace_id
+                 ) t
+                 LEFT JOIN llm_calls lc2 ON lc2.trace_id = t.trace_id
+                 GROUP BY t.trace_id
+               ),
+               combined AS (
+                 SELECT * FROM real_traces
+                 UNION ALL
+                 SELECT * FROM session_traces
+                 WHERE trace_id NOT IN (SELECT trace_id FROM real_traces)
+               )
+               SELECT * FROM combined
                ORDER BY started_at DESC
                LIMIT ? OFFSET ?""",
             (limit, offset),
         )
         rows = await cursor.fetchall()
+        source_labels = {
+            "claude_code": "Claude Code",
+            "gemini_cli": "Gemini CLI",
+            "openai_codex": "OpenAI Codex",
+        }
         return [
             TraceSummary(
                 trace_id=row["trace_id"],
-                root_agent_name=row["root_agent_name"] or "unknown",
-                span_count=row["span_count"],
+                root_agent_name=source_labels.get(
+                    row["root_agent_name"] or "", row["root_agent_name"] or "unknown"
+                ),
+                span_count=row["span_count"] or 0,
                 total_token_input=row["total_token_input"] or 0,
                 total_token_output=row["total_token_output"] or 0,
                 started_at=row["started_at"] or "",
@@ -809,18 +927,42 @@ class SQLiteBackend(StorageBackend):
             for row in rows
         ]
 
-    async def list_sessions(self, limit: int = 50, offset: int = 0) -> list[dict[str, object]]:
-        """Return sessions that have message events, newest first."""
+    async def list_sessions(
+        self, limit: int = 50, offset: int = 0, archived: bool = False
+    ) -> list[dict[str, object]]:
+        """Return all sessions, newest first. Filters by archived state."""
         assert self._conn is not None
         async with self._conn.execute(
-            """SELECT session_id, COUNT(*) as message_count,
-                      MIN(timestamp) as first_seen, MAX(timestamp) as last_seen,
-                      project, source
-               FROM session_messages
-               GROUP BY session_id
-               ORDER BY last_seen DESC
+            """WITH all_sessions AS (
+                 SELECT session_id, MIN(timestamp) as first_seen,
+                        MAX(timestamp) as last_seen, project, source
+                 FROM (
+                   SELECT session_id, timestamp, project, source FROM session_messages
+                    WHERE session_id != ''
+                   UNION ALL
+                   SELECT session_id, timestamp, project, source FROM tool_calls
+                    WHERE session_id != ''
+                   UNION ALL
+                   SELECT session_id, timestamp, project, source FROM llm_calls
+                    WHERE session_id != ''
+                 ) GROUP BY session_id
+               ),
+               msg_counts AS (
+                 SELECT session_id, COUNT(*) as message_count
+                 FROM session_messages GROUP BY session_id
+               )
+               SELECT a.session_id, COALESCE(m.message_count, 0),
+                      a.first_seen, a.last_seen,
+                      CASE WHEN sm.project != '' THEN sm.project ELSE a.project END,
+                      a.source,
+                      COALESCE(sm.archived, 0)
+               FROM all_sessions a
+               LEFT JOIN msg_counts m ON a.session_id = m.session_id
+               LEFT JOIN session_metadata sm ON a.session_id = sm.session_id
+               WHERE COALESCE(sm.archived, 0) = ?
+               ORDER BY a.last_seen DESC
                LIMIT ? OFFSET ?""",
-            (limit, offset),
+            (1 if archived else 0, limit, offset),
         ) as cur:
             rows = await cur.fetchall()
         return [
@@ -831,21 +973,61 @@ class SQLiteBackend(StorageBackend):
                 "last_seen": r[3],
                 "project": r[4] or "",
                 "source": r[5] or "",
+                "archived": bool(r[6]),
             }
             for r in rows
         ]
+
+    async def archive_session(self, session_id: str, archived: bool) -> None:
+        """Set or clear the archived flag for a session."""
+        assert self._conn is not None
+        await self._conn.execute(
+            """INSERT INTO session_metadata (session_id, archived, updated_at)
+               VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+               ON CONFLICT(session_id) DO UPDATE
+               SET archived = excluded.archived, updated_at = excluded.updated_at""",
+            (session_id, 1 if archived else 0),
+        )
+        await self._conn.commit()
+
+    async def delete_session(self, session_id: str) -> None:
+        """Delete all data for a session across all tables."""
+        assert self._conn is not None
+        for table in ("session_messages", "tool_calls", "llm_calls", "session_metadata"):
+            await self._conn.execute(
+                f"DELETE FROM {table} WHERE session_id = ?",  # noqa: S608
+                (session_id,),
+            )
+        await self._conn.commit()
+
+    async def set_session_project(self, session_id: str, project: str) -> None:
+        """Update the project tag for a session in all tables."""
+        assert self._conn is not None
+        await self._conn.execute(
+            """INSERT INTO session_metadata (session_id, project, updated_at)
+               VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+               ON CONFLICT(session_id) DO UPDATE
+               SET project = excluded.project, updated_at = excluded.updated_at""",
+            (session_id, project),
+        )
+        for table in ("tool_calls", "llm_calls", "session_messages"):
+            await self._conn.execute(
+                f"UPDATE {table} SET project = ? WHERE session_id = ?",  # noqa: S608
+                (project, session_id),
+            )
+        await self._conn.commit()
 
     async def get_session_replay(self, session_id: str) -> list[dict[str, object]]:
         """Return all turns (messages + tool calls) for a session, ordered by timestamp."""
         assert self._conn is not None
         async with self._conn.execute(
             """SELECT 'message' AS kind, timestamp, role AS subtype,
-                      content_preview, token_count, NULL, NULL, NULL
+                      content_preview, token_count, NULL, NULL, NULL, source
                FROM session_messages
                WHERE session_id = ?
                UNION ALL
                SELECT 'tool', timestamp, status,
-                      NULL, NULL, tool_name, status, latency_ms
+                      NULL, NULL, tool_name, status, latency_ms, source
                FROM tool_calls
                WHERE session_id = ?
                ORDER BY timestamp ASC""",
@@ -865,6 +1047,7 @@ class SQLiteBackend(StorageBackend):
                         "tool_name": None,
                         "status": None,
                         "latency_ms": None,
+                        "source": r[8] or "",
                     }
                 )
             else:
@@ -877,6 +1060,7 @@ class SQLiteBackend(StorageBackend):
                         "tool_name": r[5],
                         "status": r[6],
                         "latency_ms": r[7],
+                        "source": r[8] or "",
                     }
                 )
         return turns

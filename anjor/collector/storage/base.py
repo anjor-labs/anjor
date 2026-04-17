@@ -180,7 +180,9 @@ class StorageBackend(ABC):
         ...
 
     @abstractmethod
-    async def list_daily_usage(self, days: int = 14) -> list[dict[str, Any]]:
+    async def list_daily_usage(
+        self, days: int = 14, project: str | None = None
+    ) -> list[dict[str, Any]]:
         """Return token usage grouped by date and model for the last N days."""
         ...
 

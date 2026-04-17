@@ -274,9 +274,14 @@ class EventIngestRequest(BaseModel):
     schema_drift: dict[str, Any] | None = None
 
 
+class SetProjectRequest(BaseModel):
+    project: str
+
+
 class SessionItem(BaseModel):
     session_id: str
     message_count: int
+    archived: bool = False
     first_seen: str
     last_seen: str
     project: str = ""
@@ -291,6 +296,7 @@ class ReplayTurn(BaseModel):
     tool_name: str | None = None
     status: str | None = None
     latency_ms: float | None = None
+    source: str = ""
 
 
 class ReplayResponse(BaseModel):

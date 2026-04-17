@@ -55,6 +55,7 @@ import structlog
 from anjor.analysis.drift.fingerprint import fingerprint
 from anjor.core.events.base import BaseEvent
 from anjor.core.events.llm_call import LLMCallEvent, LLMTokenUsage
+from anjor.core.events.message import MessageEvent
 from anjor.core.events.tool_call import (
     FailureType,
     ToolCallEvent,
@@ -159,6 +160,34 @@ class CodexTranscriptWatcher(BaseTranscriptWatcher):
                     self._current_context_window = int(ctx)
             elif payload_type == "token_count":
                 return self._handle_token_count(payload, ts)
+            elif payload_type == "user_message" and self._capture_messages:
+                text = str(payload.get("message") or "").strip()
+                if text:
+                    return [
+                        MessageEvent(
+                            role="user",
+                            content_preview=text[:500],
+                            turn_index=0,
+                            session_id=self._current_session_id,
+                            trace_id=self._current_session_id,
+                            timestamp=ts,
+                            source=self.source_tag,
+                        )
+                    ]
+            elif payload_type == "agent_message" and self._capture_messages:
+                text = str(payload.get("message") or "").strip()
+                if text:
+                    return [
+                        MessageEvent(
+                            role="assistant",
+                            content_preview=text[:500],
+                            turn_index=0,
+                            session_id=self._current_session_id,
+                            trace_id=self._current_session_id,
+                            timestamp=ts,
+                            source=self.source_tag,
+                        )
+                    ]
             return None
 
         if outer_type == "response_item":
