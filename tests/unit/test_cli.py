@@ -690,3 +690,97 @@ class TestRunReport:
             main()
         out = capsys.readouterr().out
         assert "anjor report" in out
+
+
+# ---------------------------------------------------------------------------
+# anjor diff command
+# ---------------------------------------------------------------------------
+
+
+class TestRunDiff:
+    def _make_args(
+        self,
+        window: str = "24h",
+        fmt: str = "text",
+        project: str | None = None,
+        db: str = ":memory:",
+    ):  # type: ignore[return]
+        import argparse
+
+        return argparse.Namespace(window=window, format=fmt, project=project, db=db)
+
+    def _mock_query(
+        self,
+        current: list[dict] | None = None,
+        prior: list[dict] | None = None,
+    ) -> MagicMock:
+        from unittest.mock import AsyncMock
+
+        rows_cur = (
+            current
+            if current is not None
+            else [{"tool_name": "bash", "status": "success", "latency_ms": 100.0}]
+        )
+        rows_pri = (
+            prior
+            if prior is not None
+            else [{"tool_name": "bash", "status": "success", "latency_ms": 120.0}]
+        )
+        return AsyncMock(return_value=(rows_cur, rows_pri, 0.0, 0.0))
+
+    def test_diff_prints_text_output(self, capsys: pytest.CaptureFixture[str]) -> None:
+        from anjor.cli import _run_diff
+
+        with patch("anjor.cli._query_diff_windows", self._mock_query()):
+            _run_diff(self._make_args())
+        out = capsys.readouterr().out
+        assert "anjor diff" in out
+        assert "bash" in out
+
+    def test_diff_no_data_exits_2(self) -> None:
+        from anjor.cli import _run_diff
+
+        mock = self._mock_query(current=[], prior=[])
+        with (
+            patch("anjor.cli._query_diff_windows", mock),
+            pytest.raises(SystemExit) as exc,
+        ):
+            _run_diff(self._make_args())
+        assert exc.value.code == 2
+
+    def test_diff_json_format(self, capsys: pytest.CaptureFixture[str]) -> None:
+        import json as _json
+
+        from anjor.cli import _run_diff
+
+        with patch("anjor.cli._query_diff_windows", self._mock_query()):
+            _run_diff(self._make_args(fmt="json"))
+        parsed = _json.loads(capsys.readouterr().out)
+        assert "overall" in parsed
+        assert "tools" in parsed
+
+    def test_diff_markdown_format(self, capsys: pytest.CaptureFixture[str]) -> None:
+        from anjor.cli import _run_diff
+
+        with patch("anjor.cli._query_diff_windows", self._mock_query()):
+            _run_diff(self._make_args(fmt="markdown"))
+        assert "## Anjor Diff" in capsys.readouterr().out
+
+    def test_diff_invalid_window_exits_2(self) -> None:
+        from anjor.cli import _run_diff
+
+        with pytest.raises(SystemExit) as exc:
+            _run_diff(self._make_args(window="bad"))
+        assert exc.value.code == 2
+
+    def test_diff_dispatched_via_main(self, capsys: pytest.CaptureFixture[str]) -> None:
+        from unittest.mock import AsyncMock
+
+        rows = [{"tool_name": "bash", "status": "success", "latency_ms": 100.0}]
+        mock = AsyncMock(return_value=(rows, rows, 0.0, 0.0))
+        with (
+            patch.object(sys, "argv", ["anjor", "diff"]),
+            patch("anjor.cli._query_diff_windows", mock),
+        ):
+            main()
+        assert "anjor diff" in capsys.readouterr().out

@@ -142,6 +142,30 @@ def main() -> None:
         help="SQLite DB path (default: ~/.anjor/anjor.db)",
     )
 
+    diff_cmd = sub.add_parser(
+        "diff",
+        help="Compare current window vs prior window; detect regressions",
+    )
+    diff_cmd.add_argument(
+        "--window",
+        metavar="WINDOW",
+        default="24h",
+        help="Window size, e.g. '24h', '7d', '30m' (default: 24h). "  # noqa: E501
+        "Current = last window; prior = window before that.",
+    )
+    diff_cmd.add_argument(
+        "--format",
+        choices=["text", "json", "markdown"],
+        default="text",
+        help="Output format (default: text)",
+    )
+    diff_cmd.add_argument("--project", default=None, help="Filter to a specific project tag")
+    diff_cmd.add_argument(
+        "--db",
+        default=None,
+        help="SQLite DB path (default: ~/.anjor/anjor.db)",
+    )
+
     wt_cmd = sub.add_parser(
         "watch-transcripts",
         help="Watch AI coding agent transcript files (standalone)",
@@ -190,6 +214,8 @@ def main() -> None:
         _run_status(args)
     elif args.command == "report":
         _run_report(args)
+    elif args.command == "diff":
+        _run_diff(args)
     elif args.command == "watch-transcripts":
         _run_watch_transcripts(args)
 
@@ -422,6 +448,99 @@ def _run_report(args: argparse.Namespace) -> None:
 
     if results and not all(r.passed for r in results):
         sys.exit(1)
+
+
+def _run_diff(args: argparse.Namespace) -> None:
+    import asyncio
+    from pathlib import Path
+
+    from anjor.analysis.report import DiffReport
+
+    db_path = args.db or str(Path.home() / ".anjor" / "anjor.db")
+    project: str | None = args.project
+    fmt: str = args.format
+
+    try:
+        window_minutes = _parse_since(args.window)
+    except ValueError as exc:
+        print(f"anjor: {exc}", file=sys.stderr)
+        sys.exit(2)
+
+    current_rows, prior_rows, cur_token, pri_token = asyncio.run(
+        _query_diff_windows(db_path, window_minutes, project)
+    )
+
+    if not current_rows and not prior_rows:
+        print("anjor: no data in either window (is the DB path correct, or try a wider --window?)")
+        sys.exit(2)
+
+    gen = DiffReport()
+    data = gen.generate(
+        current_rows,
+        prior_rows,
+        window_minutes=window_minutes,
+        project=project,
+        current_avg_token_input=cur_token,
+        prior_avg_token_input=pri_token,
+    )
+
+    if fmt == "json":
+        print(gen.format_json(data))
+    elif fmt == "markdown":
+        print(gen.format_markdown(data))
+    else:
+        print(gen.format_text(data))
+
+
+async def _query_diff_windows(
+    db_path: str,
+    window_minutes: int,
+    project: str | None,
+) -> tuple[list[dict[str, object]], list[dict[str, object]], float, float]:
+    """Return (current_rows, prior_rows, current_avg_token, prior_avg_token)."""
+    from datetime import UTC, datetime, timedelta
+
+    import aiosqlite
+
+    now = datetime.now(UTC)
+    t1 = now - timedelta(minutes=window_minutes)  # current window start
+    t2 = now - timedelta(minutes=2 * window_minutes)  # prior window start
+
+    proj_clause = " AND project = ?" if project else ""
+    proj_params = [project] if project else []
+
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+
+            async def _tool_rows(since: datetime, until: datetime) -> list[dict[str, object]]:
+                params: list[object] = [since.isoformat(), until.isoformat(), *proj_params]
+                cur = await conn.execute(
+                    f"SELECT tool_name, status, latency_ms FROM tool_calls"  # noqa: S608
+                    f" WHERE timestamp >= ? AND timestamp < ?{proj_clause}",
+                    params,
+                )
+                return [dict(r) for r in await cur.fetchall()]
+
+            async def _avg_token(since: datetime, until: datetime) -> float:
+                params: list[object] = [since.isoformat(), until.isoformat(), *proj_params]
+                cur = await conn.execute(
+                    f"SELECT AVG(token_input) FROM llm_calls"  # noqa: S608
+                    f" WHERE timestamp >= ? AND timestamp < ?{proj_clause}",
+                    params,
+                )
+                row = await cur.fetchone()
+                return float(row[0] or 0.0) if row else 0.0
+
+            current_rows = await _tool_rows(t1, now)
+            prior_rows = await _tool_rows(t2, t1)
+            cur_token = await _avg_token(t1, now)
+            pri_token = await _avg_token(t2, t1)
+
+    except Exception:  # noqa: BLE001, S110
+        return [], [], 0.0, 0.0
+
+    return current_rows, prior_rows, cur_token, pri_token
 
 
 async def _find_last_session_minutes(db_path: str) -> int:
