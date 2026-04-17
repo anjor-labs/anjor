@@ -8,7 +8,8 @@ def test_registry_contains_providers():
     assert "claude" in WATCHER_REGISTRY
     assert "gemini" in WATCHER_REGISTRY
     assert "codex" in WATCHER_REGISTRY
-    assert "antigravity" in WATCHER_REGISTRY
+    # AntiGravity is an IDE, not an AI agent — removed to prevent silent no-ops
+    assert "antigravity" not in WATCHER_REGISTRY
 
 
 def test_build_explicit_providers():

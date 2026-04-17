@@ -10,7 +10,6 @@ import glob
 
 import structlog
 
-from anjor.watchers.antigravity import AntiGravityTranscriptWatcher
 from anjor.watchers.base import BaseTranscriptWatcher
 from anjor.watchers.claude import ClaudeTranscriptWatcher
 from anjor.watchers.codex import CodexTranscriptWatcher
@@ -18,11 +17,12 @@ from anjor.watchers.gemini import GeminiTranscriptWatcher
 
 logger = structlog.get_logger(__name__)
 
+# AntiGravity is an IDE (VS Code fork), not an AI coding agent — no session transcripts.
+# It has been removed from the registry to prevent silent no-ops.
 WATCHER_REGISTRY: dict[str, type[BaseTranscriptWatcher]] = {
     "claude": ClaudeTranscriptWatcher,
     "gemini": GeminiTranscriptWatcher,
     "codex": CodexTranscriptWatcher,
-    "antigravity": AntiGravityTranscriptWatcher,
 }
 
 

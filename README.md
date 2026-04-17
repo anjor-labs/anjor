@@ -247,7 +247,6 @@ Anjor can ingest and visualize history from agents that write local session tran
 | **Claude Code** | `claude_code` | `~/.claude/projects/**/*.jsonl` | Yes — `.mcp.json` |
 | **Gemini CLI** | `gemini_cli` | `~/.gemini/tmp/**/*.json` | Yes — `.gemini/settings.json` |
 | **OpenAI Codex** | `openai_codex` | `~/.codex/sessions/**/*.jsonl` | Coming soon |
-| **AntiGravity** | `antigravity` | `~/.antigravity/**/*.jsonl` | Coming soon |
 
 ### One-shot ingestion
 ```bash

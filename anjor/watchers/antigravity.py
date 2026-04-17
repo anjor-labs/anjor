@@ -1,6 +1,11 @@
-"""AntiGravityTranscriptWatcher — transcript watcher for AntiGravity sessions.
+"""AntiGravityTranscriptWatcher — REMOVED from default registry.
 
-Format TBD — implement parse_line() when format is confirmed.
+AntiGravity is a code editor (VS Code fork), not an AI coding agent.
+Its ~/.antigravity directory contains IDE extensions and configuration,
+not AI session transcripts. There are no JSONL files to watch.
+
+This class is kept to avoid breaking any code that imports it directly,
+but it will never produce events and is not registered in WATCHER_REGISTRY.
 """
 
 from __future__ import annotations
@@ -8,6 +13,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 import structlog
 
@@ -21,13 +27,18 @@ class AntiGravityTranscriptWatcher(BaseTranscriptWatcher):
     provider_name = "AntiGravity"
     source_tag = "antigravity"
 
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        logger.warning(
+            "antigravity_watcher_not_available",
+            reason="AntiGravity is an IDE, not an AI coding agent — no session transcripts exist",
+        )
+
     def default_paths(self) -> list[str]:
-        # PATH UNCONFIRMED — verify against actual install before 0.8.0 release
         if sys.platform == "win32":
             appdata = os.environ.get("APPDATA", "")
             return [str(Path(appdata) / "AntiGravity" / "**" / "*.jsonl")]
         return [str(Path.home() / ".antigravity" / "**" / "*.jsonl")]
 
     def parse_line(self, line: str) -> list[BaseEvent] | None:
-        logger.debug("antigravity_transcript_parse_not_implemented", line_preview=line[:80])
         return None
