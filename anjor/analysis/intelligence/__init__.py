@@ -17,6 +17,10 @@ from anjor.analysis.intelligence.quality_scorer import (
     QualityScorer,
     ToolQualityScore,
 )
+from anjor.analysis.intelligence.root_cause import (
+    Hypothesis,
+    RootCauseAdvisor,
+)
 from anjor.analysis.intelligence.token_optimizer import (
     CostEstimator,
     OptimizationSuggestion,
@@ -26,6 +30,8 @@ from anjor.analysis.intelligence.token_optimizer import (
 __all__ = [
     "FailureCluster",
     "FailureClusterer",
+    "Hypothesis",
+    "RootCauseAdvisor",
     "OptimizationSuggestion",
     "TokenOptimizer",
     "CostEstimator",

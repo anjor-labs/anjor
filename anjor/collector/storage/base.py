@@ -291,6 +291,23 @@ class StorageBackend(ABC):
         ...
 
     @abstractmethod
+    async def list_prompt_versions(
+        self, project: str | None = None, limit: int = 50
+    ) -> list[dict[str, Any]]:
+        """Return LLM calls grouped by system_prompt_hash, newest first."""
+        ...
+
+    @abstractmethod
+    async def save_baseline(self, name: str, window: str, metrics_json: str) -> None:
+        """Upsert a named diff baseline."""
+        ...
+
+    @abstractmethod
+    async def load_baseline(self, name: str) -> dict[str, Any] | None:
+        """Return a named baseline, or None if not found."""
+        ...
+
+    @abstractmethod
     async def close(self) -> None:
         """Release resources."""
         ...

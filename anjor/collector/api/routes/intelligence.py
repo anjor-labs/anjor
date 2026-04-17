@@ -15,6 +15,7 @@ from fastapi import APIRouter
 
 from anjor.analysis.intelligence.failure_clustering import FailureClusterer
 from anjor.analysis.intelligence.quality_scorer import QualityScorer
+from anjor.analysis.intelligence.root_cause import RootCauseAdvisor
 from anjor.analysis.intelligence.token_optimizer import TokenOptimizer
 from anjor.analysis.tracing.attribution import AttributionAnalyser
 from anjor.collector.api.schemas import (
@@ -22,6 +23,8 @@ from anjor.collector.api.schemas import (
     AgentRunQualityScoreItem,
     FailureClusterItem,
     OptimizationSuggestionItem,
+    PromptVersionItem,
+    RootCauseHypothesisItem,
     ToolQualityScoreItem,
 )
 from anjor.collector.storage.base import LLMQueryFilters
@@ -153,6 +156,64 @@ def make_intelligence_router(service: CollectorService) -> APIRouter:
                 failure_rate=a.failure_rate,
             )
             for a in results
+        ]
+
+    @router.get("/prompt_versions", response_model=list[PromptVersionItem])
+    async def get_prompt_versions(
+        project: str | None = None, limit: int = 50
+    ) -> list[PromptVersionItem]:
+        rows = await service.storage.list_prompt_versions(project=project, limit=limit)
+        return [PromptVersionItem(**r) for r in rows]
+
+    @router.get("/root_causes", response_model=list[RootCauseHypothesisItem])
+    async def get_root_causes() -> list[RootCauseHypothesisItem]:
+        """Return ranked root-cause hypotheses from failure clusters, tool stats, and LLM stats."""
+        tool_calls = await service.storage.query_tool_calls_for_analysis()
+
+        clusterer = FailureClusterer()
+        clusters = [
+            {
+                "tool_name": c.tool_name,
+                "failure_type": c.failure_type,
+                "occurrence_count": c.occurrence_count,
+                "total_calls": c.total_calls,
+                "failure_rate": c.failure_rate,
+            }
+            for c in clusterer.cluster(tool_calls)
+        ]
+
+        tool_summaries_raw = await service.storage.list_tool_summaries()
+        tool_summaries = [
+            {
+                "tool_name": s.tool_name,
+                "call_count": s.call_count,
+                "success_rate": s.success_rate,
+                "avg_latency_ms": s.avg_latency_ms,
+                "p95_latency_ms": s.p95_latency_ms,
+                "drift_rate": 0.0,
+            }
+            for s in tool_summaries_raw
+        ]
+
+        llm_summaries_raw = await service.storage.list_llm_summaries()
+        llm_summaries = [
+            {
+                "model": s.model,
+                "avg_context_utilisation": s.avg_context_utilisation,
+            }
+            for s in llm_summaries_raw
+        ]
+
+        advisor = RootCauseAdvisor()
+        hypotheses = advisor.generate(clusters, tool_summaries, llm_summaries)
+        return [
+            RootCauseHypothesisItem(
+                title=h.title,
+                evidence=h.evidence,
+                confidence=h.confidence,
+                action=h.action,
+            )
+            for h in hypotheses
         ]
 
     return router

@@ -966,6 +966,60 @@ class SQLiteBackend(StorageBackend):
                 )
         return turns
 
+    async def list_prompt_versions(
+        self, project: str | None = None, limit: int = 50
+    ) -> list[dict[str, Any]]:
+        assert self._conn is not None
+        conditions = ["system_prompt_hash IS NOT NULL", "system_prompt_hash != ''"]
+        params: list[Any] = []
+        if project:
+            conditions.append("project = ?")
+            params.append(project)
+        where = "WHERE " + " AND ".join(conditions)
+        params.append(limit)
+        cursor = await self._conn.execute(
+            f"""SELECT
+                system_prompt_hash,
+                min(timestamp)                  AS first_seen,
+                max(timestamp)                  AS last_seen,
+                count(*)                        AS call_count,
+                avg(coalesce(token_input, 0))   AS avg_token_input,
+                avg(coalesce(context_utilisation, 0)) AS avg_context_utilisation,
+                group_concat(DISTINCT model)    AS models
+               FROM llm_calls
+               {where}
+               GROUP BY system_prompt_hash
+               ORDER BY first_seen DESC
+               LIMIT ?""",  # noqa: S608
+            params,
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def save_baseline(self, name: str, window: str, metrics_json: str) -> None:
+        assert self._conn is not None
+        await self._conn.execute(
+            """INSERT INTO baselines (name, window, metrics_json)
+               VALUES (?, ?, ?)
+               ON CONFLICT(name) DO UPDATE
+               SET window = excluded.window,
+                   metrics_json = excluded.metrics_json,
+                   created_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')""",
+            (name, window, metrics_json),
+        )
+        await self._conn.commit()
+
+    async def load_baseline(self, name: str) -> dict[str, Any] | None:
+        assert self._conn is not None
+        cursor = await self._conn.execute(
+            "SELECT name, window, metrics_json FROM baselines WHERE name = ?",
+            (name,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        return dict(row)
+
     async def close(self) -> None:
         if self._flush_task is not None:
             self._flush_task.cancel()

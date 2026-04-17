@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0] — 2026-04-17
+
+### Added
+- **Root Cause Advisor** — `GET /intelligence/root_causes` returns ranked hypotheses (high/medium/low confidence) from 6 automated rules: context window pressure, timeout patterns, schema drift + failure correlation, dominant failure tool, high latency variance, and retry storm detection
+- **Prompt Version Tracking** — `GET /intelligence/prompt_versions` groups LLM calls by `system_prompt_hash`; shows first/last seen, call count, average token input, context utilisation, and models used per prompt version
+- **Named Diff Baselines** — `anjor diff --save-baseline NAME` saves current metrics snapshot; `anjor diff --vs NAME` diffs current state against the named baseline; baselines stored in `~/.anjor/anjor.db` via migration 009
+- **Intelligence dashboard — Root Cause Hypotheses section** — confidence-colored cards (high=red, medium=yellow, low=blue) with evidence and recommended action; paginated
+- **Intelligence dashboard — Prompt Versions section** — table view with hash, date range, call count, token averages, context %, and models
+
+---
+
 ## [1.0.1] — 2026-04-17
 
 ### Added

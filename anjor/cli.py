@@ -179,6 +179,18 @@ def main() -> None:
         default=None,
         help="SQLite DB path (default: ~/.anjor/anjor.db)",
     )
+    diff_cmd.add_argument(
+        "--save-baseline",
+        metavar="NAME",
+        default=None,
+        help="Save current window metrics as a named baseline for future comparison.",
+    )
+    diff_cmd.add_argument(
+        "--vs",
+        metavar="NAME",
+        default=None,
+        help="Compare current window against a saved baseline instead of the prior rolling window.",
+    )
 
     wt_cmd = sub.add_parser(
         "watch-transcripts",
@@ -476,13 +488,17 @@ def _run_report(args: argparse.Namespace) -> None:
 
 def _run_diff(args: argparse.Namespace) -> None:
     import asyncio
+    import json
     from pathlib import Path
 
-    from anjor.analysis.report import DiffReport
+    from anjor.analysis.report import DiffData, DiffReport, WindowMetrics
+    from anjor.collector.storage.sqlite import SQLiteBackend
 
     db_path = args.db or str(Path.home() / ".anjor" / "anjor.db")
     project: str | None = args.project
     fmt: str = args.format
+    save_baseline: str | None = getattr(args, "save_baseline", None)
+    vs_baseline: str | None = getattr(args, "vs", None)
 
     try:
         window_minutes = _parse_since(args.window)
@@ -499,7 +515,7 @@ def _run_diff(args: argparse.Namespace) -> None:
         sys.exit(2)
 
     gen = DiffReport()
-    data = gen.generate(
+    current_data = gen.generate(
         current_rows,
         prior_rows,
         window_minutes=window_minutes,
@@ -507,6 +523,62 @@ def _run_diff(args: argparse.Namespace) -> None:
         current_avg_token_input=cur_token,
         prior_avg_token_input=pri_token,
     )
+
+    if save_baseline:
+        m = current_data.overall_current
+        metrics_dict = {
+            "call_count": m.call_count,
+            "success_rate": m.success_rate,
+            "failure_count": m.failure_count,
+            "p50_latency_ms": m.p50_latency_ms,
+            "p95_latency_ms": m.p95_latency_ms,
+            "avg_token_input": m.avg_token_input,
+        }
+
+        async def _save() -> None:
+            backend = SQLiteBackend(db_path=db_path)
+            await backend.connect()
+            try:
+                await backend.save_baseline(save_baseline, args.window, json.dumps(metrics_dict))
+            finally:
+                await backend.close()
+
+        asyncio.run(_save())
+        print(f"Baseline '{save_baseline}' saved.")
+        return
+
+    if vs_baseline:
+
+        async def _load() -> dict | None:  # type: ignore[type-arg]
+            backend = SQLiteBackend(db_path=db_path)
+            await backend.connect()
+            try:
+                return await backend.load_baseline(vs_baseline)
+            finally:
+                await backend.close()
+
+        row = asyncio.run(_load())
+        if row is None:
+            print(f"anjor: baseline '{vs_baseline}' not found.", file=sys.stderr)
+            sys.exit(1)
+        bm = json.loads(row["metrics_json"])
+        prior_wm = WindowMetrics(
+            call_count=bm.get("call_count", 0),
+            success_rate=bm.get("success_rate", 0.0),
+            failure_count=bm.get("failure_count", 0),
+            p50_latency_ms=bm.get("p50_latency_ms", 0.0),
+            p95_latency_ms=bm.get("p95_latency_ms", 0.0),
+            avg_token_input=bm.get("avg_token_input", 0.0),
+        )
+        data = DiffData(
+            window_minutes=window_minutes,
+            project=project,
+            tools=[],
+            overall_current=current_data.overall_current,
+            overall_prior=prior_wm,
+        )
+    else:
+        data = current_data
 
     if fmt == "json":
         print(gen.format_json(data))

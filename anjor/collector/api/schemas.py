@@ -303,3 +303,20 @@ class ReplayResponse(BaseModel):
     session_id: str
     turn_count: int
     turns: list[ReplayTurn]
+
+
+class PromptVersionItem(BaseModel):
+    system_prompt_hash: str
+    first_seen: str
+    last_seen: str
+    call_count: int
+    avg_token_input: float
+    avg_context_utilisation: float
+    models: str
+
+
+class RootCauseHypothesisItem(BaseModel):
+    title: str
+    evidence: str
+    confidence: str  # "high" | "medium" | "low"
+    action: str

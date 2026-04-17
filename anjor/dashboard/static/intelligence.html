@@ -19,7 +19,7 @@
     const ROWS_PER_PAGE  = 10
 
     // Per-section page state
-    const pages = { failure: 0, opt: 0, tool: 0, run: 0 }
+    const pages = { failure: 0, opt: 0, tool: 0, run: 0, rc: 0, pv: 0 }
 
     // Cached data so re-renders don't refetch
     let allData = null
@@ -53,13 +53,15 @@
 
     async function load() {
       try {
-        const [clusters, suggestions, toolScores, runScores] = await Promise.all([
+        const [clusters, suggestions, toolScores, runScores, rootCauses, promptVersions] = await Promise.all([
           fetch(`${API}/intelligence/failures`).then(r => r.json()),
           fetch(`${API}/intelligence/optimization`).then(r => r.json()),
           fetch(`${API}/intelligence/quality/tools`).then(r => r.json()),
           fetch(`${API}/intelligence/quality/runs`).then(r => r.json()),
+          fetch(`${API}/intelligence/root_causes`).then(r => r.json()),
+          fetch(`${API}/intelligence/prompt_versions`).then(r => r.json()),
         ])
-        allData = { clusters, suggestions, toolScores, runScores }
+        allData = { clusters, suggestions, toolScores, runScores, rootCauses, promptVersions }
         render()
       } catch (e) {
         document.getElementById('app').innerHTML = `
@@ -209,6 +211,64 @@
       ${pageControls('run', pages.run, scores.length, ROWS_PER_PAGE)}`
     }
 
+    const CONFIDENCE_COLOR = { high: 'red', medium: 'yellow', low: 'blue' }
+
+    function rootCausesSection(hypotheses) {
+      if (hypotheses.length === 0)
+        return '<p class="text-sm text-gray-500 italic">No root-cause hypotheses — system looks healthy.</p>'
+
+      const page  = paginate(hypotheses, pages.rc, CARDS_PER_PAGE)
+      const cards = page.map(h => {
+        const col = CONFIDENCE_COLOR[h.confidence] || 'gray'
+        return `<div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+          <div class="flex items-start justify-between gap-3 mb-2">
+            <span class="font-semibold text-sm text-white">${h.title}</span>
+            <span class="shrink-0 text-xs px-1.5 py-0.5 rounded bg-${col}-900 text-${col}-300 border border-${col}-700 uppercase">${h.confidence}</span>
+          </div>
+          <p class="text-xs text-gray-300 mb-2">${h.evidence}</p>
+          <div class="bg-gray-800 rounded p-2 text-xs text-gray-400">
+            <span class="text-green-400 font-medium">Action: </span>${h.action}
+          </div>
+        </div>`
+      }).join('')
+
+      return `<div class="space-y-3">${cards}</div>
+        ${pageControls('rc', pages.rc, hypotheses.length, CARDS_PER_PAGE)}`
+    }
+
+    function promptVersionsSection(versions) {
+      if (versions.length === 0)
+        return '<p class="text-sm text-gray-500 italic">No prompt versions recorded yet — LLM calls with system prompts will appear here.</p>'
+
+      const page = paginate(versions, pages.pv, ROWS_PER_PAGE)
+      const rows = page.map(v => `
+        <tr class="hover:bg-gray-900/50">
+          <td class="py-3 pr-4 font-mono text-xs text-gray-300">${v.system_prompt_hash.slice(0, 12)}…</td>
+          <td class="py-3 pr-4 text-gray-400 text-xs">${v.first_seen.slice(0, 10)}</td>
+          <td class="py-3 pr-4 text-gray-400 text-xs">${v.last_seen.slice(0, 10)}</td>
+          <td class="py-3 pr-4 text-white">${v.call_count}</td>
+          <td class="py-3 pr-4 text-gray-300">${v.avg_token_input.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+          <td class="py-3 pr-4 text-orange-400">${fmt.pct(v.avg_context_utilisation)}</td>
+          <td class="py-3 pr-4 text-xs text-gray-500">${v.models}</td>
+        </tr>`).join('')
+
+      return `<div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead><tr class="text-left text-xs text-gray-500 uppercase border-b border-gray-800">
+            <th class="pb-2 pr-4">Prompt hash</th>
+            <th class="pb-2 pr-4">First seen</th>
+            <th class="pb-2 pr-4">Last seen</th>
+            <th class="pb-2 pr-4">Calls</th>
+            <th class="pb-2 pr-4">Avg input tokens</th>
+            <th class="pb-2 pr-4">Avg context %</th>
+            <th class="pb-2 pr-4">Models</th>
+          </tr></thead>
+          <tbody class="divide-y divide-gray-800">${rows}</tbody>
+        </table>
+      </div>
+      ${pageControls('pv', pages.pv, versions.length, ROWS_PER_PAGE)}`
+    }
+
     function sectionHeader(title, count, sub) {
       return `<div class="flex items-baseline gap-3 mb-4">
         <h2 class="text-lg font-semibold text-white">${title}</h2>
@@ -218,20 +278,24 @@
     }
 
     function render() {
-      const { clusters, suggestions, toolScores, runScores } = allData
+      const { clusters, suggestions, toolScores, runScores, rootCauses, promptVersions } = allData
       document.getElementById('app').innerHTML = `
         <div>
           <h1 class="text-xl font-bold text-white">Intelligence</h1>
           <p class="text-sm text-gray-500 mt-1">Active recommendations derived from historical event data.</p>
         </div>
 
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+            <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Root causes</p>
+            <p class="text-2xl font-bold text-rose-400">${rootCauses.length}</p>
+          </div>
           <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
             <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Failure patterns</p>
             <p class="text-2xl font-bold text-red-400">${clusters.length}</p>
           </div>
           <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
-            <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Optimization opportunities</p>
+            <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Optimization</p>
             <p class="text-2xl font-bold text-orange-400">${suggestions.length}</p>
           </div>
           <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
@@ -242,7 +306,16 @@
             <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Runs scored</p>
             <p class="text-2xl font-bold text-purple-400">${runScores.length}</p>
           </div>
+          <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+            <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Prompt versions</p>
+            <p class="text-2xl font-bold text-teal-400">${promptVersions.length}</p>
+          </div>
         </div>
+
+        <section>
+          ${sectionHeader('Root Cause Hypotheses', rootCauses.length, 'Sorted by confidence — high first')}
+          ${rootCausesSection(rootCauses)}
+        </section>
 
         <section>
           ${sectionHeader('Failure Patterns', clusters.length, 'Sorted by failure rate — worst first')}
@@ -262,6 +335,11 @@
         <section>
           ${sectionHeader('Agent Run Quality', runScores.length, 'Per trace_id — sorted by overall score ascending')}
           ${runQualitySection(runScores)}
+        </section>
+
+        <section>
+          ${sectionHeader('Prompt Versions', promptVersions.length, 'LLM calls grouped by system prompt hash')}
+          ${promptVersionsSection(promptVersions)}
         </section>`
 
     }
