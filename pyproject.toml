@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "anjor"
-version = "1.1.0"
+version = "1.2.0"
 description = "Observability and reliability platform for agentic AI systems"
 readme = "README.md"
 requires-python = ">=3.11"

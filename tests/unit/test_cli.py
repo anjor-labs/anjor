@@ -796,3 +796,238 @@ class TestRunDiff:
         ):
             main()
         assert "anjor diff" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# anjor summarize command
+# ---------------------------------------------------------------------------
+
+
+class TestRunSummarize:
+    def _make_args(
+        self,
+        session: str = "last",
+        api_key: str | None = "sk-test",
+        model: str = "claude-haiku-4-5-20251001",
+        save: bool = False,
+        db: str = ":memory:",
+    ):  # type: ignore[return]
+        import argparse
+
+        return argparse.Namespace(
+            session=session,
+            api_key=api_key,
+            model=model,
+            save=save,
+            db=db,
+        )
+
+    def _mock_backend(
+        self,
+        messages: list | None = None,
+        tool_stats: dict | None = None,
+        llm_stats: dict | None = None,
+    ) -> MagicMock:
+        from unittest.mock import AsyncMock
+
+        mock = MagicMock()
+        mock.connect = AsyncMock()
+        mock.close = AsyncMock()
+        mock.get_session_messages = AsyncMock(return_value=messages or [])
+        mock.get_session_tool_stats = AsyncMock(
+            return_value=tool_stats or {"tool_call_count": 5, "tool_success_count": 4}
+        )
+        mock.get_session_llm_stats = AsyncMock(
+            return_value=llm_stats
+            or {"llm_call_count": 3, "estimated_cost_usd": 0.01, "models_used": ["haiku"]}
+        )
+        mock.save_session_summary = AsyncMock()
+        return mock
+
+    def test_no_api_key_exits_2(self) -> None:
+        import os
+        from anjor.cli import _run_summarize
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            pytest.raises(SystemExit) as exc,
+        ):
+            _run_summarize(self._make_args(api_key=None))
+        assert exc.value.code == 2
+
+    def test_uses_env_api_key(self, capsys: pytest.CaptureFixture[str]) -> None:
+        import os
+        from unittest.mock import AsyncMock
+        from anjor.cli import _run_summarize
+        from anjor.analysis.summarizer import SessionSummary
+
+        mock_backend = self._mock_backend()
+        mock_summarizer = MagicMock()
+        mock_summarizer.summarize.return_value = SessionSummary(
+            session_id="sess-env", summary="Used env key.", model="haiku"
+        )
+
+        with (
+            patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-env-key"}),
+            patch("anjor.cli._find_last_session_id", AsyncMock(return_value="sess-env")),
+            patch("anjor.collector.storage.sqlite.SQLiteBackend", return_value=mock_backend),
+            patch("anjor.analysis.summarizer.SessionSummarizer", return_value=mock_summarizer),
+        ):
+            _run_summarize(self._make_args(api_key=None))
+
+        out = capsys.readouterr().out
+        assert "Used env key." in out
+
+    def test_no_sessions_exits_2(self) -> None:
+        from unittest.mock import AsyncMock
+        from anjor.cli import _run_summarize
+
+        with (
+            patch("anjor.cli._find_last_session_id", AsyncMock(return_value="")),
+            pytest.raises(SystemExit) as exc,
+        ):
+            _run_summarize(self._make_args())
+        assert exc.value.code == 2
+
+    def test_explicit_session_id(self, capsys: pytest.CaptureFixture[str]) -> None:
+        from anjor.analysis.summarizer import SessionSummary
+        from anjor.cli import _run_summarize
+
+        mock_backend = self._mock_backend()
+        mock_summarizer = MagicMock()
+        mock_summarizer.summarize.return_value = SessionSummary(
+            session_id="explicit-sess", summary="Explicit session summary.", model="haiku"
+        )
+
+        with (
+            patch("anjor.collector.storage.sqlite.SQLiteBackend", return_value=mock_backend),
+            patch("anjor.analysis.summarizer.SessionSummarizer", return_value=mock_summarizer),
+        ):
+            _run_summarize(self._make_args(session="explicit-sess"))
+
+        out = capsys.readouterr().out
+        assert "Explicit session summary." in out
+
+    def test_summarize_last_session(self, capsys: pytest.CaptureFixture[str]) -> None:
+        from unittest.mock import AsyncMock
+        from anjor.analysis.summarizer import SessionSummary
+        from anjor.cli import _run_summarize
+
+        mock_backend = self._mock_backend()
+        mock_summarizer = MagicMock()
+        mock_summarizer.summarize.return_value = SessionSummary(
+            session_id="last-sess", summary="Last session was productive.", model="haiku"
+        )
+
+        with (
+            patch("anjor.cli._find_last_session_id", AsyncMock(return_value="last-sess")),
+            patch("anjor.collector.storage.sqlite.SQLiteBackend", return_value=mock_backend),
+            patch("anjor.analysis.summarizer.SessionSummarizer", return_value=mock_summarizer),
+        ):
+            _run_summarize(self._make_args(session="last"))
+
+        assert "Last session was productive." in capsys.readouterr().out
+
+    def test_save_flag_persists_summary(self, capsys: pytest.CaptureFixture[str]) -> None:
+        from unittest.mock import AsyncMock
+        from anjor.analysis.summarizer import SessionSummary
+        from anjor.cli import _run_summarize
+
+        mock_backend = self._mock_backend()
+        mock_summarizer = MagicMock()
+        mock_summarizer.summarize.return_value = SessionSummary(
+            session_id="save-sess", summary="Saved summary.", model="haiku"
+        )
+
+        with (
+            patch("anjor.cli._find_last_session_id", AsyncMock(return_value="save-sess")),
+            patch("anjor.collector.storage.sqlite.SQLiteBackend", return_value=mock_backend),
+            patch("anjor.analysis.summarizer.SessionSummarizer", return_value=mock_summarizer),
+        ):
+            _run_summarize(self._make_args(save=True))
+
+        mock_backend.save_session_summary.assert_called_once_with(
+            "save-sess", "Saved summary.", "haiku"
+        )
+        out = capsys.readouterr().out
+        assert "Saved summary." in out
+        assert "Summary saved" in out
+
+    def test_summarize_dispatched_via_main(self, capsys: pytest.CaptureFixture[str]) -> None:
+        from anjor.analysis.summarizer import SessionSummary
+
+        mock_backend = self._mock_backend()
+        mock_summarizer = MagicMock()
+        mock_summarizer.summarize.return_value = SessionSummary(
+            session_id="main-sess", summary="Via main dispatch.", model="haiku"
+        )
+
+        with (
+            patch.object(
+                sys,
+                "argv",
+                ["anjor", "summarize", "--session", "main-sess", "--api-key", "sk-test"],
+            ),
+            patch("anjor.collector.storage.sqlite.SQLiteBackend", return_value=mock_backend),
+            patch("anjor.analysis.summarizer.SessionSummarizer", return_value=mock_summarizer),
+        ):
+            main()
+
+        assert "Via main dispatch." in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# _find_last_session_id integration helper
+# ---------------------------------------------------------------------------
+
+
+class TestFindLastSessionId:
+    def test_returns_empty_for_bad_db(self) -> None:
+        import asyncio
+        from anjor.cli import _find_last_session_id
+
+        result = asyncio.run(_find_last_session_id("/nonexistent/path/db.db"))
+        assert result == ""
+
+    def test_returns_session_id_from_tool_calls(self, tmp_path) -> None:
+        import asyncio
+        import aiosqlite
+        from anjor.cli import _find_last_session_id
+
+        db_path = str(tmp_path / "test.db")
+
+        async def _setup() -> None:
+            async with aiosqlite.connect(db_path) as conn:
+                await conn.execute("CREATE TABLE tool_calls (session_id TEXT, timestamp TEXT)")
+                await conn.execute(
+                    "INSERT INTO tool_calls VALUES (?, ?)",
+                    ("sess-from-tools", "2025-01-01T12:00:00Z"),
+                )
+                await conn.commit()
+
+        asyncio.run(_setup())
+        result = asyncio.run(_find_last_session_id(db_path))
+        assert result == "sess-from-tools"
+
+    def test_returns_session_id_from_messages_when_no_tool_calls(self, tmp_path) -> None:
+        import asyncio
+        import aiosqlite
+        from anjor.cli import _find_last_session_id
+
+        db_path = str(tmp_path / "test2.db")
+
+        async def _setup() -> None:
+            async with aiosqlite.connect(db_path) as conn:
+                await conn.execute("CREATE TABLE tool_calls (session_id TEXT, timestamp TEXT)")
+                await conn.execute(
+                    "CREATE TABLE session_messages (session_id TEXT, timestamp TEXT)"
+                )
+                await conn.execute(
+                    "INSERT INTO session_messages VALUES (?, ?)",
+                    ("sess-from-msgs", "2025-01-01T12:00:00Z"),
+                )
+                await conn.commit()
+
+        asyncio.run(_setup())
+        result = asyncio.run(_find_last_session_id(db_path))
+        assert result == "sess-from-msgs"

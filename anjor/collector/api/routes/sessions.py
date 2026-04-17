@@ -84,4 +84,12 @@ def make_sessions_router(service: CollectorService) -> APIRouter:
                 return SessionItem(**match)  # type: ignore
         raise HTTPException(status_code=404, detail=f"Session {session_id!r} not found.")
 
+    @router.get("/sessions/{session_id}/summary")
+    async def get_session_summary(session_id: str) -> dict:  # type: ignore[type-arg]
+        storage = _sqlite()
+        row = await storage.get_session_summary(session_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="No summary found")
+        return row
+
     return router

@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] — 2026-04-17
+
+### Added
+- **`anjor summarize`** — post-session summarization via your own Anthropic API key; `--session last` or `--session <id>`, `--save` persists to DB, `--model` to choose Claude variant (default: claude-haiku-4-5-20251001)
+- **Session summary storage** — migration 010 (`session_summaries` table); `save_session_summary` / `get_session_summary` storage methods
+- **`GET /sessions/{id}/summary`** — returns stored summary; `404` if not yet generated
+- **Replay page summary banner** — when a saved summary exists for a session it appears as a teal banner at the top of the replay pane
+- **`@anjor/sdk` v0.1.0** — TypeScript/JavaScript SDK (`anjor-sdk/` at repo root); `traceTool()` wraps any async tool call; `traceCall()` wraps LLM calls with automatic token extraction for OpenAI and Anthropic response shapes; posts to existing `POST /events`; zero runtime dependencies; fire-and-forget (never throws into agent code)
+- Three new SQLiteBackend query methods: `get_session_messages`, `get_session_tool_stats`, `get_session_llm_stats`
+
+---
+
 ## [1.1.0] — 2026-04-17
 
 ### Added

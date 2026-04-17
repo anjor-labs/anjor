@@ -1020,6 +1020,86 @@ class SQLiteBackend(StorageBackend):
             return None
         return dict(row)
 
+    async def get_session_messages(self, session_id: str) -> list[dict[str, Any]]:
+        """Return all messages for a session, ordered by turn_index."""
+        assert self._conn is not None
+        cursor = await self._conn.execute(
+            "SELECT * FROM session_messages WHERE session_id = ? ORDER BY turn_index",
+            (session_id,),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def get_session_tool_stats(self, session_id: str) -> dict[str, Any]:
+        """Return tool call counts for a session."""
+        assert self._conn is not None
+        cursor = await self._conn.execute(
+            """SELECT
+                count(*) AS tool_call_count,
+                sum(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS tool_success_count
+               FROM tool_calls
+               WHERE session_id = ?""",
+            (session_id,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return {"tool_call_count": 0, "tool_success_count": 0}
+        return {
+            "tool_call_count": row["tool_call_count"] or 0,
+            "tool_success_count": row["tool_success_count"] or 0,
+        }
+
+    async def get_session_llm_stats(self, session_id: str) -> dict[str, Any]:
+        """Return LLM call stats for a session with rough cost estimate."""
+        assert self._conn is not None
+        cursor = await self._conn.execute(
+            """SELECT
+                count(*) AS llm_call_count,
+                sum(coalesce(token_input, 0)) AS total_input,
+                sum(coalesce(token_output, 0)) AS total_output,
+                group_concat(DISTINCT model) AS models_concat
+               FROM llm_calls
+               WHERE session_id = ?""",
+            (session_id,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return {"llm_call_count": 0, "estimated_cost_usd": 0.0, "models_used": []}
+        # $3/M input tokens, $15/M output tokens (approximate Sonnet pricing)
+        input_tokens: int = row["total_input"] or 0
+        output_tokens: int = row["total_output"] or 0
+        estimated_cost = (input_tokens / 1_000_000) * 3.0 + (output_tokens / 1_000_000) * 15.0
+        models_raw: str | None = row["models_concat"]
+        models_used = [m for m in (models_raw or "").split(",") if m] if models_raw else []
+        return {
+            "llm_call_count": row["llm_call_count"] or 0,
+            "estimated_cost_usd": estimated_cost,
+            "models_used": models_used,
+        }
+
+    async def save_session_summary(self, session_id: str, summary: str, model: str) -> None:
+        """Upsert a session summary into session_summaries."""
+        assert self._conn is not None
+        await self._conn.execute(
+            """INSERT OR REPLACE INTO session_summaries (session_id, summary, model)
+               VALUES (?, ?, ?)""",
+            (session_id, summary, model),
+        )
+        await self._conn.commit()
+
+    async def get_session_summary(self, session_id: str) -> dict[str, Any] | None:
+        """Return summary dict or None if not found."""
+        assert self._conn is not None
+        cursor = await self._conn.execute(
+            "SELECT session_id, summary, model, created_at"
+            " FROM session_summaries WHERE session_id = ?",
+            (session_id,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        return dict(row)
+
     async def close(self) -> None:
         if self._flush_task is not None:
             self._flush_task.cancel()

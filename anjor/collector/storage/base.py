@@ -308,6 +308,16 @@ class StorageBackend(ABC):
         ...
 
     @abstractmethod
+    async def save_session_summary(self, session_id: str, summary: str, model: str) -> None:
+        """Persist a session summary."""
+        ...
+
+    @abstractmethod
+    async def get_session_summary(self, session_id: str) -> dict[str, Any] | None:
+        """Return summary dict or None if not found."""
+        ...
+
+    @abstractmethod
     async def close(self) -> None:
         """Release resources."""
         ...

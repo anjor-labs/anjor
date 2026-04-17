@@ -192,6 +192,28 @@ def main() -> None:
         help="Compare current window against a saved baseline instead of the prior rolling window.",
     )
 
+    from anjor.analysis.summarizer import SessionSummarizer
+
+    sub_summarize = sub.add_parser("summarize", help="Summarize a session using Claude API")
+    sub_summarize.add_argument(
+        "--session",
+        default="last",
+        help="Session ID or 'last' (default: last)",
+    )
+    sub_summarize.add_argument("--api-key", dest="api_key", default=None)
+    sub_summarize.add_argument("--model", default=SessionSummarizer.DEFAULT_MODEL)
+    sub_summarize.add_argument(
+        "--save",
+        action="store_true",
+        help="Persist summary to DB",
+    )
+    sub_summarize.add_argument(
+        "--db",
+        default=None,
+        help="SQLite DB path (default: ~/.anjor/anjor.db)",
+    )
+    sub_summarize.set_defaults(func=_run_summarize)
+
     wt_cmd = sub.add_parser(
         "watch-transcripts",
         help="Watch AI coding agent transcript files (standalone)",
@@ -251,6 +273,8 @@ def main() -> None:
         _run_diff(args)
     elif args.command == "watch-transcripts":
         _run_watch_transcripts(args)
+    elif args.command == "summarize":
+        _run_summarize(args)
 
 
 def _check_port(host: str, port: int) -> str:
@@ -666,6 +690,98 @@ async def _find_last_session_minutes(db_path: str) -> int:
     except Exception:  # noqa: BLE001, S110
         pass
     return 120  # fallback
+
+
+async def _find_last_session_id(db_path: str) -> str:
+    """Return the session_id of the most recent session, or empty string if none."""
+    import aiosqlite
+
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            cur = await conn.execute(
+                """
+                SELECT session_id FROM tool_calls
+                WHERE session_id != ''
+                ORDER BY timestamp DESC LIMIT 1
+                """
+            )
+            row = await cur.fetchone()
+            if row and row[0]:
+                return str(row[0])
+            # Fallback: check session_messages
+            cur = await conn.execute(
+                """
+                SELECT session_id FROM session_messages
+                WHERE session_id != ''
+                ORDER BY timestamp DESC LIMIT 1
+                """
+            )
+            row = await cur.fetchone()
+            if row and row[0]:
+                return str(row[0])
+    except Exception:  # noqa: BLE001, S110
+        pass
+    return ""
+
+
+def _run_summarize(args: argparse.Namespace) -> None:
+    import asyncio
+    import os
+    from pathlib import Path
+
+    from anjor.analysis.summarizer import SessionSummarizer
+    from anjor.collector.storage.sqlite import SQLiteBackend
+
+    db_path = args.db or str(Path.home() / ".anjor" / "anjor.db")
+    api_key: str = args.api_key or os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        print("anjor: --api-key or ANTHROPIC_API_KEY required", file=sys.stderr)
+        sys.exit(2)
+
+    session_id: str
+    if args.session == "last":
+        session_id = asyncio.run(_find_last_session_id(db_path))
+        if not session_id:
+            print("anjor: no sessions found in DB", file=sys.stderr)
+            sys.exit(2)
+    else:
+        session_id = args.session
+
+    async def _fetch() -> tuple[list[dict], dict, dict]:  # type: ignore[type-arg]
+        backend = SQLiteBackend(db_path=db_path)
+        await backend.connect()
+        try:
+            messages = await backend.get_session_messages(session_id)
+            tool_stats = await backend.get_session_tool_stats(session_id)
+            llm_stats = await backend.get_session_llm_stats(session_id)
+        finally:
+            await backend.close()
+        return messages, tool_stats, llm_stats
+
+    messages, tool_stats, llm_stats = asyncio.run(_fetch())
+
+    summarizer = SessionSummarizer(api_key=api_key, model=args.model)
+    result = summarizer.summarize(
+        session_id=session_id,
+        messages=messages,
+        **tool_stats,
+        **llm_stats,
+    )
+
+    print(result.summary)
+
+    if args.save:
+
+        async def _save() -> None:
+            backend = SQLiteBackend(db_path=db_path)
+            await backend.connect()
+            try:
+                await backend.save_session_summary(session_id, result.summary, result.model)
+            finally:
+                await backend.close()
+
+        asyncio.run(_save())
+        print(f"\nSummary saved for session {session_id[:16]}…")
 
 
 def _run_watch_transcripts(args: argparse.Namespace) -> None:

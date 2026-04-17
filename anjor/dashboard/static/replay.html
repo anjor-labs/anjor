@@ -253,16 +253,17 @@
     }
 
     // ── Render replay pane ───────────────────────────────────────────────────
-    function renderPage() {
+    function renderPage(summaryBanner) {
+      const banner = summaryBanner || ''
       const turns = visibleTurns()
       const total = turns.length
       const pageCount = Math.ceil(total / PAGE_SIZE) || 1
       currentPage = Math.min(currentPage, pageCount - 1)
       const slice = turns.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE)
 
-      document.getElementById('replay-pane').innerHTML = slice.length
+      document.getElementById('replay-pane').innerHTML = banner + (slice.length
         ? `<div class="space-y-3">${slice.map(renderTurn).join('')}</div>`
-        : '<p class="text-gray-600 text-sm mt-8 text-center">No turns to show.</p>'
+        : '<p class="text-gray-600 text-sm mt-8 text-center">No turns to show.</p>')
 
       const pagEl = document.getElementById('replay-pagination')
       if (pageCount > 1) {
@@ -310,7 +311,19 @@
       allTurns = data.turns; currentPage = 0
       document.getElementById('replay-controls').classList.remove('hidden')
       document.getElementById('replay-controls').classList.add('flex')
-      renderPage()
+
+      // Fetch and render summary banner (silently skip on 404/error)
+      let summaryBanner = ''
+      try {
+        const sr = await fetch(`${API}/sessions/${encodeURIComponent(sessionId)}/summary`)
+        if (sr.ok) {
+          const summary = await sr.json()
+          summaryBanner = `<div class="bg-gray-900 border border-gray-800 rounded p-3 mb-3 text-xs text-gray-300">` +
+            `<span class="text-teal-400 font-medium">Summary: </span>${escHtml(summary.summary)}</div>`
+        }
+      } catch (_) { /* silently skip */ }
+
+      renderPage(summaryBanner)
     }
 
     // ── Turn renderers ───────────────────────────────────────────────────────

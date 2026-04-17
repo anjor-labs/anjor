@@ -9,7 +9,7 @@
 </head>
 <body class="min-h-screen bg-gray-950 text-gray-100 font-mono">
   <div id="nav"></div>
-  <main class="px-6 py-8 max-w-7xl mx-auto space-y-12" id="app">
+  <main class="px-6 py-8 max-w-7xl mx-auto" id="app">
     <p class="text-gray-600 text-sm">Loading…</p>
   </main>
   <script>
@@ -18,16 +18,41 @@
     const CARDS_PER_PAGE = 5
     const ROWS_PER_PAGE  = 10
 
-    // Per-section page state
+    const TABS = [
+      { id: 'root_causes',   label: 'Root Causes',     color: 'rose'   },
+      { id: 'failures',      label: 'Failure Patterns', color: 'red'    },
+      { id: 'optimization',  label: 'Optimization',     color: 'orange' },
+      { id: 'tool_quality',  label: 'Tool Quality',     color: 'blue'   },
+      { id: 'run_quality',   label: 'Run Quality',      color: 'purple' },
+      { id: 'prompt_versions', label: 'Prompt Versions', color: 'teal'  },
+    ]
+
+    // Per-section pagination state
     const pages = { failure: 0, opt: 0, tool: 0, run: 0, rc: 0, pv: 0 }
 
-    // Cached data so re-renders don't refetch
-    let allData = null
+    let allData    = null
+    let activeTab  = 'root_causes'
+
+    // ── URL hash routing ──────────────────────────────────────────────────────
+    function tabFromHash() {
+      const h = location.hash.replace('#', '')
+      return TABS.find(t => t.id === h) ? h : 'root_causes'
+    }
+
+    function setTab(id) {
+      activeTab = id
+      history.replaceState(null, '', '#' + id)
+      if (allData) render()
+    }
+
+    window.addEventListener('hashchange', () => {
+      activeTab = tabFromHash()
+      if (allData) render()
+    })
 
     // ── Pagination helpers ────────────────────────────────────────────────────
     function paginate(items, page, size) {
-      const start = page * size
-      return items.slice(start, start + size)
+      return items.slice(page * size, page * size + size)
     }
 
     function pageControls(section, page, total, size) {
@@ -51,7 +76,9 @@
       </div>`
     }
 
+    // ── Data fetch ────────────────────────────────────────────────────────────
     async function load() {
+      activeTab = tabFromHash()
       try {
         const [clusters, suggestions, toolScores, runScores, rootCauses, promptVersions] = await Promise.all([
           fetch(`${API}/intelligence/failures`).then(r => r.json()),
@@ -65,19 +92,44 @@
         render()
       } catch (e) {
         document.getElementById('app').innerHTML = `
-          <div>
+          <div class="space-y-4">
             <h1 class="text-xl font-bold text-white">Intelligence</h1>
-            <p class="text-sm text-gray-500 mt-1">Active recommendations derived from historical event data.</p>
-          </div>
-          <div class="bg-red-950 border border-red-800 rounded-lg p-4 text-red-300 text-sm">
-            ${e.message || 'Failed to load'} — is the collector running at localhost:${window.location.port || 7843}?
+            <div class="bg-red-950 border border-red-800 rounded-lg p-4 text-red-300 text-sm">
+              ${e.message || 'Failed to load'} — is the collector running at localhost:${window.location.port || 7843}?
+            </div>
           </div>`
       }
     }
 
+    // ── Section renderers ─────────────────────────────────────────────────────
+    const CONFIDENCE_COLOR = { high: 'red', medium: 'yellow', low: 'blue' }
+
+    function rootCausesSection(hypotheses) {
+      if (hypotheses.length === 0)
+        return emptyState('No root-cause hypotheses yet — system looks healthy or not enough data has been collected.')
+
+      const page  = paginate(hypotheses, pages.rc, CARDS_PER_PAGE)
+      const cards = page.map(h => {
+        const col = CONFIDENCE_COLOR[h.confidence] || 'gray'
+        return `<div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+          <div class="flex items-start justify-between gap-3 mb-2">
+            <span class="font-semibold text-sm text-white">${h.title}</span>
+            <span class="shrink-0 text-xs px-1.5 py-0.5 rounded bg-${col}-900 text-${col}-300 border border-${col}-700 uppercase">${h.confidence}</span>
+          </div>
+          <p class="text-xs text-gray-300 mb-2">${h.evidence}</p>
+          <div class="bg-gray-800 rounded p-2 text-xs text-gray-400">
+            <span class="text-green-400 font-medium">Action: </span>${h.action}
+          </div>
+        </div>`
+      }).join('')
+
+      return `<div class="space-y-3">${cards}</div>
+        ${pageControls('rc', pages.rc, hypotheses.length, CARDS_PER_PAGE)}`
+    }
+
     function failureSection(clusters) {
       if (clusters.length === 0)
-        return '<p class="text-sm text-gray-500 italic">No failure patterns detected — all tools passing.</p>'
+        return emptyState('No failure patterns detected — all tools passing.')
 
       const page  = paginate(clusters, pages.failure, CARDS_PER_PAGE)
       const cards = page.map(c => `
@@ -107,7 +159,7 @@
 
     function optimizationSection(suggestions) {
       if (suggestions.length === 0)
-        return '<p class="text-sm text-gray-500 italic">No optimization opportunities found — all tool outputs are within context budget.</p>'
+        return emptyState('No optimization opportunities — all tool outputs are within context budget.')
 
       const page = paginate(suggestions, pages.opt, ROWS_PER_PAGE)
       const rows = page.map(s => `
@@ -149,7 +201,7 @@
 
     function toolQualitySection(scores) {
       if (scores.length === 0)
-        return '<p class="text-sm text-gray-500 italic">No tool data yet.</p>'
+        return emptyState('No tool data yet.')
 
       const page  = paginate(scores, pages.tool, CARDS_PER_PAGE)
       const cards = page.map(s => `
@@ -178,7 +230,7 @@
 
     function runQualitySection(scores) {
       if (scores.length === 0)
-        return '<p class="text-sm text-gray-500 italic">No run data yet.</p>'
+        return emptyState('No run data yet.')
 
       const page = paginate(scores, pages.run, ROWS_PER_PAGE)
       const rows = page.map(s => `
@@ -211,34 +263,9 @@
       ${pageControls('run', pages.run, scores.length, ROWS_PER_PAGE)}`
     }
 
-    const CONFIDENCE_COLOR = { high: 'red', medium: 'yellow', low: 'blue' }
-
-    function rootCausesSection(hypotheses) {
-      if (hypotheses.length === 0)
-        return '<p class="text-sm text-gray-500 italic">No root-cause hypotheses — system looks healthy.</p>'
-
-      const page  = paginate(hypotheses, pages.rc, CARDS_PER_PAGE)
-      const cards = page.map(h => {
-        const col = CONFIDENCE_COLOR[h.confidence] || 'gray'
-        return `<div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
-          <div class="flex items-start justify-between gap-3 mb-2">
-            <span class="font-semibold text-sm text-white">${h.title}</span>
-            <span class="shrink-0 text-xs px-1.5 py-0.5 rounded bg-${col}-900 text-${col}-300 border border-${col}-700 uppercase">${h.confidence}</span>
-          </div>
-          <p class="text-xs text-gray-300 mb-2">${h.evidence}</p>
-          <div class="bg-gray-800 rounded p-2 text-xs text-gray-400">
-            <span class="text-green-400 font-medium">Action: </span>${h.action}
-          </div>
-        </div>`
-      }).join('')
-
-      return `<div class="space-y-3">${cards}</div>
-        ${pageControls('rc', pages.rc, hypotheses.length, CARDS_PER_PAGE)}`
-    }
-
     function promptVersionsSection(versions) {
       if (versions.length === 0)
-        return '<p class="text-sm text-gray-500 italic">No prompt versions recorded yet — LLM calls with system prompts will appear here.</p>'
+        return emptyState('No prompt versions recorded yet — LLM calls with system prompts will appear here.')
 
       const page = paginate(versions, pages.pv, ROWS_PER_PAGE)
       const rows = page.map(v => `
@@ -269,92 +296,106 @@
       ${pageControls('pv', pages.pv, versions.length, ROWS_PER_PAGE)}`
     }
 
-    function sectionHeader(title, count, sub) {
-      return `<div class="flex items-baseline gap-3 mb-4">
-        <h2 class="text-lg font-semibold text-white">${title}</h2>
-        ${count != null ? `<span class="text-sm text-gray-400">${count} found</span>` : ''}
-        ${sub ? `<span class="text-xs text-gray-500">${sub}</span>` : ''}
-      </div>`
+    function emptyState(msg) {
+      return `<p class="text-sm text-gray-500 italic">${msg}</p>`
     }
 
-    function render() {
+    // ── Tab content dispatch ──────────────────────────────────────────────────
+    function tabContent() {
       const { clusters, suggestions, toolScores, runScores, rootCauses, promptVersions } = allData
-      document.getElementById('app').innerHTML = `
-        <div>
-          <h1 class="text-xl font-bold text-white">Intelligence</h1>
-          <p class="text-sm text-gray-500 mt-1">Active recommendations derived from historical event data.</p>
-        </div>
-
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
-            <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Root causes</p>
-            <p class="text-2xl font-bold text-rose-400">${rootCauses.length}</p>
-          </div>
-          <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
-            <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Failure patterns</p>
-            <p class="text-2xl font-bold text-red-400">${clusters.length}</p>
-          </div>
-          <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
-            <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Optimization</p>
-            <p class="text-2xl font-bold text-orange-400">${suggestions.length}</p>
-          </div>
-          <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
-            <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Tools scored</p>
-            <p class="text-2xl font-bold text-blue-400">${toolScores.length}</p>
-          </div>
-          <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
-            <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Runs scored</p>
-            <p class="text-2xl font-bold text-purple-400">${runScores.length}</p>
-          </div>
-          <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
-            <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Prompt versions</p>
-            <p class="text-2xl font-bold text-teal-400">${promptVersions.length}</p>
-          </div>
-        </div>
-
-        <section>
-          ${sectionHeader('Root Cause Hypotheses', rootCauses.length, 'Sorted by confidence — high first')}
-          ${rootCausesSection(rootCauses)}
-        </section>
-
-        <section>
-          ${sectionHeader('Failure Patterns', clusters.length, 'Sorted by failure rate — worst first')}
-          ${failureSection(clusters)}
-        </section>
-
-        <section>
-          ${sectionHeader('Token Optimization', suggestions.length, 'Tools whose outputs consume >5% of context window')}
-          ${optimizationSection(suggestions)}
-        </section>
-
-        <section>
-          ${sectionHeader('Tool Quality Scores', toolScores.length, 'Sorted by overall score — lowest first')}
-          ${toolQualitySection(toolScores)}
-        </section>
-
-        <section>
-          ${sectionHeader('Agent Run Quality', runScores.length, 'Per trace_id — sorted by overall score ascending')}
-          ${runQualitySection(runScores)}
-        </section>
-
-        <section>
-          ${sectionHeader('Prompt Versions', promptVersions.length, 'LLM calls grouped by system prompt hash')}
-          ${promptVersionsSection(promptVersions)}
-        </section>`
-
+      const TAB_META = {
+        root_causes:     { title: 'Root Cause Hypotheses',   sub: 'Sorted by confidence — high first',                   content: rootCausesSection(rootCauses) },
+        failures:        { title: 'Failure Patterns',         sub: 'Sorted by failure rate — worst first',                content: failureSection(clusters) },
+        optimization:    { title: 'Token Optimization',       sub: 'Tools consuming >5% of context window',               content: optimizationSection(suggestions) },
+        tool_quality:    { title: 'Tool Quality Scores',      sub: 'Sorted by overall score — lowest first',              content: toolQualitySection(toolScores) },
+        run_quality:     { title: 'Agent Run Quality',        sub: 'Per trace_id — sorted by overall score ascending',    content: runQualitySection(runScores) },
+        prompt_versions: { title: 'Prompt Versions',          sub: 'LLM calls grouped by system prompt hash',             content: promptVersionsSection(promptVersions) },
+      }
+      const meta = TAB_META[activeTab] || TAB_META.root_causes
+      return `<div class="mb-5">
+        <h2 class="text-lg font-semibold text-white">${meta.title}</h2>
+        <p class="text-xs text-gray-500 mt-0.5">${meta.sub}</p>
+      </div>
+      ${meta.content}`
     }
 
-    // Single delegated listener attached once — survives innerHTML re-renders
-    // because it lives on #app which is never replaced, only its contents are.
+    // ── Stat cards ────────────────────────────────────────────────────────────
+    function statCards() {
+      const { clusters, suggestions, toolScores, runScores, rootCauses, promptVersions } = allData
+      const STATS = [
+        { tab: 'root_causes',    label: 'Root causes',      count: rootCauses.length,      color: 'rose'   },
+        { tab: 'failures',       label: 'Failure patterns', count: clusters.length,         color: 'red'    },
+        { tab: 'optimization',   label: 'Optimization',     count: suggestions.length,      color: 'orange' },
+        { tab: 'tool_quality',   label: 'Tools scored',     count: toolScores.length,       color: 'blue'   },
+        { tab: 'run_quality',    label: 'Runs scored',      count: runScores.length,        color: 'purple' },
+        { tab: 'prompt_versions', label: 'Prompt versions', count: promptVersions.length,   color: 'teal'   },
+      ]
+      return STATS.map(s => {
+        const active = s.tab === activeTab
+        return `<button data-tab="${s.tab}"
+          class="text-left bg-gray-900 border rounded-lg p-4 transition-colors
+            ${active ? `border-${s.color}-600 ring-1 ring-${s.color}-700` : 'border-gray-800 hover:border-gray-600'}">
+          <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">${s.label}</p>
+          <p class="text-2xl font-bold text-${s.color}-400">${s.count}</p>
+        </button>`
+      }).join('')
+    }
+
+    // ── Tab bar ───────────────────────────────────────────────────────────────
+    function tabBar() {
+      return TABS.map(t => {
+        const active = t.id === activeTab
+        return `<button data-tab="${t.id}"
+          class="px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors
+            ${active
+              ? `border-${t.color}-500 text-${t.color}-400`
+              : 'border-transparent text-gray-500 hover:text-gray-300 hover:border-gray-600'}">
+          ${t.label}
+        </button>`
+      }).join('')
+    }
+
+    // ── Main render ───────────────────────────────────────────────────────────
+    function render() {
+      document.getElementById('app').innerHTML = `
+        <div class="space-y-6">
+          <div>
+            <h1 class="text-xl font-bold text-white">Intelligence</h1>
+            <p class="text-sm text-gray-500 mt-1">Active recommendations derived from historical event data.</p>
+          </div>
+
+          <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            ${statCards()}
+          </div>
+
+          <div class="border-b border-gray-800 flex gap-1 overflow-x-auto">
+            ${tabBar()}
+          </div>
+
+          <div id="tab-content">
+            ${tabContent()}
+          </div>
+        </div>`
+    }
+
+    // ── Event delegation ──────────────────────────────────────────────────────
     document.getElementById('app').addEventListener('click', e => {
-      const btn = e.target.closest('[data-section][data-dir]')
-      if (!btn || btn.disabled) return
-      const section = btn.getAttribute('data-section')
-      const dir     = parseInt(btn.getAttribute('data-dir'), 10)
+      // Tab switch
+      const tabBtn = e.target.closest('[data-tab]')
+      if (tabBtn) {
+        setTab(tabBtn.getAttribute('data-tab'))
+        return
+      }
+      // Pagination
+      const pageBtn = e.target.closest('[data-section][data-dir]')
+      if (!pageBtn || pageBtn.disabled) return
+      const section = pageBtn.getAttribute('data-section')
+      const dir     = parseInt(pageBtn.getAttribute('data-dir'), 10)
       pages[section] = Math.max(0, pages[section] + dir)
       render()
     })
 
+    initAutoRefresh(load)
     load()
   </script>
 </body>
