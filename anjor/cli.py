@@ -101,6 +101,47 @@ def main() -> None:
     )
     status_cmd.add_argument("--project", default=None, help="Filter to a specific project tag")
 
+    report_cmd = sub.add_parser(
+        "report",
+        help="Generate a quality report; exit 1 if assertions fail, 2 if no data",
+    )
+    report_cmd.add_argument(
+        "--session",
+        metavar="SESSION",
+        default=None,
+        help="Session to report on. Pass 'last' to use the most recent session.",
+    )
+    report_cmd.add_argument(
+        "--since",
+        metavar="WINDOW",
+        default=None,
+        help="Time window, e.g. '2h' or '30m' (default: 2h, ignored when --session is set)",
+    )
+    report_cmd.add_argument(
+        "--assert",
+        dest="assertions",
+        action="append",
+        default=[],
+        metavar="EXPR",
+        help=(
+            "Assertion expression, e.g. 'success_rate >= 0.95'. "
+            "Supported metrics: success_rate, p95_latency_ms, failure_count, total_cost_usd. "
+            "Can be repeated."
+        ),
+    )
+    report_cmd.add_argument(
+        "--format",
+        choices=["text", "json", "markdown"],
+        default="text",
+        help="Output format (default: text)",
+    )
+    report_cmd.add_argument("--project", default=None, help="Filter to a specific project tag")
+    report_cmd.add_argument(
+        "--db",
+        default=None,
+        help="SQLite DB path (default: ~/.anjor/anjor.db)",
+    )
+
     wt_cmd = sub.add_parser(
         "watch-transcripts",
         help="Watch AI coding agent transcript files (standalone)",
@@ -147,6 +188,8 @@ def main() -> None:
         _run_mcp(args)
     elif args.command == "status":
         _run_status(args)
+    elif args.command == "report":
+        _run_report(args)
     elif args.command == "watch-transcripts":
         _run_watch_transcripts(args)
 
@@ -310,6 +353,104 @@ def _run_status(args: argparse.Namespace) -> None:
         sys.exit(2)
 
     print(summary)
+
+
+def _parse_since(since: str) -> int:
+    """Parse a window string like '2h' or '30m' into minutes."""
+    since = since.strip()
+    if since.endswith("h"):
+        return int(since[:-1]) * 60
+    if since.endswith("m"):
+        return int(since[:-1])
+    if since.endswith("d"):
+        return int(since[:-1]) * 1440
+    raise ValueError(f"unrecognised window format: {since!r} (use e.g. '2h', '30m')")
+
+
+def _run_report(args: argparse.Namespace) -> None:
+    import asyncio
+    from pathlib import Path
+
+    from anjor.analysis.report import ReportGenerator
+    from anjor.collector.storage.sqlite import SQLiteBackend
+
+    db_path = args.db or str(Path.home() / ".anjor" / "anjor.db")
+    project: str | None = args.project
+    fmt: str = args.format
+    assertions: list[str] = args.assertions
+
+    since_minutes: int
+    if args.session == "last":
+        since_minutes = asyncio.run(_find_last_session_minutes(db_path))
+    elif args.since:
+        try:
+            since_minutes = _parse_since(args.since)
+        except ValueError as exc:
+            print(f"anjor: {exc}", file=sys.stderr)
+            sys.exit(2)
+    else:
+        since_minutes = 120
+
+    async def _query() -> tuple[list[object], list[object]]:
+        backend = SQLiteBackend(db_path=db_path)
+        await backend.connect()
+        try:
+            tools = await backend.list_tool_summaries(project=project, since_minutes=since_minutes)
+            llm_models = await backend.list_llm_summaries(
+                project=project, since_minutes=since_minutes
+            )
+        finally:
+            await backend.close()
+        return tools, llm_models  # type: ignore[return-value]
+
+    tools, llm_models = asyncio.run(_query())
+
+    if not tools and not llm_models:
+        print("anjor: no data in window (is the DB path correct, or try a wider --since window?)")
+        sys.exit(2)
+
+    gen = ReportGenerator()
+    data = gen.generate(tools, llm_models, since_minutes=since_minutes, project=project)
+    results = gen.evaluate_assertions(assertions, data)
+
+    if fmt == "json":
+        print(gen.format_json(data, results))
+    elif fmt == "markdown":
+        print(gen.format_markdown(data, results))
+    else:
+        print(gen.format_text(data, results))
+
+    if results and not all(r.passed for r in results):
+        sys.exit(1)
+
+
+async def _find_last_session_minutes(db_path: str) -> int:
+    """Return minutes since the most recent session's earliest event."""
+    from datetime import UTC, datetime
+
+    import aiosqlite
+
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            cur = await conn.execute(
+                """
+                SELECT MIN(timestamp) FROM tool_calls
+                WHERE session_id = (
+                    SELECT session_id FROM tool_calls
+                    ORDER BY timestamp DESC LIMIT 1
+                )
+                """
+            )
+            row = await cur.fetchone()
+            if row and row[0]:
+                start = datetime.fromisoformat(row[0])
+                if start.tzinfo is None:
+                    start = start.replace(tzinfo=UTC)
+                delta = datetime.now(UTC) - start
+                return max(1, int(delta.total_seconds() / 60) + 1)
+    except Exception:  # noqa: BLE001, S110
+        pass
+    return 120  # fallback
 
 
 def _run_watch_transcripts(args: argparse.Namespace) -> None:

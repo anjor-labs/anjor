@@ -546,3 +546,147 @@ class TestRunStatus:
             pass
 
         assert any("since_minutes=30" in u for u in captured_urls)
+
+
+# ---------------------------------------------------------------------------
+# anjor report command
+# ---------------------------------------------------------------------------
+
+
+class TestRunReport:
+    def _make_args(
+        self,
+        session: str | None = None,
+        since: str | None = None,
+        assertions: list[str] | None = None,
+        fmt: str = "text",
+        project: str | None = None,
+        db: str = ":memory:",
+    ):  # type: ignore[return]
+        import argparse
+
+        return argparse.Namespace(
+            session=session,
+            since=since,
+            assertions=assertions or [],
+            format=fmt,
+            project=project,
+            db=db,
+        )
+
+    def _mock_backend(
+        self,
+        tools: list[dict] | None = None,
+        llm: list[dict] | None = None,
+    ) -> MagicMock:
+        from unittest.mock import AsyncMock
+
+        mock = MagicMock()
+        mock.connect = AsyncMock()
+        mock.close = AsyncMock()
+        mock.list_tool_summaries = AsyncMock(return_value=tools or [])
+        mock.list_llm_summaries = AsyncMock(return_value=llm or [])
+        return mock
+
+    def _tool(self, name: str = "bash", calls: int = 10, failures: int = 0) -> dict:  # type: ignore[type-arg]
+        return {
+            "tool_name": name,
+            "call_count": calls,
+            "success_count": calls - failures,
+            "failure_count": failures,
+            "p95_latency_ms": 500.0,
+            "p50_latency_ms": 200.0,
+            "p99_latency_ms": 800.0,
+            "avg_latency_ms": 250.0,
+        }
+
+    def test_report_prints_text_output(self, capsys: pytest.CaptureFixture[str]) -> None:
+        from anjor.cli import _run_report
+
+        mock = self._mock_backend(tools=[self._tool()])
+        with patch("anjor.collector.storage.sqlite.SQLiteBackend", return_value=mock):
+            _run_report(self._make_args())
+        out = capsys.readouterr().out
+        assert "anjor report" in out
+        assert "10" in out  # call count
+
+    def test_report_no_data_exits_2(self) -> None:
+        from anjor.cli import _run_report
+
+        mock = self._mock_backend(tools=[], llm=[])
+        with (
+            patch("anjor.collector.storage.sqlite.SQLiteBackend", return_value=mock),
+            pytest.raises(SystemExit) as exc,
+        ):
+            _run_report(self._make_args())
+        assert exc.value.code == 2
+
+    def test_report_assertion_pass_exits_0(self) -> None:
+        from anjor.cli import _run_report
+
+        mock = self._mock_backend(tools=[self._tool(calls=10, failures=0)])
+        with patch("anjor.collector.storage.sqlite.SQLiteBackend", return_value=mock):
+            _run_report(self._make_args(assertions=["success_rate >= 0.95"]))
+
+    def test_report_assertion_fail_exits_1(self) -> None:
+        from anjor.cli import _run_report
+
+        mock = self._mock_backend(tools=[self._tool(calls=10, failures=5)])
+        with (
+            patch("anjor.collector.storage.sqlite.SQLiteBackend", return_value=mock),
+            pytest.raises(SystemExit) as exc,
+        ):
+            _run_report(self._make_args(assertions=["success_rate >= 0.95"]))
+        assert exc.value.code == 1
+
+    def test_report_json_format(self, capsys: pytest.CaptureFixture[str]) -> None:
+        import json as _json
+
+        from anjor.cli import _run_report
+
+        mock = self._mock_backend(tools=[self._tool()])
+        with patch("anjor.collector.storage.sqlite.SQLiteBackend", return_value=mock):
+            _run_report(self._make_args(fmt="json"))
+        out = capsys.readouterr().out
+        parsed = _json.loads(out)
+        assert "summary" in parsed
+        assert parsed["summary"]["total_calls"] == 10
+
+    def test_report_markdown_format(self, capsys: pytest.CaptureFixture[str]) -> None:
+        from anjor.cli import _run_report
+
+        mock = self._mock_backend(tools=[self._tool()])
+        with patch("anjor.collector.storage.sqlite.SQLiteBackend", return_value=mock):
+            _run_report(self._make_args(fmt="markdown"))
+        out = capsys.readouterr().out
+        assert "## Anjor Report" in out
+
+    def test_report_since_parsed_correctly(self) -> None:
+        from anjor.cli import _parse_since
+
+        assert _parse_since("2h") == 120
+        assert _parse_since("30m") == 30
+        assert _parse_since("1d") == 1440
+
+    def test_report_invalid_since_exits_2(self) -> None:
+        from anjor.cli import _run_report
+
+        with pytest.raises(SystemExit) as exc:
+            _run_report(self._make_args(since="bad"))
+        assert exc.value.code == 2
+
+    def test_report_dispatched_via_main(self, capsys: pytest.CaptureFixture[str]) -> None:
+        from unittest.mock import AsyncMock
+
+        mock = MagicMock()
+        mock.connect = AsyncMock()
+        mock.close = AsyncMock()
+        mock.list_tool_summaries = AsyncMock(return_value=[self._tool()])
+        mock.list_llm_summaries = AsyncMock(return_value=[])
+        with (
+            patch.object(sys, "argv", ["anjor", "report"]),
+            patch("anjor.collector.storage.sqlite.SQLiteBackend", return_value=mock),
+        ):
+            main()
+        out = capsys.readouterr().out
+        assert "anjor report" in out
