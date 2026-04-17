@@ -213,8 +213,7 @@ class AlertHandler:
             if "hooks.slack.com" in webhook:
                 payload: dict[str, Any] = {
                     "text": (
-                        f"anjor alert: {name} — "
-                        f"{metric}={value:.4g} (threshold {threshold:.4g})"
+                        f"anjor alert: {name} — {metric}={value:.4g} (threshold {threshold:.4g})"
                     )
                 }
             else:
